@@ -71,10 +71,10 @@ func pick(agents []string) string {
 		return agents[0]
 	}
 	choice := strings.TrimSpace(line)
-	switch {
-	case choice == "":
+	switch choice {
+	case "":
 		return agents[0]
-	case choice == "0":
+	case "0":
 		return None
 	}
 	if n, err := strconv.Atoi(choice); err == nil {
