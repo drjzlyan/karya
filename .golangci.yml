@@ -1,36 +1,49 @@
-# golangci-lint configuration for karya.
+# golangci-lint configuration for karya (schema v2).
 # https://golangci-lint.run
+# Migrated from v1 for golangci-lint-action v9, which installs golangci-lint v2.
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
 linters:
   enable:
-    - errcheck
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
+    - bodyclose
     - misspell
     - revive
-    - gofmt
-    - goimports
     - unconvert
-    - bodyclose
-
+  settings:
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    # Test helpers and integration tests may intentionally ignore some errors.
-    - path: _test\.go
-      linters:
-        - errcheck
-
-linters-settings:
-  goimports:
-    local-prefixes: github.com/drjzlyan/karya
-  revive:
-    rules:
-      - name: exported
-        disabled: false
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/drjzlyan/karya
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
