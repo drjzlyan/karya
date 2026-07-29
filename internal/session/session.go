@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/drjzlyan/karya/internal/agent"
+	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/tmuxx"
 )
 
@@ -78,9 +79,10 @@ func Build(t *tmuxx.Tmux, o Options) error {
 	}
 
 	// Editor pane (left, 65%). Set NVIM_APPNAME explicitly since this pane was
-	// spawned before the session environment was applied.
+	// spawned before the session environment was applied; it points Neovim at the
+	// extracted karya config (~/.config/karya/nvim) and isolates its data/state.
 	_ = t.Run("select-pane", "-t", p1, "-T", "editor")
-	_ = t.Run("send-keys", "-t", p1, "NVIM_APPNAME=karya nvim", "Enter")
+	_ = t.Run("send-keys", "-t", p1, "NVIM_APPNAME="+config.NvimAppName+" nvim", "Enter")
 
 	// Right column: agent (top) over build/test (bottom).
 	_ = t.Run("split-window", "-h", "-l", "35%", "-t", p1, "-c", o.Workdir)

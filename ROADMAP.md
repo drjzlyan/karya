@@ -56,14 +56,14 @@ today's behavior, driven entirely by `karya`.
 
 ---
 
-## Phase 3 — Editor integration (embedded Neovim config)
+## Phase 3 — Editor integration (embedded Neovim config) ✅
 **Goal:** the Neovim IDE ships inside the binary, fully isolated.
 
-- ☐ Vendor `nvim-config` into `assets/nvim/` (build step / sync script)
-- ☐ `go:embed` + extract to `~/.config/karya/nvim`; version via `manifest.json`
-- ☐ Launch via `NVIM_APPNAME=karya`; isolated data/state/cache dirs
-- ☐ Plugin bootstrap/sync (`nvim --headless +"Lazy! sync" +qa`)
-- ☐ Verify user's `~/.config/nvim` is never read/written (isolation test)
+- ☑ Vendor `nvim-config` into `internal/assets/nvim/` (`scripts/sync-nvim.sh` / `make sync-nvim`)
+- ☑ `go:embed` + extract to `~/.config/karya/nvim`; version via `manifest.json`
+- ☑ Launch via `NVIM_APPNAME=karya/nvim`; isolated data/state/cache dirs
+- ☑ Plugin bootstrap/sync (`editor.SyncPlugins` → `nvim --headless +"Lazy! sync" +qa`)
+- ☑ Verify user's `~/.config/nvim` is never read/written (isolation test)
 
 **Done when:** editing works with the full LSP/DAP/git/tasks config, extracted
 from the binary, with zero impact on the user's own Neovim.

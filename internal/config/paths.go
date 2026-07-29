@@ -12,9 +12,15 @@ import (
 	"path/filepath"
 )
 
-// AppName is used for the XDG subdirectories and, crucially, as NVIM_APPNAME so
-// Neovim isolates its config/data/state/cache under a karya-specific namespace.
+// AppName is the karya prefix used for all XDG subdirectories.
 const AppName = "karya"
+
+// NvimAppName is the value of NVIM_APPNAME. The trailing "/nvim" nests Neovim's
+// config/data/state/cache one level below the karya prefix (e.g.
+// ~/.config/karya/nvim), keeping the editor's files separate from karya's own
+// tmux.conf/prefs/tools while staying fully inside the isolated karya tree. It
+// deliberately matches NvimConfig() so Neovim reads exactly what karya extracts.
+const NvimAppName = AppName + "/nvim"
 
 // Paths is the set of karya-owned directories, all namespaced by AppName.
 type Paths struct {
@@ -69,8 +75,8 @@ func (p Paths) EnsureDirs() error {
 }
 
 // NvimConfig is where the embedded Neovim config is extracted. With
-// NVIM_APPNAME=karya, Neovim reads from ~/.config/karya, so the config lives at
-// ~/.config/karya/nvim mirroring a standard ~/.config/nvim layout.
+// NVIM_APPNAME=karya/nvim, Neovim reads its config from ~/.config/karya/nvim, so
+// the extracted tree lives there, mirroring a standard ~/.config/nvim layout.
 func (p Paths) NvimConfig() string { return filepath.Join(p.Config, "nvim") }
 
 // TmuxConf is the extracted karya tmux configuration used with `tmux -f`.
@@ -94,7 +100,7 @@ const TmuxSocket = "karya"
 func (p Paths) Env(karyaBin string) []string {
 	edit := karyaBin + " edit"
 	return []string{
-		"NVIM_APPNAME=" + AppName,
+		"NVIM_APPNAME=" + NvimAppName,
 		"EDITOR=" + edit,
 		"VISUAL=" + edit,
 		"GIT_EDITOR=" + edit,

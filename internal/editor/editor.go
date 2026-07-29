@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/tmuxx"
 )
 
@@ -134,7 +135,7 @@ func execNvim(file string, line int) error {
 		return fmt.Errorf("nvim not found on PATH")
 	}
 	argv := []string{"nvim", fmt.Sprintf("+%d", line), file}
-	env := append(os.Environ(), "NVIM_APPNAME=karya")
+	env := append(os.Environ(), "NVIM_APPNAME="+config.NvimAppName)
 	return syscall.Exec(path, argv, env)
 }
 

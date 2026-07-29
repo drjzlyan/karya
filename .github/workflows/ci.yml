@@ -70,12 +70,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Install tmux (Linux)
+      - name: Install tmux + neovim (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y tmux
-      - name: Install tmux (macOS)
+        run: sudo apt-get update && sudo apt-get install -y tmux neovim
+      - name: Install tmux + neovim (macOS)
         if: runner.os == 'macOS'
-        run: brew install tmux || true
+        run: brew install tmux neovim || true
       - name: Run integration tests
         run: go test -tags=integration ./...
 

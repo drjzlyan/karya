@@ -56,17 +56,18 @@ namespacing:
 | Data | `~/.local/share/nvim` | `~/.local/share/karya/**` |
 | State | `~/.local/state/nvim` | `~/.local/state/karya/**` |
 | Cache | `~/.cache/nvim` | `~/.cache/karya/**` |
-| Neovim | user's `nvim` config | launched with `NVIM_APPNAME=karya` |
+| Neovim | user's `nvim` config | launched with `NVIM_APPNAME=karya/nvim` |
 | tmux | user's default socket + `~/.tmux.conf` | dedicated socket `-L karya` + `-f` karya conf |
 | Shell | user's `~/.zshrc` | **opt-in** `eval "$(karya shellenv)"` only |
 | Tools | user's Homebrew | karya prefix `~/.local/share/karya/tools/bin` (detect-or-install) |
 
 Key mechanisms:
 
-- **`NVIM_APPNAME=karya`** — Neovim natively reads config from
-  `~/.config/karya/` and data from `~/.local/share/karya/` when this env var is
-  set. The user's own `~/.config/nvim` is never read or written. This is the
-  clean, first-class isolation primitive Neovim provides.
+- **`NVIM_APPNAME=karya/nvim`** — Neovim natively reads config from
+  `~/.config/karya/nvim` and data from `~/.local/share/karya/nvim` when this env
+  var is set (path separators nest it below the karya prefix). The user's own
+  `~/.config/nvim` is never read or written. This is the clean, first-class
+  isolation primitive Neovim provides.
 - **Dedicated tmux server** — `tmux -L karya -f <karya tmux.conf>` runs on a
   separate socket with its own config. karya's sessions never collide with the
   user's tmux, and the user's `~/.tmux.conf` is never sourced.
@@ -238,8 +239,12 @@ karya/
 - `karya edit <file> [line]` finds the editor pane in the current karya tmux
   session and sends `:e +<line> <file>`; falls back to launching nvim directly
   when not in a session. Port of `bin/nvim-edit`.
-- The Neovim config is the vendored `nvim-config`, embedded and extracted to
-  `~/.config/karya/nvim`. Launched as `NVIM_APPNAME=karya nvim`. Plugin sync via
+- The Neovim config is the vendored `nvim-config`, embedded via `go:embed` and
+  extracted to `~/.config/karya/nvim`, versioned by a `manifest.json` so `update`
+  re-extracts only when the embedded tree changed. Launched as
+  `NVIM_APPNAME=karya/nvim nvim`: the trailing `/nvim` makes Neovim read that
+  extracted config and nest its data/state/cache under `…/karya/nvim`, one level
+  below karya's own tmux.conf/prefs. Plugin sync via
   `nvim --headless +"Lazy! sync" +qa` against the isolated data dir.
 - `nvim-config`'s existing `:DevHealth`, `:DevUpdate`, etc. remain available and
   are surfaced through `karya doctor` / `karya update`.

@@ -35,7 +35,7 @@ func newTestTmux(t *testing.T) *tmuxx.Tmux {
 		t.Fatalf("extract tmux.conf: %v", err)
 	}
 	socket := fmt.Sprintf("karya-itest-%d", time.Now().UnixNano())
-	tx := tmuxx.New(socket, conf, []string{"NVIM_APPNAME=karya", "EDITOR=/bin/true edit"})
+	tx := tmuxx.New(socket, conf, []string{"NVIM_APPNAME=karya/nvim", "EDITOR=/bin/true edit"})
 	t.Cleanup(func() { _ = tx.Run("kill-server") })
 	return tx
 }
@@ -67,8 +67,8 @@ func TestBuildLayout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("show-environment: %v", err)
 	}
-	if !strings.Contains(env, "NVIM_APPNAME=karya") {
-		t.Errorf("session env missing NVIM_APPNAME=karya; got:\n%s", env)
+	if !strings.Contains(env, "NVIM_APPNAME=karya/nvim") {
+		t.Errorf("session env missing NVIM_APPNAME=karya/nvim; got:\n%s", env)
 	}
 
 	// @ide_* state options are populated.

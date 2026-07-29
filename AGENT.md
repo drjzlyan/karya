@@ -115,7 +115,7 @@ main.go                 entrypoint → internal/cli
 internal/cli/           command dispatch + flags + app wiring
 internal/config/        XDG paths + karya prefix (isolation lives here)
 internal/version/       version/build info
-internal/assets/        go:embed payload (tmux.conf, later nvim config) + extract
+internal/assets/        go:embed payload (tmux.conf + vendored nvim config) + extract/version
 internal/tmuxx/         tmux wrapper (dedicated socket)
 internal/session/       `dev` layout: Build (testable) + Dev (Build+Attach), Quit
 internal/agent/         detect/select (switch/next/prev/reset land in Phase 2)
