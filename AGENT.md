@@ -158,10 +158,16 @@ Run the exact checks CI runs; all must be green. **Do not open a PR until they p
 export PATH="/opt/homebrew/bin:$PATH"   # if Go is via Homebrew
 gofmt -l .                       # must print nothing
 go vet ./...                     # must pass
-golangci-lint run                # must pass
+golangci-lint run                # must pass (golangci-lint v2; see below)
 go test -race ./...              # unit tests (race-enabled)
 go test -tags=integration ./...  # integration tests (requires tmux)
 go build ./...                   # builds clean
+```
+CI installs **golangci-lint v2** (`.golangci.yml` is the v2 schema). If it isn't
+installed locally, run it without installing — pin the v2 module path so it
+matches CI, not the old v1:
+```bash
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2 run
 ```
 CI (`.github/workflows/ci.yml`) enforces the same on Linux + macOS: `lint`,
 `test`, `integration`, and cross-`build` jobs. Branch protection should require
