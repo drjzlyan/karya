@@ -60,7 +60,7 @@ make build && go vet ./... && go test ./...
 | 4 | Project scaffolding (`new`) | ☐ |
 | 5 | Language & tool management | ☐ |
 | 6 | Install / update / uninstall | ☐ |
-| 7 | Doctor, docs, polish, distribution | ☐ |
+| 7 | Embedded help, self-guided tutorial, doctor & distribution | ☐ |
 | 8 | (Deferred) Native agent | ☐ |
 
 ---
