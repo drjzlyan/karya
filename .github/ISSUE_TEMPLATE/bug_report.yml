@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a problem with karya
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to file a bug! Please fill out the details below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands you ran (e.g. `karya dev`, `karya agent next`).
+      placeholder: |
+        1. Run `karya ...`
+        2. ...
+        3. See error
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: karya version
+      description: Output of `karya version`.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS / architecture
+      description: e.g. macOS 15 arm64, Ubuntu 24.04 amd64
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Relevant tool versions — `tmux -V`, `nvim --version | head -1`, shell.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / output
+      render: shell

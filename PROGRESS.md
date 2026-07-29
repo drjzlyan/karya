@@ -55,6 +55,25 @@ make build && go vet ./... && go test ./...
 
 ## Changelog
 
+### 2026-07-30 — Open-source setup: CI, governance, docs, tutorial
+- **CI** (`.github/workflows/ci.yml`): `lint` (gofmt/vet/golangci-lint),
+  `test` (race+coverage on Linux+macOS), `integration` (installs tmux, runs
+  `-tags=integration`), and cross-`build` (darwin/linux × amd64/arm64). Merges
+  gated on green CI. Added `release.yml` (GoReleaser on `v*`), `.goreleaser.yaml`,
+  `.golangci.yml`, and `.github/dependabot.yml`.
+- **SOLID refactor:** split `session.Build` (testable, no attach) from
+  `session.Dev` (Build+Attach); added integration tests asserting layout, env,
+  `@ide_*` state, and default-server isolation.
+- **Governance/OSS files:** `LICENSE` (MIT), `CONTRIBUTING.md`,
+  `CODE_OF_CONDUCT.md`, `SECURITY.md`, PR template, issue templates.
+- **AGENT.md** rewritten as the engineering guide: mandatory TDD (Red-Green-
+  Refactor), SOLID + Go design principles, documentation standards, git/PR
+  conventions, and a **pre-PR verification gate** (the exact CI checks).
+- **Docs:** `docs/tutorial.md` (self-guided: tmux/nvim fundamentals, agents, and
+  Python/Java/TS/Go/C++/Rust walkthroughs) and `docs/keymaps.md` (full CLI/tmux/
+  nvim reference). README: badges, license, contributing section.
+- Repo published: remote `git@github.com:drjzlyan/karya.git`, public.
+
 ### 2026-07-29 — Phase 0 + Phase 1 complete
 - Installed Go 1.26; skeleton builds and runs (`karya version`, `--help`).
 - **Phase 1 shipped:** `internal/{tmuxx,assets,agent,session,editor}` + CLI wiring.

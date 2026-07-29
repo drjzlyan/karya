@@ -1,0 +1,41 @@
+# GoReleaser builds karya as a single static binary for macOS and Linux.
+# https://goreleaser.com
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: karya
+    main: .
+    binary: karya
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X github.com/drjzlyan/karya/internal/version.Version={{ .Version }}
+      - -X github.com/drjzlyan/karya/internal/version.Commit={{ .ShortCommit }}
+      - -X github.com/drjzlyan/karya/internal/version.Date={{ .Date }}
+
+archives:
+  - id: karya
+    formats: [tar.gz]
+    name_template: "karya_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  draft: false
+  prerelease: auto

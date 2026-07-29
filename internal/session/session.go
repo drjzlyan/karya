@@ -34,7 +34,9 @@ type Options struct {
 }
 
 // Dev launches (or attaches to) the IDE session. On success it replaces the
-// process via tmux attach and does not return.
+// process via tmux attach and does not return. It composes Build (create the
+// layout) with Attach (hand over the terminal); the split keeps Build free of
+// process-replacing side effects so it can be exercised by integration tests.
 func Dev(t *tmuxx.Tmux, o Options) error {
 	if !tmuxx.Available() {
 		return fmt.Errorf("tmux is not installed; run `karya doctor`")
@@ -49,6 +51,16 @@ func Dev(t *tmuxx.Tmux, o Options) error {
 		}
 	}
 
+	if err := Build(t, o); err != nil {
+		return err
+	}
+	return t.Attach(o.Name + ":dev")
+}
+
+// Build creates the IDE session detached — panes, environment, @ide_* state, and
+// the git window — without attaching. It is the pure, side-effect-scoped core of
+// Dev and is what integration tests drive against a throwaway tmux server.
+func Build(t *tmuxx.Tmux, o Options) error {
 	dev := o.Name + ":dev"
 	p1, p2, p3 := dev+".1", dev+".2", dev+".3"
 
@@ -106,7 +118,7 @@ func Dev(t *tmuxx.Tmux, o Options) error {
 		_ = t.Run("new-window", "-t", o.Name, "-n", "git", "-c", o.Workdir, "lazygit")
 	}
 
-	return t.Attach(dev)
+	return nil
 }
 
 // Quit cleanly tears down a session: ask Neovim to quit, then kill the session.

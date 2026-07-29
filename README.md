@@ -1,5 +1,9 @@
 # karya
 
+[![CI](https://github.com/drjzlyan/karya/actions/workflows/ci.yml/badge.svg)](https://github.com/drjzlyan/karya/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/drjzlyan/karya)](https://goreportcard.com/report/github.com/drjzlyan/karya)
+
 **An AI-first, terminal-based IDE in a single binary.**
 
 karya (कार्य — "work") orchestrates Neovim, tmux, and your coding agent into one
@@ -51,11 +55,21 @@ make build                 # -> ./bin/karya
 
 ## Documentation
 
+- [docs/tutorial.md](docs/tutorial.md) — **self-guided tutorial**: learn every
+  keymap, movement, and per-language workflow hands-on
+- [docs/keymaps.md](docs/keymaps.md) — full CLI / tmux / Neovim key reference
 - [docs/PLAN.md](docs/PLAN.md) — architecture, isolation model, subsystems
 - [ROADMAP.md](ROADMAP.md) — phased build order
 - [PROGRESS.md](PROGRESS.md) — current status / resume point
-- [AGENT.md](AGENT.md) — guide for resuming development
+- [AGENT.md](AGENT.md) — engineering guide (TDD, SOLID, CI, isolation)
+
+## Contributing
+
+Contributions are welcome! Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the
+engineering guide in [AGENT.md](AGENT.md). We use **test-driven development**,
+SOLID design, and a green-CI-before-merge policy. Please also read our
+[Code of Conduct](CODE_OF_CONDUCT.md). Security issues: see [SECURITY.md](SECURITY.md).
 
 ## License
 
-TBD.
+[MIT](LICENSE) © 2026 Dhiraj Salian and karya contributors.
