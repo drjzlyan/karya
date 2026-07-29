@@ -10,22 +10,32 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/drjzlyan/karya/internal/assets"
 	"github.com/drjzlyan/karya/internal/tmuxx"
 )
 
-// newTestTmux returns a Tmux bound to a unique, disposable server socket so the
-// test never touches the user's tmux or karya's real socket.
+// newTestTmux returns a Tmux bound to a unique, disposable server socket AND
+// karya's own extracted tmux config (`-f`). Using karya's config is what makes
+// the test both faithful to production (1-based window/pane indexes, which
+// session.Build relies on) and fully isolated: without `-f`, tmux would fall
+// back to reading the user's ~/.tmux.conf, which would make the test both
+// non-hermetic and index-dependent on the developer's machine.
 func newTestTmux(t *testing.T) *tmuxx.Tmux {
 	t.Helper()
 	if !tmuxx.Available() {
 		t.Skip("tmux not installed")
 	}
+	conf := filepath.Join(t.TempDir(), "tmux.conf")
+	if err := assets.ExtractTmuxConf(conf, "/bin/true"); err != nil {
+		t.Fatalf("extract tmux.conf: %v", err)
+	}
 	socket := fmt.Sprintf("karya-itest-%d", time.Now().UnixNano())
-	tx := tmuxx.New(socket, "", []string{"NVIM_APPNAME=karya", "EDITOR=/bin/true edit"})
+	tx := tmuxx.New(socket, conf, []string{"NVIM_APPNAME=karya", "EDITOR=/bin/true edit"})
 	t.Cleanup(func() { _ = tx.Run("kill-server") })
 	return tx
 }
