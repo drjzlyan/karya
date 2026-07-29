@@ -12,21 +12,33 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 2 — Agent management (next)
-**Overall:** Phases 0 and 1 complete. `karya` launches a fully isolated tmux IDE
+**Active phase:** Phase 3 — Editor integration (embedded Neovim config) (next)
+**Overall:** Phases 0–2 complete. `karya` launches a fully isolated tmux IDE
 session (editor/agent/build panes + git window); `karya edit`/`run` route into
-panes; build + vet + tests are green. Go 1.26 is installed.
+panes; agent detection/switching/cycling/reset + per-project memory are wired;
+build + vet + golangci-lint + unit/race/integration tests are green. Go 1.26.
 
-### Resume point (do this next — Phase 2)
-1. `internal/prefs` — per-project `key=value` store at `paths.PrefsFile()`
-   (port `load_pref`/`save_pref` from `ide-agent.sh`). Wire into `dev` agent
-   resolution (flag → saved pref → single → picker) and save the choice.
-2. `internal/agent` — add `switch/next/prev/reset` operating on `@ide_*` tmux
-   options (faithful port of `ide-agent.sh`: respawn agent pane, rebuild layout
-   preserving the editor pane).
-3. Implement `karya agent switch|next|prev|reset|prefs|clear` in `internal/cli`
-   (status already done). The tmux keybindings `Ctrl-a A/N/D` already call these.
-4. Add a test for prefs round-trip and agent cycling index math.
+### Resume point (do this next — Phase 3)
+1. Vendor `../nvim-config` into `assets/nvim/` (build step / sync script) and
+   `go:embed` it; extract to `paths.NvimConfig()` (`~/.config/karya/nvim`).
+2. Version the extracted tree via a `manifest.json` so `update` re-extracts only
+   when the embedded config changed.
+3. Launch Neovim with `NVIM_APPNAME=karya` (already set in session env) and
+   isolated data/state/cache dirs; bootstrap plugins headless
+   (`nvim --headless +"Lazy! sync" +qa`).
+4. Add an isolation test proving the user's `~/.config/nvim` is never read/written.
+
+### Phase 2 — what shipped
+- `internal/prefs` — flat `key=value` store at `paths.PrefsFile()` (port of
+  `load_pref`/`save_pref`); Get/Set/Delete/Entries, order-preserving. Wired into
+  `dev` resolution: flag → saved pref → single → picker, and the choice is saved.
+- `internal/agent.Manager` — in-session `Next/Prev/SwitchTo/SwitchInteractive/
+  Reset/ClearPref/StatusText` over `@ide_*` options; consumer-defined
+  `TmuxRunner`/`PrefStore` interfaces keep unit tests hermetic (fake tmux + fake
+  prefs). Faithful port of `ide-agent.sh` respawn/layout-reset semantics.
+- `karya agent switch|switch-to|next|prev|reset|status|prefs|clear` in the CLI;
+  `Ctrl-a A/N/D` keybindings drive them. `switch` opens a tmux command-prompt
+  that calls back `karya agent switch-to %%`.
 
 ### Verify the current build
 ```bash
@@ -43,8 +55,8 @@ make build && go vet ./... && go test ./...
 |---|---|---|
 | 0 | Scaffold & CLI skeleton | ☑ done |
 | 1 | Session orchestration (`dev`) | ☑ done |
-| 2 | Agent management | ◐ next |
-| 3 | Editor integration (embedded nvim) | ☐ |
+| 2 | Agent management | ☑ done |
+| 3 | Editor integration (embedded nvim) | ◐ next |
 | 4 | Project scaffolding (`new`) | ☐ |
 | 5 | Language & tool management | ☐ |
 | 6 | Install / update / uninstall | ☐ |
@@ -54,6 +66,22 @@ make build && go vet ./... && go test ./...
 ---
 
 ## Changelog
+
+### 2026-07-30 — Phase 2 complete: agent management + per-project memory
+- **`internal/prefs`**: flat `key=value` store (port of `load_pref`/`save_pref`)
+  with `Get/Set/Delete/Entries`, order-preserving replace, lazy file creation.
+  Round-trip/replace/delete/value-with-`=` unit tests, all under `t.TempDir()`.
+- **`internal/agent.Manager`**: in-session `Next/Prev/SwitchTo/SwitchInteractive/
+  Reset/ClearPref/StatusText` operating on `@ide_*` tmux options; faithful port
+  of `ide-agent.sh` (respawn agent pane, rebuild right column, recreate the dev
+  window if lost, relaunch current agent). Depends on consumer-defined
+  `TmuxRunner`/`PrefStore` interfaces (dependency inversion) so cycling math and
+  state transitions are unit-tested with a fake tmux + fake prefs (hermetic).
+- **CLI**: `karya agent switch|switch-to|next|prev|reset|status|prefs|clear`;
+  `dev` resolution now layers the saved per-project preference (flag → pref →
+  single → picker) and persists the choice. `Ctrl-a A/N/D` already bound.
+- Gate green: `gofmt`, `go vet`, `golangci-lint`, `go test -race`,
+  `go test -tags=integration`, `go build`.
 
 ### 2026-07-30 — Open-source setup: CI, governance, docs, tutorial
 - **CI** (`.github/workflows/ci.yml`): `lint` (gofmt/vet/golangci-lint),

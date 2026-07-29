@@ -104,8 +104,17 @@ func cmdDev(args []string) int {
 		return fail(fmt.Errorf("directory %q does not exist", workdir))
 	}
 
+	// Agent resolution: flag → saved per-project preference → single detected →
+	// interactive picker. The chosen agent is saved so it persists next launch.
 	detected := agent.Detect()
-	resolved := agent.Resolve(*agentFlag, detected)
+	explicit := *agentFlag
+	if explicit == "" {
+		explicit = a.prefs.Get("agent." + workdir)
+	}
+	resolved := agent.Resolve(explicit, detected)
+	if resolved != "" {
+		_ = a.prefs.Set("agent."+workdir, resolved)
+	}
 	if err := session.Dev(a.tmux, session.Options{
 		Name:     name,
 		Workdir:  workdir,
@@ -163,25 +172,83 @@ func cmdRun(args []string) int {
 	return 0
 }
 
-// cmdAgent dispatches `karya agent <subcommand>`. status is implemented in
-// Phase 1; switch/next/prev/reset/clear arrive in Phase 2.
+// cmdAgent dispatches `karya agent <subcommand>`. In-session subcommands
+// (switch/next/prev/reset/clear) operate on the current tmux session's @ide_*
+// state via agent.Manager; status and prefs also work from a plain terminal.
 func cmdAgent(args []string) int {
 	sub := "status"
 	if len(args) > 0 {
 		sub = args[0]
 	}
+	rest := args[1:]
+
+	a, err := newApp()
+	if err != nil {
+		return fail(err)
+	}
+
 	switch sub {
 	case "status":
-		return agentStatus()
-	case "switch", "next", "prev", "reset", "prefs", "clear":
-		return notImplemented("agent "+sub, "manage the coding agent")
+		return agentStatus(a)
+	case "prefs":
+		return agentPrefs(a)
+	case "switch", "switch-to", "next", "prev", "reset", "clear":
+		return agentInSession(a, sub, rest)
 	default:
 		fmt.Fprintf(os.Stderr, "karya agent: unknown subcommand %q\n", sub)
 		return 2
 	}
 }
 
-func agentStatus() int {
+// agentManager builds a Manager for the current tmux session, or reports that we
+// are not inside one.
+func agentManager(a *app) (*agent.Manager, bool) {
+	name, err := a.tmux.Output("display-message", "-p", "#{session_name}")
+	if err != nil || name == "" {
+		return nil, false
+	}
+	return agent.NewManager(a.tmux, a.prefs, name, a.bin), true
+}
+
+// agentInSession runs an in-session agent subcommand, requiring a karya session.
+func agentInSession(a *app, sub string, rest []string) int {
+	m, ok := agentManager(a)
+	if !ok {
+		fmt.Fprintln(os.Stderr, "karya agent: not in a karya session")
+		return 1
+	}
+	var err error
+	switch sub {
+	case "switch":
+		err = m.SwitchInteractive()
+	case "switch-to":
+		name := agent.None
+		if len(rest) > 0 && rest[0] != "" {
+			name = rest[0]
+		}
+		err = m.SwitchTo(name)
+	case "next":
+		err = m.Next()
+	case "prev":
+		err = m.Prev()
+	case "reset":
+		err = m.Reset()
+	case "clear":
+		err = m.ClearPref()
+	}
+	if err != nil {
+		return fail(err)
+	}
+	return 0
+}
+
+// agentStatus prints the current agent and availability. Inside a session it
+// shows full @ide_* state; from a terminal it lists detected agents.
+func agentStatus(a *app) int {
+	if m, ok := agentManager(a); ok {
+		fmt.Println(m.StatusText())
+		return 0
+	}
 	detected := agent.Detect()
 	if len(detected) == 0 {
 		fmt.Println("Available agents: none detected")
@@ -189,6 +256,20 @@ func agentStatus() int {
 		return 0
 	}
 	fmt.Printf("Available agents: %s\n", strings.Join(detected, ", "))
+	return 0
+}
+
+// agentPrefs prints the stored per-project preferences.
+func agentPrefs(a *app) int {
+	entries := a.prefs.Entries()
+	if len(entries) == 0 {
+		fmt.Printf("No preferences at %s\n", a.prefs.Path())
+		return 0
+	}
+	fmt.Printf("karya preferences (%s):\n", a.prefs.Path())
+	for _, e := range entries {
+		fmt.Printf("  %s\n", e)
+	}
 	return 0
 }
 
