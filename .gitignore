@@ -1,0 +1,16 @@
+# Build artifacts
+/bin/
+/dist/
+karya
+
+# Go
+*.test
+*.out
+coverage.*
+
+# Editor / OS
+.DS_Store
+*.swp
+
+# Vendored embed sync (populated by a build step from ../nvim-config)
+/assets/nvim/
