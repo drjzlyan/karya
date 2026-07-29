@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -37,7 +38,9 @@ func TestEnvNamespacesNvimAndEditor(t *testing.T) {
 	env := Paths{}.Env("/abs/karya")
 	joined := strings.Join(env, "\n")
 	for _, want := range []string{
-		"NVIM_APPNAME=" + AppName,
+		// karya/nvim (not bare karya) so Neovim reads the config extracted to
+		// ~/.config/karya/nvim and isolates its data/state/cache under karya/nvim.
+		"NVIM_APPNAME=" + NvimAppName,
 		"EDITOR=/abs/karya edit",
 		"VISUAL=/abs/karya edit",
 		"GIT_EDITOR=/abs/karya edit",
@@ -45,5 +48,22 @@ func TestEnvNamespacesNvimAndEditor(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Errorf("Env missing %q; got:\n%s", want, joined)
 		}
+	}
+}
+
+// TestNvimAppNameMatchesConfigDir guards the invariant that ties launch and
+// extraction together: NVIM_APPNAME must resolve, under XDG_CONFIG_HOME, to the
+// very directory ExtractNvimConfig writes to. If these drift, Neovim reads an
+// empty config and the IDE silently loses its editor setup.
+func TestNvimAppNameMatchesConfigDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, e := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"} {
+		t.Setenv(e, "")
+	}
+	p := Resolve()
+	wantConfig := filepath.Join(home, ".config", NvimAppName)
+	if p.NvimConfig() != wantConfig {
+		t.Errorf("NvimConfig() = %q, want %q (XDG_CONFIG_HOME/NVIM_APPNAME)", p.NvimConfig(), wantConfig)
 	}
 }

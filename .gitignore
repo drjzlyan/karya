@@ -12,5 +12,5 @@ coverage.*
 .DS_Store
 *.swp
 
-# Vendored embed sync (populated by a build step from ../nvim-config)
-/internal/assets/nvim/
+# The vendored Neovim config (internal/assets/nvim/) IS committed: go:embed needs
+# it present in every checkout (CI, GoReleaser). Refresh it with `make sync-nvim`.

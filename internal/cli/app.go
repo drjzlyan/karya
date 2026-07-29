@@ -36,6 +36,12 @@ func newApp() (*app, error) {
 	if err := assets.ExtractTmuxConf(p.TmuxConf(), bin); err != nil {
 		return nil, err
 	}
+	// Extract the embedded Neovim config when it is missing or the binary shipped
+	// a newer version. Cheap (a content hash + manifest compare) on the common
+	// path where nothing changed; plugins bootstrap lazily on first editor launch.
+	if _, err := assets.EnsureNvimConfig(p.NvimConfig()); err != nil {
+		return nil, err
+	}
 	env := p.Env(bin)
 	return &app{
 		paths: p,

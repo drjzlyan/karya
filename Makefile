@@ -9,11 +9,14 @@ LDFLAGS := -s -w \
 	-X $(PKG)/internal/version.Commit=$(COMMIT) \
 	-X $(PKG)/internal/version.Date=$(DATE)
 
-.PHONY: build install fmt vet test tidy clean run
+.PHONY: build install fmt vet test tidy clean run sync-nvim
 
 build: ## Build the karya binary into ./bin
 	@mkdir -p bin
 	go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) .
+
+sync-nvim: ## Vendor ../nvim-config into internal/assets/nvim for embedding
+	./scripts/sync-nvim.sh
 
 install: ## Install karya into ~/.local/bin
 	go build -ldflags "$(LDFLAGS)" -o $$HOME/.local/bin/$(BINARY) .
