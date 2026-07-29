@@ -41,15 +41,15 @@ the user's tmux/nvim untouched; `karya edit` and `karya run` route correctly.
 
 ---
 
-## Phase 2 — Agent management (AI-first core)
+## Phase 2 — Agent management (AI-first core) ✅
 **Goal:** first-class agent detection, switching, and memory.
 
-- ☐ `internal/agent` — detect `crush/claude/codex/gemini/aider/copilot`
-- ☐ Resolution: flag → per-project pref → single → interactive picker
-- ☐ `internal/prefs` — per-project `key=value` store under karya prefix
-- ☐ `karya agent status|switch|next|prev|reset|prefs|clear`
-- ☐ Wire tmux keybindings (`Ctrl-a A/N/D/P/S`) to karya commands
-- ☐ Faithful port of `ide-agent.sh` respawn/reset semantics
+- ☑ `internal/agent` — detect `crush/claude/codex/gemini/aider/copilot`
+- ☑ Resolution: flag → per-project pref → single → interactive picker
+- ☑ `internal/prefs` — per-project `key=value` store under karya prefix
+- ☑ `karya agent status|switch|next|prev|reset|prefs|clear`
+- ☑ Wire tmux keybindings (`Ctrl-a A/N/D/P/S`) to karya commands
+- ☑ Faithful port of `ide-agent.sh` respawn/reset semantics
 
 **Done when:** agent selection, cycling, reset, and per-project memory match
 today's behavior, driven entirely by `karya`.

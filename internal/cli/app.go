@@ -5,16 +5,19 @@ import (
 
 	"github.com/drjzlyan/karya/internal/assets"
 	"github.com/drjzlyan/karya/internal/config"
+	"github.com/drjzlyan/karya/internal/prefs"
 	"github.com/drjzlyan/karya/internal/tmuxx"
 )
 
 // app bundles the resolved environment shared by commands: karya paths, the
-// isolated child-process env, and a tmux client bound to karya's server.
+// isolated child-process env, a tmux client bound to karya's server, and the
+// per-project preference store.
 type app struct {
 	paths config.Paths
 	bin   string // absolute path to the running karya binary
 	env   []string
 	tmux  *tmuxx.Tmux
+	prefs *prefs.Store
 }
 
 // newApp resolves paths, ensures karya-owned dirs exist, extracts the tmux
@@ -39,5 +42,6 @@ func newApp() (*app, error) {
 		bin:   bin,
 		env:   env,
 		tmux:  tmuxx.New(config.TmuxSocket, p.TmuxConf(), env),
+		prefs: prefs.New(p.PrefsFile()),
 	}, nil
 }
