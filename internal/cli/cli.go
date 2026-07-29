@@ -5,9 +5,16 @@
 package cli
 
 import (
+	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 
+	"github.com/drjzlyan/karya/internal/agent"
+	"github.com/drjzlyan/karya/internal/editor"
+	"github.com/drjzlyan/karya/internal/session"
 	"github.com/drjzlyan/karya/internal/version"
 )
 
@@ -31,9 +38,9 @@ func Run(args []string) int {
 	case "agent":
 		return cmdAgent(rest)
 	case "edit":
-		return notImplemented("edit", "open a file in the editor pane (used as $EDITOR)")
+		return cmdEdit(rest)
 	case "run":
-		return notImplemented("run", "run a command in the build/test pane")
+		return cmdRun(rest)
 	case "new":
 		return notImplemented("new", "scaffold a project (python|java|typescript|go|cpp|rust)")
 	case "lang":
@@ -57,24 +64,152 @@ func Run(args []string) int {
 	}
 }
 
-// cmdDev is the entrypoint for `karya` / `karya dev`. Implemented in Phase 1.
-func cmdDev(_ []string) int {
-	return notImplemented("dev", "launch or attach the IDE session")
+// cmdDev is the entrypoint for `karya` / `karya dev`.
+func cmdDev(args []string) int {
+	fs := flag.NewFlagSet("dev", flag.ContinueOnError)
+	agentFlag := fs.String("a", "", "coding agent to use (name or 'none')")
+	fs.StringVar(agentFlag, "agent", "", "coding agent to use (name or 'none')")
+	kill := fs.Bool("k", false, "kill an existing session and recreate it")
+	fs.BoolVar(kill, "kill", false, "kill an existing session and recreate it")
+	quit := fs.Bool("q", false, "quit (kill) the session cleanly")
+	fs.BoolVar(quit, "quit", false, "quit (kill) the session cleanly")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	name := fs.Arg(0)
+	workdir := fs.Arg(1)
+	if workdir == "" {
+		workdir, _ = os.Getwd()
+	} else {
+		workdir = expandHome(workdir)
+	}
+	if name == "" {
+		name = sanitizeSession(filepath.Base(workdir))
+	}
+
+	a, err := newApp()
+	if err != nil {
+		return fail(err)
+	}
+
+	if *quit {
+		if err := session.Quit(a.tmux, name); err != nil {
+			return fail(err)
+		}
+		return 0
+	}
+
+	if st, err := os.Stat(workdir); err != nil || !st.IsDir() {
+		return fail(fmt.Errorf("directory %q does not exist", workdir))
+	}
+
+	detected := agent.Detect()
+	resolved := agent.Resolve(*agentFlag, detected)
+	if err := session.Dev(a.tmux, session.Options{
+		Name:     name,
+		Workdir:  workdir,
+		Agent:    resolved,
+		Detected: detected,
+		Kill:     *kill,
+	}); err != nil {
+		return fail(err)
+	}
+	return 0
 }
 
-// cmdAgent dispatches `karya agent <subcommand>`. Implemented in Phase 2.
+// cmdEdit opens a file in the editor pane (also used as $EDITOR).
+func cmdEdit(args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: karya edit <file> [line]")
+		return 2
+	}
+	line := 1
+	if len(args) > 1 {
+		if n, err := strconv.Atoi(args[1]); err == nil {
+			line = n
+		}
+	}
+	a, err := newApp()
+	if err != nil {
+		return fail(err)
+	}
+	if err := editor.Edit(a.tmux, args[0], line); err != nil {
+		return fail(err)
+	}
+	return 0
+}
+
+// cmdRun sends a command to the build/test pane.
+func cmdRun(args []string) int {
+	fs := flag.NewFlagSet("run", flag.ContinueOnError)
+	dir := fs.String("d", "", "run the command in this directory")
+	focus := fs.Bool("focus", false, "focus the build/test pane (no command)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	command := strings.Join(fs.Args(), " ")
+	if !*focus && command == "" {
+		fmt.Fprintln(os.Stderr, "usage: karya run [-d dir] <command> | karya run --focus")
+		return 2
+	}
+	a, err := newApp()
+	if err != nil {
+		return fail(err)
+	}
+	if err := editor.Run(a.tmux, command, *dir, *focus); err != nil {
+		return fail(err)
+	}
+	return 0
+}
+
+// cmdAgent dispatches `karya agent <subcommand>`. status is implemented in
+// Phase 1; switch/next/prev/reset/clear arrive in Phase 2.
 func cmdAgent(args []string) int {
 	sub := "status"
 	if len(args) > 0 {
 		sub = args[0]
 	}
 	switch sub {
-	case "status", "switch", "next", "prev", "reset", "prefs", "clear":
+	case "status":
+		return agentStatus()
+	case "switch", "next", "prev", "reset", "prefs", "clear":
 		return notImplemented("agent "+sub, "manage the coding agent")
 	default:
 		fmt.Fprintf(os.Stderr, "karya agent: unknown subcommand %q\n", sub)
 		return 2
 	}
+}
+
+func agentStatus() int {
+	detected := agent.Detect()
+	if len(detected) == 0 {
+		fmt.Println("Available agents: none detected")
+		fmt.Printf("Known agents (install any): %s\n", strings.Join(agent.Known, ", "))
+		return 0
+	}
+	fmt.Printf("Available agents: %s\n", strings.Join(detected, ", "))
+	return 0
+}
+
+// expandHome expands a leading ~ to the user's home directory.
+func expandHome(p string) string {
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, strings.TrimPrefix(p, "~"))
+		}
+	}
+	return p
+}
+
+// sanitizeSession makes a string safe as a tmux session name (no dots/colons).
+func sanitizeSession(s string) string {
+	return strings.NewReplacer(".", "_", ":", "_", " ", "_").Replace(s)
+}
+
+func fail(err error) int {
+	fmt.Fprintf(os.Stderr, "karya: %v\n", err)
+	return 1
 }
 
 func notImplemented(name, desc string) int {

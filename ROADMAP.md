@@ -24,16 +24,17 @@ work; every documented command exists as a stub.
 
 ---
 
-## Phase 1 — Session orchestration (`dev`)
+## Phase 1 — Session orchestration (`dev`) ✅
 **Goal:** `karya` launches the isolated tmux IDE session.
 
-- ☐ `internal/tmuxx` — tmux wrapper on dedicated socket `-L karya`
-- ☐ Embed + extract `assets/tmux.conf`; launch server with `-f`
-- ☐ `internal/session.Dev` — editor/agent/build panes + git window + `@ide_*` state
-- ☐ Session env: `NVIM_APPNAME=karya`, `EDITOR/VISUAL/GIT_EDITOR=karya edit`
-- ☐ `karya edit <file> [line]` (port of `nvim-edit`)
-- ☐ `karya run [-d dir] <cmd>` / `--focus` (port of `ide-run`)
-- ☐ `-k` recreate / `-q` quit / attach-if-exists
+- ☑ `internal/tmuxx` — tmux wrapper on dedicated socket `-L karya`
+- ☑ Embed + extract `tmux.conf` (`internal/assets`); launch server with `-f`
+- ☑ `internal/session.Dev` — editor/agent/build panes + git window + `@ide_*` state
+- ☑ Session env: `NVIM_APPNAME=karya`, `EDITOR/VISUAL/GIT_EDITOR=karya edit`
+- ☑ `karya edit <file> [line]` (port of `nvim-edit`)
+- ☑ `karya run [-d dir] <cmd>` / `--focus` (port of `ide-run`)
+- ☑ `-k` recreate / `-q` quit / attach-if-exists
+- ☑ Verified: layout, isolated env, `@ide_*` state; default tmux server untouched
 
 **Done when:** `karya` opens the 3-pane layout on a karya-only tmux socket with
 the user's tmux/nvim untouched; `karya edit` and `karya run` route correctly.

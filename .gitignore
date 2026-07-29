@@ -13,4 +13,4 @@ coverage.*
 *.swp
 
 # Vendored embed sync (populated by a build step from ../nvim-config)
-/assets/nvim/
+/internal/assets/nvim/

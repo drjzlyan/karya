@@ -12,16 +12,28 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 0 — Scaffold & CLI skeleton
-**Overall:** Planning complete; repo scaffolded; command tree stubbed.
+**Active phase:** Phase 2 — Agent management (next)
+**Overall:** Phases 0 and 1 complete. `karya` launches a fully isolated tmux IDE
+session (editor/agent/build panes + git window); `karya edit`/`run` route into
+panes; build + vet + tests are green. Go 1.26 is installed.
 
-### Resume point (do this next)
-1. Install Go (`brew install go`) — **not yet installed on this machine**.
-2. From the repo root: `go build ./...` then `./karya version` to confirm the
-   skeleton builds and runs.
-3. Run `go vet ./...` and wire the GitHub Actions CI workflow.
-4. Add `goreleaser` config (`.goreleaser.yaml`) for cross-compiled releases.
-5. Begin **Phase 1** (`internal/tmuxx` + `internal/session`) per ROADMAP.
+### Resume point (do this next — Phase 2)
+1. `internal/prefs` — per-project `key=value` store at `paths.PrefsFile()`
+   (port `load_pref`/`save_pref` from `ide-agent.sh`). Wire into `dev` agent
+   resolution (flag → saved pref → single → picker) and save the choice.
+2. `internal/agent` — add `switch/next/prev/reset` operating on `@ide_*` tmux
+   options (faithful port of `ide-agent.sh`: respawn agent pane, rebuild layout
+   preserving the editor pane).
+3. Implement `karya agent switch|next|prev|reset|prefs|clear` in `internal/cli`
+   (status already done). The tmux keybindings `Ctrl-a A/N/D` already call these.
+4. Add a test for prefs round-trip and agent cycling index math.
+
+### Verify the current build
+```bash
+export PATH="/opt/homebrew/bin:$PATH"
+make build && go vet ./... && go test ./...
+./bin/karya dev -a none <name> <dir>   # builds session on `tmux -L karya`
+```
 
 ---
 
@@ -29,9 +41,9 @@ every working session.
 
 | Phase | Title | Status |
 |---|---|---|
-| 0 | Scaffold & CLI skeleton | ◐ in progress |
-| 1 | Session orchestration (`dev`) | ☐ |
-| 2 | Agent management | ☐ |
+| 0 | Scaffold & CLI skeleton | ☑ done |
+| 1 | Session orchestration (`dev`) | ☑ done |
+| 2 | Agent management | ◐ next |
 | 3 | Editor integration (embedded nvim) | ☐ |
 | 4 | Project scaffolding (`new`) | ☐ |
 | 5 | Language & tool management | ☐ |
@@ -42,6 +54,23 @@ every working session.
 ---
 
 ## Changelog
+
+### 2026-07-29 — Phase 0 + Phase 1 complete
+- Installed Go 1.26; skeleton builds and runs (`karya version`, `--help`).
+- **Phase 1 shipped:** `internal/{tmuxx,assets,agent,session,editor}` + CLI wiring.
+  - `karya` / `karya dev [name] [path]` builds the tmux IDE session on the
+    dedicated `-L karya` socket with embedded `tmux.conf` (`-f`); layout is
+    editor(65%) | agent / build+test, plus a `git` window (lazygit).
+  - Isolation verified live: session env carries `NVIM_APPNAME=karya` and
+    `EDITOR/VISUAL/GIT_EDITOR=<karya> edit`; all `@ide_*` state options set; the
+    user's **default tmux server is untouched**.
+  - `karya edit <file> [line]` (port of `nvim-edit`) and `karya run [-d dir]
+    <cmd>` / `--focus` (port of `ide-run`) route into the right panes, with
+    direct-exec fallbacks outside tmux. `-k` recreate, `-q` quit implemented.
+  - `karya agent status` detects installed agents.
+  - Tests: isolation (paths/env), vim-escape/shell-quote, agent resolution.
+    `go vet` + `go test ./...` green.
+- Note: Go's `flag` needs options before positionals (`karya dev -a none foo`).
 
 ### 2026-07-29 — Project inception
 - Explored source repos `nvim-config` and `dotfiles`; mapped every feature.

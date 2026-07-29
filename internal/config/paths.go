@@ -89,12 +89,14 @@ const TmuxSocket = "karya"
 
 // Env returns the environment overrides karya applies to child processes
 // (Neovim, tmux, agents, git) so editor actions route into the IDE and Neovim
-// stays namespaced. Callers append these to os.Environ().
-func (p Paths) Env() []string {
+// stays namespaced. karyaBin is the absolute path to the running karya binary so
+// $EDITOR resolves regardless of PATH. Callers append these to os.Environ().
+func (p Paths) Env(karyaBin string) []string {
+	edit := karyaBin + " edit"
 	return []string{
 		"NVIM_APPNAME=" + AppName,
-		"EDITOR=karya edit",
-		"VISUAL=karya edit",
-		"GIT_EDITOR=karya edit",
+		"EDITOR=" + edit,
+		"VISUAL=" + edit,
+		"GIT_EDITOR=" + edit,
 	}
 }
