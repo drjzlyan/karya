@@ -109,9 +109,26 @@ uninstall leaving no trace beyond their own pre-existing config.
 
 ---
 
-## Phase 7 — Doctor, docs, polish, distribution
-**Goal:** production-ready release.
+## Phase 7 — Embedded help, self-guided tutorial, doctor & distribution
+**Goal:** production-ready release where the docs *ship inside the binary* — a
+user who has only `karya` on their PATH can learn and use it fully offline,
+without the repo or a browser.
 
+### Embedded help & tutorial (in the binary, not just `docs/`)
+- ☐ `internal/assets` — `go:embed` the user docs (`docs/tutorial.md`,
+  `docs/keymaps.md`, per-command reference) so they travel with the binary
+- ☐ `karya help [command]` — rich, per-command help rendered from the embedded
+  docs (beyond the flag usage `flag` prints); `karya help topics` lists them
+- ☐ `karya tutorial` — a **self-guided, self-working** tutorial launched from the
+  binary: numbered lessons a user can step through (`karya tutorial [lesson]`),
+  each runnable against a throwaway sandbox session so commands actually execute
+  and are verified, not just displayed
+- ☐ `karya docs [topic]` — browse the embedded docs offline (pager/`$PAGER`)
+- ☐ Single source of truth: `docs/*.md` are the source, embedded at build time; a
+  test asserts the embedded content stays in sync with `docs/`
+- ☐ `Ctrl-a ?` keybinding opens help/tutorial inside the session
+
+### Doctor & distribution
 - ☐ `karya doctor` — tools, versions, isolation checks, per-language tooling
 - ☐ `docs/` complete (isolation, commands, languages, troubleshooting)
 - ☐ Shell completions (`karya completion`)
@@ -119,7 +136,8 @@ uninstall leaving no trace beyond their own pre-existing config.
 - ☐ Tag `v1.0.0`, CHANGELOG, release automation
 
 **Done when:** clean install → working AI IDE → `karya doctor` all-green on a
-fresh macOS machine.
+fresh macOS machine, and `karya help`/`karya tutorial` teach the whole workflow
+**offline from the binary alone**, with no repo checkout or network needed.
 
 ---
 
