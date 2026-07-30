@@ -7,10 +7,16 @@ Install karya via Homebrew:
 
 ```sh
 brew tap drjzlyan/karya https://github.com/drjzlyan/karya
+brew trust drjzlyan/karya   # Homebrew 6.0+ requires trusting non-official taps
 brew install karya
 ```
 
-(The repository is not named `homebrew-karya`, so the tap URL is required.)
+Notes:
+- The repository is not named `homebrew-karya`, so the tap URL is required.
+- Since Homebrew 6.0, non-official taps must be trusted before a formula will
+  load (a tap can run its own Ruby code). `brew trust drjzlyan/karya` is a
+  one-time step; to trust only this formula, use
+  `brew trust --formula drjzlyan/karya/karya`.
 
 ## Maintenance
 
