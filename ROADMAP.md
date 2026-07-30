@@ -81,13 +81,18 @@ from the binary, with zero impact on the user's own Neovim.
 
 ---
 
-## Phase 5 — Language & tool management (`lang`, tools)
+## Phase 5 — Language & tool management (`lang`, tools) ✅
 **Goal:** isolated language/version selection and tool install.
 
-- ☐ `internal/lang` — interactive selector, versions from `mise ls-remote`
-- ☐ Write `languages.local`; generate **isolated** mise config in karya prefix
-- ☐ `internal/tools` — detect-or-install LSPs/formatters/adapters into karya prefix
-- ☐ Always-on servers + per-language selectable servers (PLAN §6.4)
+- ☑ `internal/lang` — selector + version discovery from `mise ls-remote`
+  (dedup by major/minor, Java distribution ranking), offline fallback
+- ☑ Write `languages.local`; generate **isolated** mise config
+  (`MISE_GLOBAL_CONFIG_FILE`/`MISE_DATA_DIR` pinned to the karya prefix)
+- ☑ `internal/tools` — detect-or-install LSPs/formatters/adapters into the karya
+  tool prefix (uv/npm/go/rustup + jdtls/lombok/VSIX downloads); Homebrew-class
+  servers are detect-only with a hint (never `brew install`)
+- ☑ Always-on servers + per-language selectable servers (PLAN §6.4)
+- ☑ `karya lang [list|add|remove|all]` + interactive selector
 
 **Done when:** selecting a language installs its tooling into the karya prefix
 without modifying Homebrew or the user's global mise.
