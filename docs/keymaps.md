@@ -29,7 +29,11 @@ reference. For a guided, hands-on path through it, see
 | `karya run [-d dir] <cmd>` | Run a command in the build/test pane |
 | `karya run --focus` | Focus the build/test pane |
 | `karya new <lang> <name>` | Scaffold a project (python/java/typescript/go/cpp/rust) |
-| `karya lang` | Select languages and runtime versions |
+| `karya lang` | Interactive language + runtime-version selector |
+| `karya lang list` | Show the selected languages and versions |
+| `karya lang add <lang> [versions]` | Add/change a language (installs its tooling) |
+| `karya lang remove <lang>` | Drop a language from the selection |
+| `karya lang all` | Select every language at its latest stable version |
 | `karya install` | Set up karya (isolated, non-destructive) |
 | `karya update` | Self-update binary, configs, tools, editor plugins |
 | `karya uninstall` | Remove karya entirely (nothing else touched) |

@@ -45,7 +45,7 @@ func Run(args []string) int {
 	case "new":
 		return cmdNew(rest)
 	case "lang":
-		return notImplemented("lang", "select languages and runtime versions")
+		return cmdLang(rest)
 	case "install":
 		return notImplemented("install", "set up karya (isolated); extract configs, fetch tools")
 	case "update":
@@ -422,7 +422,7 @@ Usage:
   karya edit <file> [line]  Open a file in the editor pane (used as $EDITOR)
   karya run <cmd...>        Run a command in the build/test pane
   karya new <lang> <name>   Scaffold a project (python|java|typescript|go|cpp|rust)
-  karya lang                Select languages and runtime versions
+  karya lang <cmd>          list | add <lang> [versions] | remove <lang> | all
 
   karya install             Set up karya (isolated, non-destructive)
   karya update [--check]    Self-update binary, configs, tools, plugins
