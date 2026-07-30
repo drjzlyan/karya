@@ -12,7 +12,7 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 7 — Embedded help, tutorial, doctor & distribution (next)
+**Active phase:** Phase 7 — Embedded help, tutorial, doctor & distribution (in progress)
 **Overall:** Phases 0–6 complete. `karya` launches a fully isolated tmux IDE
 session (editor/agent/build panes + git window); `karya edit`/`run` route into
 panes; agent detection/switching/cycling/reset + per-project memory are wired;
@@ -27,16 +27,26 @@ from GitHub Releases), `karya uninstall` (karya-only removal), `karya shellenv`
 unit/race/integration tests are green. Go 1.26.
 
 ### Resume point (do this next — Phase 7)
-1. Embed the user docs (`docs/tutorial.md`, `docs/keymaps.md`, per-command
-   reference) via `go:embed`; add `karya help [command]` / `karya docs [topic]`
-   rendered from them, with a test asserting embedded content stays in sync with
-   `docs/`.
+1. ~~Embed the user docs + `karya help`/`karya docs`.~~ **Done** (this branch).
 2. `karya tutorial` — a self-guided, self-working tutorial (numbered lessons run
-   against a throwaway sandbox session and verified, not just displayed).
+   against a throwaway sandbox session and verified, not just displayed), plus the
+   `Ctrl-a ?` in-session keybinding that opens help/tutorial.
 3. `karya doctor` — tools/versions/isolation checks + per-language tooling; add
    `karya completion`, a Homebrew tap, and cut `v1.0.0`.
 4. Provenance cleanup (final pass): strip every `nvim-config`/`dotfiles` reference
    from the whole repo and sever the build-time `../nvim-config` dependency.
+
+### Phase 7 — what shipped so far
+- **Embedded user docs:** `internal/assets/docs.go` `go:embed`s `docs/*.md` with
+  `DocTopics()`/`Doc(topic)` accessors. `scripts/sync-docs.sh` (+ `make sync-docs`)
+  vendors `docs/*.md` → `internal/assets/docs/` (mirrors the `sync-nvim` idiom);
+  a drift test (`internal/assets`) fails CI if the vendored copy falls out of sync,
+  keeping `docs/*.md` the single source of truth.
+- **CLI:** `karya docs [topic]` pages the embedded docs offline (`$PAGER` → `less
+  -R` → `more`, falling back to a plain write for pipes/redirects); no topic lists
+  them. `karya help [command]` prints rich per-command help (synopsis + syntax +
+  guidance, pointing at `karya docs`); `karya help topics` lists every command.
+  `-h`/`--help` still print the top-level usage.
 
 ### Phase 6 — what shipped
 - **`internal/update`:** self-update core with all network/OS side effects behind
