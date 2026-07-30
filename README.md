@@ -27,7 +27,7 @@ agent from an optional pane to a first-class, deeply-integrated feature.
 - **Single binary.** The Neovim and tmux configs are embedded and extracted on
   demand — one artifact, no manual assembly.
 - **Zero-impact install.** karya never edits your `~/.zshrc`, `~/.tmux.conf`,
-  `~/.gitconfig`, or `~/.config/nvim`. It uses `NVIM_APPNAME=karya` and a
+  `~/.gitconfig`, or `~/.config/nvim`. It uses `NVIM_APPNAME=karya/nvim` and a
   dedicated tmux socket, keeping everything under karya-owned directories.
   `karya uninstall` removes karya and nothing else.
 - **AI-first.** Detects and manages your existing agent CLIs (claude, codex,

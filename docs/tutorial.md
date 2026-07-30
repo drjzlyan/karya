@@ -206,7 +206,7 @@ You get a 3-pane layout plus a `git` window:
 ```
 
 Move between panes with `Ctrl-a h/j/k/l`. The editor runs karya's Neovim
-(`NVIM_APPNAME=karya`, fully isolated). Anything that opens `$EDITOR` (git,
+(`NVIM_APPNAME=karya/nvim`, fully isolated). Anything that opens `$EDITOR` (git,
 lazygit, agents) routes back into the editor pane via `karya edit`.
 
 ### 1.4 Core editor movements you'll use everywhere

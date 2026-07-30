@@ -16,6 +16,7 @@ import (
 
 	"github.com/drjzlyan/karya/internal/agent"
 	"github.com/drjzlyan/karya/internal/assets"
+	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/prefs"
 	"github.com/drjzlyan/karya/internal/session"
 	"github.com/drjzlyan/karya/internal/tmuxx"
@@ -31,7 +32,7 @@ func newTestTmux(t *testing.T) *tmuxx.Tmux {
 		t.Fatalf("extract tmux.conf: %v", err)
 	}
 	socket := fmt.Sprintf("karya-itest-%d", time.Now().UnixNano())
-	tx := tmuxx.New(socket, conf, []string{"NVIM_APPNAME=karya", "EDITOR=/bin/true edit"})
+	tx := tmuxx.New(socket, conf, []string{"NVIM_APPNAME=" + config.NvimAppName, "EDITOR=/bin/true edit"})
 	t.Cleanup(func() { _ = tx.Run("kill-server") })
 	return tx
 }

@@ -30,7 +30,7 @@ work; every documented command exists as a stub.
 - ☑ `internal/tmuxx` — tmux wrapper on dedicated socket `-L karya`
 - ☑ Embed + extract `tmux.conf` (`internal/assets`); launch server with `-f`
 - ☑ `internal/session.Dev` — editor/agent/build panes + git window + `@ide_*` state
-- ☑ Session env: `NVIM_APPNAME=karya`, `EDITOR/VISUAL/GIT_EDITOR=karya edit`
+- ☑ Session env: `NVIM_APPNAME=karya/nvim`, `EDITOR/VISUAL/GIT_EDITOR=karya edit`
 - ☑ `karya edit <file> [line]` (port of `nvim-edit`)
 - ☑ `karya run [-d dir] <cmd>` / `--focus` (port of `ide-run`)
 - ☑ `-k` recreate / `-q` quit / attach-if-exists

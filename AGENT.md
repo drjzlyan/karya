@@ -27,7 +27,8 @@ It consolidates two existing repos (kept as the behavioral source of truth):
 karya must **never** read or write the user's `~/.zshrc`, `~/.tmux.conf`,
 `~/.gitconfig`, `~/.config/nvim`, Homebrew, or global mise. All state lives under
 karya-owned dirs. The primitives:
-- Neovim: launch with `NVIM_APPNAME=karya` (isolated config/data/state/cache).
+- Neovim: launch with `NVIM_APPNAME=karya/nvim` (isolated config/data/state/cache;
+  the `/nvim` suffix nests it below the karya prefix — use `config.NvimAppName`).
 - tmux: run on a dedicated socket `tmux -L karya -f <karya tmux.conf>`.
 - Shell: **opt-in** only via `eval "$(karya shellenv)"`; never edit rc files.
 - Tools: detect on `PATH` first; otherwise install into the karya prefix.

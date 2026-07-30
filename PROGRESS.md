@@ -107,6 +107,18 @@ make build && go vet ./... && go test ./...
 
 ## Changelog
 
+### 2026-07-30 — Fix: agent-reset editor pane used the wrong NVIM_APPNAME
+- **Bug:** `agent.recreateDevWindow` (rebuild path when the `dev` window was
+  lost) launched the editor with a hardcoded `NVIM_APPNAME=karya` instead of
+  `config.NvimAppName` (`karya/nvim`), so a rebuilt editor pane read the karya
+  prefix root rather than the extracted nvim config — the Phase 3 isolation fix
+  was missed here. Now uses `config.NvimAppName`; added a hermetic unit test
+  (`TestRecreateDevWindowNamespacesNvim`) that guards it, and aligned the agent
+  integration test's session env to the same value.
+- **Docs:** corrected stale `NVIM_APPNAME=karya` → `karya/nvim` in PLAN §6.1,
+  ROADMAP Phase 1, AGENT.md, and this file's next-session notes (dated changelog
+  entries left as historical record; the Phase 3 entry documents the correction).
+
 ### 2026-07-30 — Phase 4 complete: project scaffolding (`karya new`)
 - **`internal/project`** ports `project-init.sh`: `ParseLanguage` (aliases),
   `NewSpec` (basename/module/group derivation), and `Scaffold` writing pure,
@@ -212,8 +224,8 @@ make build && go vet ./... && go test ./...
 ## Notes for the next session
 - The **isolation model** (PLAN §2) is the defining constraint: never touch the
   user's `~/.zshrc`, `~/.tmux.conf`, `~/.config/nvim`, Homebrew, or global mise.
-  Everything lives under the karya prefix; `NVIM_APPNAME=karya` + `tmux -L karya`
-  are the isolation primitives.
+  Everything lives under the karya prefix; `NVIM_APPNAME=karya/nvim` +
+  `tmux -L karya` are the isolation primitives.
 - Source-of-truth behavior to port lives in:
   `dotfiles/scripts/dev.sh`, `ide-agent.sh`, `ide-run.sh`, `project-init.sh`,
   `languages.sh`; `dotfiles/{install,update,rebuild,link,doctor}.sh`;

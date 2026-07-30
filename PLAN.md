@@ -179,12 +179,11 @@ karya/
 │   ├── tools/                   # tool detection + install into karya prefix
 │   ├── prefs/                   # per-project key=value preference store
 │   ├── doctor/                  # health checks
-│   └── update/                  # self-update (GitHub releases + checksum)
-├── assets/                      # go:embed sources (single-binary payload)
-│   ├── nvim/                    # vendored copy of nvim-config (Lua)
-│   ├── tmux.conf                # karya tmux config
-│   ├── starship.toml            # optional prompt (never overwrites user)
-│   └── manifest.json            # asset version → drives update/extraction
+│   ├── update/                  # self-update (GitHub releases + checksum)
+│   └── assets/                  # go:embed payload + extraction/versioning
+│       ├── nvim/                # vendored Neovim config (Lua)
+│       ├── tmux.conf            # karya tmux config
+│       └── *.go                 # embed + extract + manifest/version logic
 ├── docs/                        # USER-FACING product docs (embedded in binary)
 │   ├── tutorial.md              # self-guided tutorial
 │   ├── keymaps.md               # CLI / tmux / nvim key reference
@@ -225,7 +224,7 @@ binary (Phase 7). The **internal** engineering docs (`PLAN.md`, `ROADMAP.md`,
   editor (65%) | agent (top-right) / build+test (bottom-right), plus a `git`
   window running lazygit. Pane IDs + agent state stored in tmux session options
   (`@ide_*`), same scheme as today so behavior is identical.
-- `NVIM_APPNAME=karya`, `EDITOR=karya edit`, `VISUAL=karya edit`,
+- `NVIM_APPNAME=karya/nvim`, `EDITOR=karya edit`, `VISUAL=karya edit`,
   `GIT_EDITOR=karya edit` are set in the session environment so all
   editor-opening actions route into the editor pane.
 
