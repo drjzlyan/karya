@@ -29,9 +29,9 @@ unit/race/integration tests are green. Go 1.26.
 ### Resume point (do this next — Phase 7)
 1. ~~Embed the user docs + `karya help`/`karya docs`.~~ **Done** (#17).
 2. ~~`karya tutorial` (self-working) + `Ctrl-a ?` in-session help.~~ **Done** (this branch).
-3. `karya doctor` — tools/versions/isolation checks + per-language tooling; add
-   `karya completion`, a Homebrew tap, and cut `v1.0.0`.
-4. Provenance cleanup (final pass): strip every `nvim-config`/`dotfiles` reference
+3. ~~`karya doctor` — tools/versions/isolation + per-language tooling.~~ **Done** (this branch).
+4. Distribution: `karya completion`, a Homebrew tap, and cut `v1.0.0`.
+5. Provenance cleanup (final pass): strip every `nvim-config`/`dotfiles` reference
    from the whole repo and sever the build-time `../nvim-config` dependency.
 
 ### Phase 7 — what shipped so far
@@ -54,6 +54,16 @@ unit/race/integration tests are green. Go 1.26.
   a nil `Run`. Numbering is derived from slice order so it can't drift.
 - **`Ctrl-a ?`:** tmux binding pops up the key map/command reference via
   `display-popup -E "<karya> docs keymaps"` (tmux ≥ 3.2).
+- **`internal/doctor` + `karya doctor`:** health checks driven by an injected
+  `Probe` (so the report logic is hermetically unit-tested; the CLI supplies a
+  system-backed Probe via `exec.LookPath`, `tools.Installer.Available`,
+  `agent.Detect`, …). Checks: karya version, isolation invariant (every dir
+  namespaced under the karya prefix), embedded config extraction (nvim + tmux),
+  core tools with versions (tmux/nvim essential → Problem when missing;
+  git/mise/lazygit → Warn), detected coding agents, the language selection, and
+  per-language + always-on editor tooling via `tools.Plan`. Three severity
+  levels (`OK ✓ / Warn • / Problem ✗`); the command exits non-zero only on a
+  Problem. Exposed `tools.Installer.Available` as the read-only tooling probe.
 
 ### Phase 6 — what shipped
 - **`internal/update`:** self-update core with all network/OS side effects behind

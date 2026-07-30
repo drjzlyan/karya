@@ -94,6 +94,10 @@ func (in Installer) one(s ToolSpec) Result {
 	return Result{Tool: s.Name, Status: Installed}
 }
 
+// Available reports whether a tool is installed and usable in karya's prefix.
+// It is the read-only probe `karya doctor` uses to check per-language tooling.
+func (in Installer) Available(s ToolSpec) bool { return in.available(s) }
+
 // available reports whether a tool is already usable: its Bin resolves in
 // karya's BinDir or on the ambient PATH, or its Artifact exists under ToolsDir.
 func (in Installer) available(s ToolSpec) bool {
