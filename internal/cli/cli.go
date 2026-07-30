@@ -14,6 +14,7 @@ import (
 
 	"github.com/drjzlyan/karya/internal/agent"
 	"github.com/drjzlyan/karya/internal/editor"
+	"github.com/drjzlyan/karya/internal/project"
 	"github.com/drjzlyan/karya/internal/session"
 	"github.com/drjzlyan/karya/internal/version"
 )
@@ -42,7 +43,7 @@ func Run(args []string) int {
 	case "run":
 		return cmdRun(rest)
 	case "new":
-		return notImplemented("new", "scaffold a project (python|java|typescript|go|cpp|rust)")
+		return cmdNew(rest)
 	case "lang":
 		return notImplemented("lang", "select languages and runtime versions")
 	case "install":
@@ -170,6 +171,118 @@ func cmdRun(args []string) int {
 		return fail(err)
 	}
 	return 0
+}
+
+// cmdNew scaffolds a new project (`karya new <lang> <name> [dir]`). It also
+// accepts the "lang:name" form used by the tmux `Ctrl-a P` command-prompt.
+// After scaffolding it runs git init and, when invoked from inside a karya
+// session, opens the new project in its own IDE session and switches to it.
+func cmdNew(args []string) int {
+	lang, name, parent := parseNewArgs(args)
+	if lang == "" || name == "" {
+		fmt.Fprintf(os.Stderr, "usage: karya new <lang> <name> [dir]\nlanguages: %s\n",
+			strings.Join(project.Languages, ", "))
+		return 2
+	}
+
+	spec, err := project.NewSpec(lang, name)
+	if err != nil {
+		return fail(err)
+	}
+
+	a, err := newApp()
+	if err != nil {
+		return fail(err)
+	}
+
+	// Resolve the parent directory: an explicit third arg wins; otherwise fall
+	// back to the current session's workdir, then the cwd.
+	if parent == "" {
+		parent = sessionWorkdir(a)
+	}
+	if parent == "" {
+		parent, _ = os.Getwd()
+	}
+	parent = expandHome(parent)
+
+	dir, err := project.Scaffold(parent, spec)
+	if err != nil {
+		return fail(err)
+	}
+	if err := project.GitInit(dir); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	}
+	fmt.Printf("Created %s project: %s\n", spec.Lang, dir)
+
+	if !openInSession(a, spec.Basename, dir) {
+		fmt.Printf("Launch it with: karya dev %s %s\n", spec.Basename, dir)
+	}
+	return 0
+}
+
+// parseNewArgs accepts both `karya new <lang> <name> [dir]` and the single
+// "lang:name" token form. It returns empty strings when the input is unusable.
+func parseNewArgs(args []string) (lang, name, parent string) {
+	switch {
+	case len(args) == 1 && strings.Contains(args[0], ":"):
+		l, n, _ := strings.Cut(args[0], ":")
+		return strings.TrimSpace(l), strings.TrimSpace(n), ""
+	case len(args) >= 2:
+		if len(args) >= 3 {
+			parent = args[2]
+		}
+		return args[0], args[1], parent
+	default:
+		return "", "", ""
+	}
+}
+
+// sessionWorkdir returns the @ide_workdir of the karya session we are inside, or
+// "" when not in one.
+func sessionWorkdir(a *app) string {
+	if os.Getenv("TMUX") == "" {
+		return ""
+	}
+	name, err := a.tmux.Output("display-message", "-p", "#{session_name}")
+	if err != nil || name == "" {
+		return ""
+	}
+	wd, err := a.tmux.Output("show-option", "-t", name, "-v", "@ide_workdir")
+	if err != nil {
+		return ""
+	}
+	return wd
+}
+
+// openInSession opens dir as a karya IDE session named after the project and
+// switches the current client to it. It is a no-op (returning false) when not
+// inside a karya session. An existing session with the same name is reused.
+func openInSession(a *app, name, dir string) bool {
+	if os.Getenv("TMUX") == "" {
+		return false
+	}
+	name = sanitizeSession(name)
+	if a.tmux.HasSession(name) {
+		_ = a.tmux.Run("switch-client", "-t", name+":dev")
+		return true
+	}
+	detected := agent.Detect()
+	resolved := agent.Resolve(a.prefs.Get("agent."+dir), detected)
+	if resolved != "" {
+		_ = a.prefs.Set("agent."+dir, resolved)
+	}
+	if err := session.Build(a.tmux, session.Options{
+		Name:     name,
+		Workdir:  dir,
+		Agent:    resolved,
+		Detected: detected,
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not open session: %v\n", err)
+		return false
+	}
+	_ = a.tmux.Run("switch-client", "-t", name+":dev")
+	fmt.Printf("Opened session %q\n", name)
+	return true
 }
 
 // cmdAgent dispatches `karya agent <subcommand>`. In-session subcommands
@@ -308,7 +421,7 @@ Usage:
   karya agent <cmd>         status | switch | next | prev | reset | prefs | clear
   karya edit <file> [line]  Open a file in the editor pane (used as $EDITOR)
   karya run <cmd...>        Run a command in the build/test pane
-  karya new <lang> <name>   Scaffold a project
+  karya new <lang> <name>   Scaffold a project (python|java|typescript|go|cpp|rust)
   karya lang                Select languages and runtime versions
 
   karya install             Set up karya (isolated, non-destructive)

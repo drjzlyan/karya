@@ -70,12 +70,12 @@ from the binary, with zero impact on the user's own Neovim.
 
 ---
 
-## Phase 4 — Project scaffolding (`new`)
+## Phase 4 — Project scaffolding (`new`) ✅
 **Goal:** `karya new <lang> <name>` for all six languages.
 
-- ☐ `internal/project` scaffolds: python, java, typescript, go, cpp, rust
-- ☐ `git init`; open in a new dev window when inside a session
-- ☐ `Ctrl-a P` prompt (`lang:name`) → `karya new`
+- ☑ `internal/project` scaffolds: python, java, typescript, go, cpp, rust
+- ☑ `git init`; open in an IDE session when inside a karya session
+- ☑ `Ctrl-a P` prompt (`lang:name`) → `karya new`
 
 **Done when:** each language produces the same scaffold as `project-init.sh`.
 
