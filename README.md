@@ -67,8 +67,14 @@ Or via Homebrew (macOS and Linux):
 
 ```bash
 brew tap drjzlyan/karya https://github.com/drjzlyan/karya
+brew trust drjzlyan/karya   # Homebrew 6.0+ requires trusting non-official taps
 brew install karya
 ```
+
+> **Why `brew trust`?** Since Homebrew 6.0, loading a formula from a non-official
+> tap is refused until you trust it (a tap can run its own Ruby code). Trusting the
+> tap is a one-time step. To trust only this formula instead of the whole tap, use
+> `brew trust --formula drjzlyan/karya/karya`.
 
 Optionally wire karya into your shell (adds it to `PATH` and sets `$EDITOR`):
 
