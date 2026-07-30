@@ -90,6 +90,14 @@ var helpByCommand = map[string]commandHelp{
 		summary: "Print opt-in shell integration to eval in your rc file.",
 		details: []string{`Add: eval "$(karya shellenv)"`},
 	},
+	"completion": {
+		syntax:  "karya completion <bash|zsh|fish>",
+		summary: "Print a shell completion script to source.",
+		details: []string{
+			`bash/zsh: eval "$(karya completion <shell>)"`,
+			"fish:     karya completion fish | source",
+		},
+	},
 	"tutorial": {
 		syntax:  "karya tutorial [list|<lesson>]",
 		summary: "Run the self-working tutorial; lessons verify against a sandbox.",

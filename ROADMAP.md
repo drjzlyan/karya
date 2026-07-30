@@ -137,7 +137,7 @@ without the repo or a browser.
 ### Doctor & distribution
 - ☑ `karya doctor` — tools, versions, isolation checks, per-language tooling
 - ☐ `docs/` complete (isolation, commands, languages, troubleshooting)
-- ☐ Shell completions (`karya completion`)
+- ☑ Shell completions (`karya completion <bash|zsh|fish>`)
 - ☐ Homebrew tap
 - ☐ Tag `v1.0.0`, CHANGELOG, release automation
 
