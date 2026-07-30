@@ -1,6 +1,6 @@
-// Package session builds and manages karya's tmux IDE layout — a faithful port
-// of dotfiles/scripts/dev.sh, adapted to karya's isolated tmux server and the
-// NVIM_APPNAME/EDITOR routing that keeps everything namespaced to karya.
+// Package session builds and manages karya's tmux IDE layout on karya's isolated
+// tmux server, with the NVIM_APPNAME/EDITOR routing that keeps everything
+// namespaced to karya.
 //
 // Layout (window "dev"):
 //

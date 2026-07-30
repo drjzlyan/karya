@@ -1,5 +1,4 @@
-// Package project scaffolds new projects for the languages karya supports —
-// a faithful Go port of dotfiles/scripts/project-init.sh.
+// Package project scaffolds new projects for the languages karya supports.
 //
 // The file generation is pure and deterministic: Scaffold writes a complete,
 // self-contained project from embedded templates and never shells out to
@@ -32,8 +31,7 @@ const (
 	Rust       Language = "rust"
 )
 
-// languageAliases maps user-facing aliases to canonical languages, mirroring the
-// case statement in project-init.sh.
+// languageAliases maps user-facing aliases to canonical languages.
 var languageAliases = map[string]Language{
 	"python":     Python,
 	"java":       Java,
@@ -89,8 +87,7 @@ func NewSpec(lang, name string) (Spec, error) {
 	return Spec{Lang: l, Name: name, Basename: basename(name)}, nil
 }
 
-// basename returns the last component of a name split on '/' and '.', matching
-// project-init.sh's `tr '/.' '\n\n' | tail -1`.
+// basename returns the last component of a name split on '/' and '.'.
 func basename(name string) string {
 	parts := strings.FieldsFunc(name, func(r rune) bool { return r == '/' || r == '.' })
 	if len(parts) == 0 {
@@ -190,10 +187,9 @@ func className(base string) string {
 	return string(r)
 }
 
-// GitInit runs `git init && git add -A && git commit` in dir, best-effort. Like
-// project-init.sh it never fails the scaffold: a missing git binary or an empty
-// commit is ignored. It returns an error only if git is unavailable, so callers
-// can inform the user.
+// GitInit runs `git init && git add -A && git commit` in dir, best-effort. It
+// never fails the scaffold: a missing git binary or an empty commit is ignored.
+// It returns an error only if git is unavailable, so callers can inform the user.
 func GitInit(dir string) error {
 	if _, err := exec.LookPath("git"); err != nil {
 		return fmt.Errorf("git not found on PATH; skipped repository init")

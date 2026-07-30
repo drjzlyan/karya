@@ -25,7 +25,7 @@ type PrefStore interface {
 
 // Manager performs in-session agent operations (switch/next/prev/reset/status)
 // against a single tmux session, reading and writing the @ide_* session options
-// that session.Build seeds. It is a faithful port of dotfiles/scripts/ide-agent.sh.
+// that session.Build seeds.
 type Manager struct {
 	tmux    TmuxRunner
 	prefs   PrefStore
@@ -117,8 +117,8 @@ func (m *Manager) SwitchInteractive() error {
 }
 
 // launch respawns the agent pane and starts the named agent in it, updating
-// @ide_current_agent and saving the per-project preference — a port of
-// launch_in_pane. If the agent pane has disappeared it resets the layout first.
+// @ide_current_agent and saving the per-project preference. If the agent pane
+// has disappeared it resets the layout first.
 func (m *Manager) launch(name string) error {
 	workdir := m.Workdir()
 	if workdir == "" {
@@ -190,7 +190,7 @@ func (m *Manager) paneExists(pane string) bool {
 
 // cycleIndex returns the next index when stepping through a list of count items
 // from currentIdx. currentIdx of -1 (current agent not in the list) starts the
-// cycle from the ends, matching ide-agent.sh.
+// cycle from the ends.
 func cycleIndex(count, currentIdx int, forward bool) int {
 	if count == 0 {
 		return -1

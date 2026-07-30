@@ -65,8 +65,8 @@ var alwaysOn = []ToolSpec{
 
 // perLanguage maps a canonical language name to the tools it needs. LSP/formatter
 // versions track "latest" (they update independently of the runtime); pinned
-// download artifacts use known-good versions. Ported from the dotfiles tool
-// installer, re-pointed at karya's isolated prefix.
+// download artifacts use known-good versions. Everything installs into karya's
+// isolated prefix.
 var perLanguage = map[string][]ToolSpec{
 	"python": {
 		{Name: "basedpyright", Bin: "basedpyright", Kind: KindUV, Pkg: "basedpyright"},

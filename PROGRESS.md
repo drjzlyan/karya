@@ -30,17 +30,25 @@ unit/race/integration tests are green. Go 1.26.
 1. ~~Embed the user docs + `karya help`/`karya docs`.~~ **Done** (#17).
 2. ~~`karya tutorial` (self-working) + `Ctrl-a ?` in-session help.~~ **Done** (this branch).
 3. ~~`karya doctor` — tools/versions/isolation + per-language tooling.~~ **Done** (this branch).
-4. Distribution: ~~`karya completion`~~ **Done** (this branch); a Homebrew tap and
-   cut `v1.0.0` remain.
-5. Provenance cleanup (final pass): strip every `nvim-config`/`dotfiles` reference
-   from the whole repo and sever the build-time `../nvim-config` dependency.
+4. Distribution: ~~`karya completion`~~ **Done**; ~~Homebrew tap + release
+   automation~~ **wired** (this branch): GoReleaser + `.github/workflows/release.yml`
+   on `v*` tags produce cross-compiled tarballs + checksums with `install.sh`
+   attached, and `scripts/update-formula.sh` generates a cross-platform (macOS +
+   Linux) Homebrew formula committed to `main`. **Remaining:** cut `v0.1.0` (pipeline
+   shakedown) → then `v1.0.0`.
+5. ~~Provenance cleanup (final pass): describe karya on its own terms across the
+   whole repo and sever the build-time editor-config dependency.~~ **Done** (this
+   branch): the vendored `internal/assets/nvim/` is now the sole source of truth
+   (a clean checkout builds with no sibling repos), the embedded editor calls
+   `karya run`/`karya install` instead of external scripts, and the old vendoring
+   script is retired.
 
 ### Phase 7 — what shipped so far
 - **Embedded user docs (#17):** `internal/assets/docs.go` `go:embed`s `docs/*.md`
   with `DocTopics()`/`Doc(topic)` accessors. `scripts/sync-docs.sh` (+ `make
-  sync-docs`) vendors `docs/*.md` → `internal/assets/docs/` (mirrors the
-  `sync-nvim` idiom); a drift test (`internal/assets`) fails CI if the vendored
-  copy falls out of sync, keeping `docs/*.md` the single source of truth.
+  sync-docs`) vendors `docs/*.md` → `internal/assets/docs/`; a drift test
+  (`internal/assets`) fails CI if the vendored copy falls out of sync, keeping
+  `docs/*.md` the single source of truth.
 - **CLI docs/help (#17):** `karya docs [topic]` pages the embedded docs offline
   (`$PAGER` → `less -R` → `more`, plain write for pipes/redirects); no topic lists
   them. `karya help [command]` prints rich per-command help (synopsis + syntax +
@@ -138,8 +146,7 @@ unit/race/integration tests are green. Go 1.26.
 
 ### Phase 4 — what shipped
 - **`internal/project`:** pure, deterministic scaffolds for python/java/
-  typescript/go/cpp/rust from embedded `text/template`s — a faithful port of
-  `dotfiles/scripts/project-init.sh` (same files/layout/greetings). It never
+  typescript/go/cpp/rust from embedded `text/template`s. It never
   shells out to uv/cargo/go/npm, so generation is reproducible, offline, and
   hermetic to test. `NewSpec` normalises language aliases and derives the
   basename (last `/`- or `.`-separated component; module/group id preserved in
@@ -156,9 +163,9 @@ unit/race/integration tests are green. Go 1.26.
   `go test -race`, `go test -tags=integration`, `go build`.
 
 ### Phase 3 — what shipped
-- **Vendoring:** `scripts/sync-nvim.sh` (+ `make sync-nvim`) copies the runtime
-  subset of `../nvim-config` (init.lua, lua/**, lazy-lock.json, after/) into
-  `internal/assets/nvim/`, committed so `go:embed` works in CI/releases.
+- **Vendoring:** the runtime Neovim config (init.lua, lua/**, lazy-lock.json,
+  after/) lives in `internal/assets/nvim/`, committed so `go:embed` works in
+  CI/releases. This vendored tree is the source of truth.
 - **`internal/assets` (nvim):** `//go:embed all:nvim`; `NvimVersion` (sha256 over
   the sorted embedded tree), `ExtractNvimConfig` (clean re-extract + `manifest.json`),
   `EnsureNvimConfig` (extract only when missing/stale; reports whether it did).
@@ -174,13 +181,13 @@ unit/race/integration tests are green. Go 1.26.
   user's `~/.config/nvim` is never created. CI's integration job now installs nvim.
 
 ### Phase 2 — what shipped
-- `internal/prefs` — flat `key=value` store at `paths.PrefsFile()` (port of
-  `load_pref`/`save_pref`); Get/Set/Delete/Entries, order-preserving. Wired into
+- `internal/prefs` — flat `key=value` store at `paths.PrefsFile()`;
+  Get/Set/Delete/Entries, order-preserving. Wired into
   `dev` resolution: flag → saved pref → single → picker, and the choice is saved.
 - `internal/agent.Manager` — in-session `Next/Prev/SwitchTo/SwitchInteractive/
   Reset/ClearPref/StatusText` over `@ide_*` options; consumer-defined
   `TmuxRunner`/`PrefStore` interfaces keep unit tests hermetic (fake tmux + fake
-  prefs). Faithful port of `ide-agent.sh` respawn/layout-reset semantics.
+  prefs). Implements the agent-pane respawn/layout-reset semantics.
 - `karya agent switch|switch-to|next|prev|reset|status|prefs|clear` in the CLI;
   `Ctrl-a A/N/D` keybindings drive them. `switch` opens a tmux command-prompt
   that calls back `karya agent switch-to %%`.
@@ -263,7 +270,7 @@ make build && go vet ./... && go test ./...
   entries left as historical record; the Phase 3 entry documents the correction).
 
 ### 2026-07-30 — Phase 4 complete: project scaffolding (`karya new`)
-- **`internal/project`** ports `project-init.sh`: `ParseLanguage` (aliases),
+- **`internal/project`**: `ParseLanguage` (aliases),
   `NewSpec` (basename/module/group derivation), and `Scaffold` writing pure,
   deterministic per-language file sets from embedded templates for python, java,
   typescript, go, cpp, rust. No external tools invoked → reproducible & offline.
@@ -276,9 +283,9 @@ make build && go vet ./... && go test ./...
   `-tags=integration`/`build`). The `Ctrl-a P` keybinding was already wired.
 
 ### 2026-07-30 — Phase 3 complete: embedded, isolated Neovim editor
-- **Vendoring:** `scripts/sync-nvim.sh` + `make sync-nvim` copy the runtime subset
-  of `../nvim-config` into `internal/assets/nvim/` (committed — `go:embed` needs it
-  in every checkout for CI and GoReleaser; removed the stale `.gitignore` exclude).
+- **Vendoring:** the runtime Neovim config lives in `internal/assets/nvim/`
+  (committed — `go:embed` needs it in every checkout for CI and GoReleaser;
+  removed the stale `.gitignore` exclude).
 - **`internal/assets` (nvim):** `//go:embed all:nvim`; `NvimVersion` (deterministic
   sha256 over the sorted embedded tree), `ExtractNvimConfig` (clean re-extract that
   drops upstream-removed files + writes `manifest.json`), `EnsureNvimConfig` (extract
@@ -298,13 +305,13 @@ make build && go vet ./... && go test ./...
   `go test -tags=integration`, `go build`.
 
 ### 2026-07-30 — Phase 2 complete: agent management + per-project memory
-- **`internal/prefs`**: flat `key=value` store (port of `load_pref`/`save_pref`)
-  with `Get/Set/Delete/Entries`, order-preserving replace, lazy file creation.
-  Round-trip/replace/delete/value-with-`=` unit tests, all under `t.TempDir()`.
+- **`internal/prefs`**: flat `key=value` store with `Get/Set/Delete/Entries`,
+  order-preserving replace, lazy file creation. Round-trip/replace/delete/
+  value-with-`=` unit tests, all under `t.TempDir()`.
 - **`internal/agent.Manager`**: in-session `Next/Prev/SwitchTo/SwitchInteractive/
-  Reset/ClearPref/StatusText` operating on `@ide_*` tmux options; faithful port
-  of `ide-agent.sh` (respawn agent pane, rebuild right column, recreate the dev
-  window if lost, relaunch current agent). Depends on consumer-defined
+  Reset/ClearPref/StatusText` operating on `@ide_*` tmux options (respawn agent
+  pane, rebuild right column, recreate the dev window if lost, relaunch current
+  agent). Depends on consumer-defined
   `TmuxRunner`/`PrefStore` interfaces (dependency inversion) so cycling math and
   state transitions are unit-tested with a fake tmux + fake prefs (hermetic).
 - **CLI**: `karya agent switch|switch-to|next|prev|reset|status|prefs|clear`;
@@ -341,8 +348,8 @@ make build && go vet ./... && go test ./...
   - Isolation verified live: session env carries `NVIM_APPNAME=karya` and
     `EDITOR/VISUAL/GIT_EDITOR=<karya> edit`; all `@ide_*` state options set; the
     user's **default tmux server is untouched**.
-  - `karya edit <file> [line]` (port of `nvim-edit`) and `karya run [-d dir]
-    <cmd>` / `--focus` (port of `ide-run`) route into the right panes, with
+  - `karya edit <file> [line]` and `karya run [-d dir] <cmd>` / `--focus` route
+    into the right panes, with
     direct-exec fallbacks outside tmux. `-k` recreate, `-q` quit implemented.
   - `karya agent status` detects installed agents.
   - Tests: isolation (paths/env), vim-escape/shell-quote, agent resolution.
@@ -350,7 +357,7 @@ make build && go vet ./... && go test ./...
 - Note: Go's `flag` needs options before positionals (`karya dev -a none foo`).
 
 ### 2026-07-29 — Project inception
-- Explored source repos `nvim-config` and `dotfiles`; mapped every feature.
+- Scoped the full feature set and mapped every capability karya would provide.
 - **Decisions locked in** (via clarifying questions):
   - Architecture: **orchestrator/launcher** binary (Neovim stays the editor).
   - Language: **Go** (single static binary, easy cross-compile & self-update).
@@ -369,19 +376,11 @@ make build && go vet ./... && go test ./...
   user's `~/.zshrc`, `~/.tmux.conf`, `~/.config/nvim`, Homebrew, or global mise.
   Everything lives under the karya prefix; `NVIM_APPNAME=karya/nvim` +
   `tmux -L karya` are the isolation primitives.
-- Source-of-truth behavior to port lives in:
-  `dotfiles/scripts/dev.sh`, `ide-agent.sh`, `ide-run.sh`, `project-init.sh`,
-  `languages.sh`; `dotfiles/{install,update,rebuild,link,doctor}.sh`;
-  `dotfiles/bin/nvim-edit`; and the whole `nvim-config/` tree.
+- The embedded editor config in `internal/assets/nvim/` is the sole source of
+  truth; edit it directly. A clean checkout builds with no sibling repositories.
 - Keep the dependency list minimal (stdlib → add `cobra` only when the tree
   grows). No CGO.
 - **Keep ROADMAP.md and PLAN.md in sync** — when one changes, reflect it in
   the other (and this file).
-- **Consolidating ≠ copying.** Port behavior from `nvim-config`/`dotfiles`
-  deliberately; do not carry over their bugs or bad design decisions
-  (e.g. dotfiles' symlink-over-user-config model — rejected in PLAN §2).
-- **Phase 7 cleanup:** strip all `nvim-config`/`dotfiles` references from the
-  **entire repo** — shipped surfaces (`--help`, README, docs, code comments)
-  *and* the internal design log (PLAN, this file, AGENT) — and sever the
-  build-time `../nvim-config` dependency. History stays in git. Tracked in
-  ROADMAP Phase 7.
+- **Product, not a port.** karya stands on its own terms; reject any design that
+  breaks the isolation guarantee (e.g. symlinking over user config — see PLAN §2).

@@ -1,11 +1,10 @@
 # karya — Architecture & Design Plan
 
 > **karya** (कार्य — "work/task") is an AI-first, terminal-based IDE delivered as a
-> single self-contained Go binary. It consolidates the author's existing
-> [`nvim-config`](../../nvim-config) (the editor) and
-> [`dotfiles`](../../dotfiles) (the machine/session tooling) into one program
-> that installs, launches, manages, and updates a complete terminal development
-> environment — **without touching any of the user's existing settings.**
+> single self-contained Go binary. It installs, launches, manages, and updates a
+> complete terminal development environment — a Neovim editor, a tmux multiplexer,
+> and a coding agent, all orchestrated as one program — **without touching any of
+> the user's existing settings.**
 
 ---
 
@@ -16,9 +15,8 @@ Today the IDE is assembled from many moving parts:
 - **Neovim** with a capability-oriented Lua config (LSP, completion, DAP, git,
   tasks, testing, 6 languages, health checks).
 - **tmux** driving a 3-pane layout (editor / agent / build+test) plus a git window.
-- **Shell scripts** (`dev.sh`, `ide-agent.sh`, `ide-run.sh`, `nvim-edit`,
-  `project-init.sh`, `languages.sh`, `install.sh`, `link.sh`, `update.sh`,
-  `rebuild.sh`, `doctor.sh`).
+- **Session tooling** for the IDE layout, agent control, command routing, project
+  scaffolding, language selection, and install/update/health.
 - **External tools** (ripgrep, fd, fzf, lazygit, delta, starship, zoxide, uv,
   mise, LSP servers, formatters, debug adapters) installed via Homebrew + mise.
 
@@ -44,10 +42,10 @@ promoted from an optional pane to a **first-class, deeply-integrated citizen**.
 
 ## 2. The isolation model (the most important design decision)
 
-The current `dotfiles` approach **symlinks over** `~/.zshrc`, `~/.tmux.conf`,
-`~/.config/nvim`, etc. That is exactly what karya must **not** do. karya achieves
-"installation does not impact any other user settings" through strict
-namespacing:
+A traditional config-management approach **symlinks over** `~/.zshrc`,
+`~/.tmux.conf`, `~/.config/nvim`, etc. That is exactly what karya must **not** do.
+karya achieves "installation does not impact any other user settings" through
+strict namespacing:
 
 | Concern | User's setup (untouched) | karya's isolated equivalent |
 |---|---|---|
@@ -84,27 +82,26 @@ there is nothing to restore.
 
 ---
 
-## 3. Feature consolidation map
+## 3. Command & subsystem map
 
-Every existing capability maps to a karya command or subsystem:
+Every capability karya provides maps to a command or subsystem:
 
-| Existing (dotfiles / nvim-config) | karya replacement |
+| Capability | karya surface |
 |---|---|
-| `dev.sh` (tmux IDE session) | `karya` / `karya dev [name] [path]` |
-| `ide-agent.sh` (switch/next/prev/reset/status/prefs) | `karya agent <subcommand>` |
-| `ide-run.sh` (route cmd to build/test pane) | `karya run <cmd>` |
-| `bin/nvim-edit` (open file in editor pane) | `karya edit <file> [line]` (also the `$EDITOR`) |
-| `project-init.sh` (scaffold python/java/ts/go/cpp/rust) | `karya new <lang> <name> [dir]` |
-| `languages.sh` (select langs + versions, gen mise.toml) | `karya lang [list\|add\|remove\|all]` |
-| `install.sh` (bootstrap machine) | `karya install` (isolated, non-destructive) |
-| `link.sh` / `unlink.sh` (symlink dotfiles) | **removed** — replaced by embedded configs + `NVIM_APPNAME` |
-| `update.sh` (upgrade everything) | `karya update` |
-| `rebuild.sh` (re-apply after pull) | folded into `karya update` |
-| `doctor.sh` + `:DevHealth` | `karya doctor` |
-| `nvim-config/**` (Lua editor config) | embedded assets, extracted to `~/.config/karya/nvim` |
-| `.tmux.conf` | embedded asset, karya-owned socket + conf |
-| `.zshrc` aliases / PATH | `karya shellenv` (opt-in) |
-| `starship.toml`, `lazygit`, `ghostty`, `.gitconfig` | embedded/optional; never overwrite user files |
+| tmux IDE session | `karya` / `karya dev [name] [path]` |
+| switch/next/prev/reset/status/prefs for the agent | `karya agent <subcommand>` |
+| route a command to the build/test pane | `karya run <cmd>` |
+| open a file in the editor pane | `karya edit <file> [line]` (also the `$EDITOR`) |
+| scaffold python/java/ts/go/cpp/rust | `karya new <lang> <name> [dir]` |
+| select langs + versions, generate isolated mise config | `karya lang [list\|add\|remove\|all]` |
+| isolated, non-destructive install | `karya install` |
+| upgrade karya + refresh configs/tools/plugins | `karya update` |
+| no symlinking of user config | embedded configs + `NVIM_APPNAME` (never touches `~/.config/nvim`) |
+| health checks | `karya doctor` (+ in-editor `:DevHealth`) |
+| Lua editor config | embedded asset, extracted to `~/.config/karya/nvim` |
+| tmux config | embedded asset, karya-owned socket + conf |
+| shell aliases / PATH | `karya shellenv` (opt-in) |
+| starship / lazygit / ghostty / gitconfig | embedded/optional; never overwrite user files |
 | tmux keybindings (`prefix + A/N/D/P/S`) | wired to `karya agent …` / `karya new` in embedded tmux.conf |
 
 ---
@@ -220,10 +217,10 @@ binary (Phase 7). The **internal** engineering docs (`PLAN.md`, `ROADMAP.md`,
 - All tmux invocations go through `-L karya` (dedicated socket) and, on server
   start, `-f <extracted tmux.conf>`. This isolates karya's server from the
   user's tmux entirely.
-- `session.Dev` reproduces the current `dev.sh` layout:
+- `session.Dev` builds the IDE layout:
   editor (65%) | agent (top-right) / build+test (bottom-right), plus a `git`
   window running lazygit. Pane IDs + agent state stored in tmux session options
-  (`@ide_*`), same scheme as today so behavior is identical.
+  (`@ide_*`), so behavior is stable across sessions.
 - `NVIM_APPNAME=karya/nvim`, `EDITOR=karya edit`, `VISUAL=karya edit`,
   `GIT_EDITOR=karya edit` are set in the session environment so all
   editor-opening actions route into the editor pane.
@@ -235,24 +232,23 @@ binary (Phase 7). The **internal** engineering docs (`PLAN.md`, `ROADMAP.md`,
 - Resolution order for the active agent: `--agent` flag → saved per-project
   preference → single detected agent → interactive picker.
 - Per-project preference persisted to `~/.local/share/karya/prefs` (via
-  `internal/prefs`), keyed by absolute workdir. Mirrors today's
-  `ide-preferences.local` semantics.
+  `internal/prefs`), keyed by absolute workdir.
 - Switch/next/prev respawn the agent pane; reset rebuilds the layout while
-  preserving the editor pane — a faithful port of `ide-agent.sh`.
+  preserving the editor pane.
 
 ### 6.3 Editor integration (`internal/editor`)
 
 - `karya edit <file> [line]` finds the editor pane in the current karya tmux
   session and sends `:e +<line> <file>`; falls back to launching nvim directly
-  when not in a session. Port of `bin/nvim-edit`.
-- The Neovim config is the vendored `nvim-config`, embedded via `go:embed` and
+  when not in a session.
+- The Neovim config is the vendored editor config, embedded via `go:embed` and
   extracted to `~/.config/karya/nvim`, versioned by a `manifest.json` so `update`
   re-extracts only when the embedded tree changed. Launched as
   `NVIM_APPNAME=karya/nvim nvim`: the trailing `/nvim` makes Neovim read that
   extracted config and nest its data/state/cache under `…/karya/nvim`, one level
   below karya's own tmux.conf/prefs. Plugin sync via
   `nvim --headless +"Lazy! sync" +qa` against the isolated data dir.
-- `nvim-config`'s existing `:DevHealth`, `:DevUpdate`, etc. remain available and
+- The embedded config's `:DevHealth`, `:DevUpdate`, etc. remain available and
   are surfaced through `karya doctor` / `karya update`.
 
 ### 6.4 Language & tool management (`internal/lang`, `internal/tools`)
@@ -296,15 +292,12 @@ binary (Phase 7). The **internal** engineering docs (`PLAN.md`, `ROADMAP.md`,
 - **Linux tool bootstrap** parity (no Homebrew) — designed for, validated later.
 - **Ghostty / terminal config** stays optional and never overwrites user files;
   may ship as a documented sample rather than an applied config.
-- **Provenance vs. product.** `nvim-config` and `dotfiles` are the *sources* this
-  binary consolidates; karya must not inherit their bugs or design choices (e.g.
-  `dotfiles`' symlink-over-user-config model — deliberately rejected, see §2).
-  Each ported behavior is re-evaluated, not copied verbatim. The final phase
-  (ROADMAP Phase 7) strips every reference to those projects from the **entire
-  repo** — shipped surfaces (`--help`, README, docs, code comments) *and* the
-  internal design log (this file, PROGRESS, AGENT) — and severs the build-time
-  dependency on `../nvim-config`. Historical provenance lives in git history,
-  not the tree.
+- **Product, not a port.** karya stands on its own terms. It deliberately rejects
+  the symlink-over-user-config model (see §2) and any other design that would
+  break the isolation guarantee. The embedded editor tree
+  (`internal/assets/nvim/`) is the sole source of truth — a clean checkout builds
+  with no sibling repositories. Historical provenance lives in git history, not
+  the tree.
 
 See [ROADMAP.md](ROADMAP.md) for the phased build order and
 [PROGRESS.md](PROGRESS.md) for the current resume point.

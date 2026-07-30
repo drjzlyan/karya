@@ -11,10 +11,9 @@ import (
 
 // Reset restores the default dev-window layout: the editor pane on the left and
 // the agent / build-test panes stacked on the right, then relaunches the current
-// agent. If the whole dev window has been lost it is recreated from scratch. It
-// is a port of reset_layout in ide-agent.sh, adapted to karya's isolated env
-// (panes inherit NVIM_APPNAME/EDITOR from the session environment, so no per-pane
-// exports are needed).
+// agent. If the whole dev window has been lost it is recreated from scratch.
+// karya's isolated env means panes inherit NVIM_APPNAME/EDITOR from the session
+// environment, so no per-pane exports are needed.
 func (m *Manager) Reset() error {
 	workdir := m.Workdir()
 	if workdir == "" {
@@ -138,8 +137,7 @@ func (m *Manager) StatusText() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// ClearPref removes the saved agent preference for this session's workdir,
-// porting clear_pref from ide-agent.sh.
+// ClearPref removes the saved agent preference for this session's workdir.
 func (m *Manager) ClearPref() error {
 	workdir := m.Workdir()
 	if workdir == "" {

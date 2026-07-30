@@ -1,10 +1,10 @@
 // Package editor routes file-open and command-run actions into the IDE panes.
 //
-//   - Edit ports dotfiles/bin/nvim-edit: open a file in the editor (nvim) pane,
-//     falling back to launching Neovim directly outside a session. It is what
-//     karya sets as $EDITOR/$VISUAL/$GIT_EDITOR.
-//   - Run ports dotfiles/scripts/ide-run.sh: send a command to the build/test
-//     pane, creating it on demand, or run directly when outside tmux.
+//   - Edit opens a file in the editor (nvim) pane, falling back to launching
+//     Neovim directly outside a session. It is what karya sets as
+//     $EDITOR/$VISUAL/$GIT_EDITOR.
+//   - Run sends a command to the build/test pane, creating it on demand, or runs
+//     the command directly when outside tmux.
 //
 // Both operate on karya's isolated tmux server via internal/tmuxx.
 package editor

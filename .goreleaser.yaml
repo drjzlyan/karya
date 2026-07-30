@@ -36,6 +36,16 @@ changelog:
       - "^test:"
       - "^chore:"
 
+# NOTE: the Homebrew tap (HomebrewFormula/karya.rb) is generated cross-platform
+# (macOS + Linux, amd64 + arm64) by scripts/update-formula.sh from the checksums
+# below, and committed to `main` by the release workflow — GoReleaser's built-in
+# `brews`/`homebrew_casks` are intentionally not used (cask is macOS-only; `brews`
+# is deprecated).
+
 release:
   draft: false
   prerelease: auto
+  # Attach the standalone installer so `releases/latest/download/install.sh`
+  # (referenced by `karya tutorial`) resolves.
+  extra_files:
+    - glob: ./scripts/install.sh

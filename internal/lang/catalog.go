@@ -1,8 +1,7 @@
 // Package lang manages which programming languages and runtime versions karya
 // configures, and generates an isolated mise config from that selection.
 //
-// It is the karya-native successor to the dotfiles language selector, but obeys
-// the isolation model (PLAN.md §2, §6.4): the selection lives at
+// It obeys karya's isolation model (PLAN.md §2, §6.4): the selection lives at
 // config.Paths.LanguagesFile and the generated mise config, runtimes, and shims
 // stay entirely inside the karya prefix. The user's global mise is never read or
 // written.

@@ -11,9 +11,11 @@ orchestrates Neovim (editor), tmux (multiplexer), and a coding agent into one
 cohesive IDE, and installs/updates/uninstalls itself **without touching any of
 the user's existing settings**. Full design: [PLAN.md](PLAN.md).
 
-It consolidates two existing repos (kept as the behavioral source of truth):
-- `../nvim-config` — the Neovim editor config (Lua). Gets embedded into karya.
-- `../dotfiles` — the shell scripts / session tooling. Reimplemented in Go.
+karya has two internal layers, both shipped inside the one binary:
+- an embedded Neovim editor configuration (Lua), extracted to the isolated karya
+  prefix on install.
+- Go-native session, agent, project, and tooling logic that drives Neovim, tmux,
+  and the chosen coding agent.
 
 ## Locked decisions (do not relitigate)
 - **Orchestrator, not a from-scratch editor.** Neovim + tmux are reused.
@@ -128,7 +130,7 @@ internal/assets/        go:embed payload (tmux.conf + vendored nvim config) + ex
 internal/tmuxx/         tmux wrapper (dedicated socket)
 internal/session/       `dev` layout: Build (testable) + Dev (Build+Attach), Quit
 internal/agent/         detect/select (switch/next/prev/reset land in Phase 2)
-internal/editor/        `edit` (nvim-edit) + `run` (ide-run) routing
+internal/editor/        `edit` (editor pane) + `run` (build/test pane) routing
 internal/project/       `new` scaffolds                      [Phase 4]
 internal/lang/          language/version selection           [Phase 5]
 internal/tools/         tool detect/install                  [Phase 5]
@@ -141,17 +143,18 @@ PLAN.md ROADMAP.md PROGRESS.md AGENT.md    INTERNAL docs (root; never shipped)
 README.md CONTRIBUTING.md                  user landing + contributor entry
 ```
 
-## Behavioral source of truth (port faithfully)
-| karya piece | Port from |
+## Command surface
+| karya command | What it does |
 |---|---|
-| `session` / `dev` | `dotfiles/scripts/dev.sh` |
-| `agent` | `dotfiles/scripts/ide-agent.sh` |
-| `run` | `dotfiles/scripts/ide-run.sh` |
-| `edit` | `dotfiles/bin/nvim-edit` |
-| `project`/`new` | `dotfiles/scripts/project-init.sh` |
-| `lang` | `dotfiles/scripts/languages.sh` |
-| `install`/`update` | `dotfiles/{install,update,rebuild,link,doctor}.sh` |
-| embedded editor | `nvim-config/**` |
+| `dev` (default) | Build/attach the isolated tmux IDE session for the cwd |
+| `agent` | Switch/cycle/reset the coding-agent pane in a session |
+| `run` | Send a command to the build/test pane (or run it directly) |
+| `edit` | Open a file in the editor pane; also karya's `$EDITOR` |
+| `new` / `project` | Scaffold a new project for a supported language |
+| `lang` | Choose languages + runtimes; regenerate the isolated mise config |
+| `install` / `update` / `uninstall` | Isolated self-install, self-update, and teardown |
+| `doctor` | Health checks: tools, versions, isolation, per-language tooling |
+| `help` / `docs` / `tutorial` | Offline docs embedded in the binary |
 
 ---
 
