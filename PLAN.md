@@ -185,16 +185,23 @@ karya/
 │   ├── tmux.conf                # karya tmux config
 │   ├── starship.toml            # optional prompt (never overwrites user)
 │   └── manifest.json            # asset version → drives update/extraction
-├── docs/
-│   ├── PLAN.md                  # this file
+├── docs/                        # USER-FACING product docs (embedded in binary)
+│   ├── tutorial.md              # self-guided tutorial
+│   ├── keymaps.md               # CLI / tmux / nvim key reference
 │   ├── isolation.md             # deep dive on the zero-impact model
 │   ├── commands.md              # per-command reference
 │   └── languages.md             # per-language tooling
-├── ROADMAP.md                   # phased milestones
-├── PROGRESS.md                  # living status log (resume point)
-├── AGENT.md                     # instructions for the agent/dev resuming work
+├── PLAN.md                      # this file — architecture & design (internal)
+├── ROADMAP.md                   # phased milestones (internal)
+├── PROGRESS.md                  # living status log / resume point (internal)
+├── AGENT.md                     # engineering guide for contributors (internal)
 └── README.md                    # user-facing intro + quick start
 ```
+
+Documentation is split by audience: **`docs/`** holds user-facing product docs
+(tutorial, keymaps, command/language reference) — these are embedded in the
+binary (Phase 7). The **internal** engineering docs (`PLAN.md`, `ROADMAP.md`,
+`PROGRESS.md`, `AGENT.md`) live at the repo root and are never shipped to users.
 
 ### Dependency policy
 
@@ -300,5 +307,5 @@ karya/
   dependency on `../nvim-config`. Historical provenance lives in git history,
   not the tree.
 
-See [ROADMAP.md](../ROADMAP.md) for the phased build order and
-[PROGRESS.md](../PROGRESS.md) for the current resume point.
+See [ROADMAP.md](ROADMAP.md) for the phased build order and
+[PROGRESS.md](PROGRESS.md) for the current resume point.

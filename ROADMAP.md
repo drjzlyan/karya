@@ -2,7 +2,7 @@
 
 Phased build order. Each phase is shippable and leaves the binary working.
 Track live status in [PROGRESS.md](PROGRESS.md). Full design in
-[docs/PLAN.md](docs/PLAN.md).
+[PLAN.md](PLAN.md).
 
 Legend: ☐ not started · ◐ in progress · ☑ done
 
@@ -139,7 +139,7 @@ without the repo or a browser.
 - ☐ Remove **every** reference to the source projects (`nvim-config`, `dotfiles`)
   from the entire repo — karya is the product, not a port. This covers both
   shipped surfaces (`--help`, README, `docs/`, in-code comments) **and** the
-  internal design log (`docs/PLAN.md`, `PROGRESS.md`, `AGENT.md`): rewrite
+  internal design log (`PLAN.md`, `PROGRESS.md`, `AGENT.md`): rewrite
   "port of X.sh" / consolidation-map language to describe karya on its own
   terms. Historical provenance lives in git history, not the tree.
 - ☐ Sever the build-time dependency on `../nvim-config`: the vendored

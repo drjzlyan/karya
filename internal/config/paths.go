@@ -1,6 +1,6 @@
 // Package config resolves karya's isolated, XDG-based directories.
 //
-// Isolation is the defining constraint of karya (see docs/PLAN.md §2): every
+// Isolation is the defining constraint of karya (see PLAN.md §2): every
 // path karya touches lives under a karya-owned prefix, and Neovim/tmux are
 // launched with karya-specific env so the user's own configuration is never
 // read or written. All other packages MUST obtain paths from here rather than

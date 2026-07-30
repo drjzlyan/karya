@@ -4,7 +4,7 @@ Living status document. **Read this first when resuming work.** It records what
 is done, what is in flight, and the exact next action. Update it at the end of
 every working session.
 
-- **Plan:** [docs/PLAN.md](docs/PLAN.md)
+- **Plan:** [PLAN.md](PLAN.md)
 - **Roadmap:** [ROADMAP.md](ROADMAP.md)
 - **Agent/dev guide:** [AGENT.md](AGENT.md)
 
@@ -201,7 +201,7 @@ make build && go vet ./... && go test ./...
   - Language: **Go** (single static binary, easy cross-compile & self-update).
   - AI agent: **BYO agent CLI, first-class** (detect/manage existing agent CLIs;
     native API agent deferred to Phase 8).
-- Wrote [docs/PLAN.md](docs/PLAN.md) (full architecture + isolation model),
+- Wrote [PLAN.md](PLAN.md) (full architecture + isolation model),
   [ROADMAP.md](ROADMAP.md), this file, and [AGENT.md](AGENT.md).
 - Scaffolded repo: `go.mod`, `main.go`, `internal/{cli,config,version}`,
   `Makefile`, `.gitignore`, `assets/`. Every PLAN §4 command exists as a stub.
@@ -220,7 +220,7 @@ make build && go vet ./... && go test ./...
   `dotfiles/bin/nvim-edit`; and the whole `nvim-config/` tree.
 - Keep the dependency list minimal (stdlib → add `cobra` only when the tree
   grows). No CGO.
-- **Keep ROADMAP.md and docs/PLAN.md in sync** — when one changes, reflect it in
+- **Keep ROADMAP.md and PLAN.md in sync** — when one changes, reflect it in
   the other (and this file).
 - **Consolidating ≠ copying.** Port behavior from `nvim-config`/`dotfiles`
   deliberately; do not carry over their bugs or bad design decisions

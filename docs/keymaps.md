@@ -6,8 +6,8 @@ reference. For a guided, hands-on path through it, see
 [tutorial.md](tutorial.md).
 
 > Editor keymaps below are provided by karya's embedded Neovim config, which is
-> extracted on `karya install` (Phase 3). CLI/tmux orchestration is available
-> now. See [../ROADMAP.md](../ROADMAP.md) for current status.
+> extracted on `karya install`. CLI/tmux orchestration is available now; run
+> `karya doctor` to see what's available in your installed build.
 
 ---
 

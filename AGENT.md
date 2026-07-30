@@ -9,7 +9,7 @@ maintainable, well-tested, well-documented, and welcoming to contributors.
 An **AI-first, terminal-based IDE** shipped as a **single Go binary**. It
 orchestrates Neovim (editor), tmux (multiplexer), and a coding agent into one
 cohesive IDE, and installs/updates/uninstalls itself **without touching any of
-the user's existing settings**. Full design: [docs/PLAN.md](docs/PLAN.md).
+the user's existing settings**. Full design: [PLAN.md](PLAN.md).
 
 It consolidates two existing repos (kept as the behavioral source of truth):
 - `../nvim-config` — the Neovim editor config (Lua). Gets embedded into karya.
@@ -35,7 +35,7 @@ karya-owned dirs. The primitives:
 Every path goes through `internal/config` — never hardcode `~/.config/...`.
 `karya uninstall` must remove everything karya created and nothing else. Any PR
 that could violate isolation must include a test proving it does not. See
-[docs/PLAN.md](docs/PLAN.md) §2 before touching install/launch code.
+[PLAN.md](PLAN.md) §2 before touching install/launch code.
 
 ---
 
@@ -100,8 +100,16 @@ Good docs are part of "done":
   start with the identifier name). `revive`'s `exported` rule enforces this in CI.
 - Each package has a package comment explaining its responsibility and how it
   fits the isolation model.
-- User-facing changes update `docs/`:
-  - new/changed commands → `docs/PLAN.md` §4 and `README.md`;
+- **Docs are split by audience — keep them on separate paths:**
+  - **User-facing product docs** live in `docs/` (`tutorial.md`, `keymaps.md`,
+    and the planned `commands.md`/`languages.md`/`isolation.md`). These are what
+    ship embedded in the binary (Phase 7). Write them for a karya *user*.
+  - **Internal engineering docs** live at the repo root (`PLAN.md`, `ROADMAP.md`,
+    `PROGRESS.md`, `AGENT.md`). These are for contributors and are never shipped.
+  - Never mix the two: user docs don't reference internal planning, and internal
+    docs aren't embedded or surfaced to end users.
+- User-facing changes update `docs/` and the design record:
+  - new/changed commands → `PLAN.md` §4 and `README.md`;
   - new keymaps/workflows → `docs/tutorial.md` and `docs/keymaps.md`.
 - Update `ROADMAP.md` (tick boxes) and `PROGRESS.md` (status + resume point +
   changelog entry) whenever a phase advances.
@@ -126,7 +134,10 @@ internal/tools/         tool detect/install                  [Phase 5]
 internal/prefs/         per-project preference store         [Phase 2]
 internal/doctor/        health checks                        [Phase 7]
 internal/update/        self-update                          [Phase 6]
-docs/ ROADMAP.md PROGRESS.md README.md CONTRIBUTING.md
+
+docs/                   USER-FACING product docs (embedded in binary, Phase 7)
+PLAN.md ROADMAP.md PROGRESS.md AGENT.md    INTERNAL docs (root; never shipped)
+README.md CONTRIBUTING.md                  user landing + contributor entry
 ```
 
 ## Behavioral source of truth (port faithfully)
