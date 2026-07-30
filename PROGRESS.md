@@ -4,7 +4,7 @@ Living status document. **Read this first when resuming work.** It records what
 is done, what is in flight, and the exact next action. Update it at the end of
 every working session.
 
-- **Plan:** [docs/PLAN.md](docs/PLAN.md)
+- **Plan:** [PLAN.md](PLAN.md)
 - **Roadmap:** [ROADMAP.md](ROADMAP.md)
 - **Agent/dev guide:** [AGENT.md](AGENT.md)
 
@@ -107,6 +107,18 @@ make build && go vet ./... && go test ./...
 
 ## Changelog
 
+### 2026-07-30 — Fix: agent-reset editor pane used the wrong NVIM_APPNAME
+- **Bug:** `agent.recreateDevWindow` (rebuild path when the `dev` window was
+  lost) launched the editor with a hardcoded `NVIM_APPNAME=karya` instead of
+  `config.NvimAppName` (`karya/nvim`), so a rebuilt editor pane read the karya
+  prefix root rather than the extracted nvim config — the Phase 3 isolation fix
+  was missed here. Now uses `config.NvimAppName`; added a hermetic unit test
+  (`TestRecreateDevWindowNamespacesNvim`) that guards it, and aligned the agent
+  integration test's session env to the same value.
+- **Docs:** corrected stale `NVIM_APPNAME=karya` → `karya/nvim` in PLAN §6.1,
+  ROADMAP Phase 1, AGENT.md, and this file's next-session notes (dated changelog
+  entries left as historical record; the Phase 3 entry documents the correction).
+
 ### 2026-07-30 — Phase 4 complete: project scaffolding (`karya new`)
 - **`internal/project`** ports `project-init.sh`: `ParseLanguage` (aliases),
   `NewSpec` (basename/module/group derivation), and `Scaffold` writing pure,
@@ -201,7 +213,7 @@ make build && go vet ./... && go test ./...
   - Language: **Go** (single static binary, easy cross-compile & self-update).
   - AI agent: **BYO agent CLI, first-class** (detect/manage existing agent CLIs;
     native API agent deferred to Phase 8).
-- Wrote [docs/PLAN.md](docs/PLAN.md) (full architecture + isolation model),
+- Wrote [PLAN.md](PLAN.md) (full architecture + isolation model),
   [ROADMAP.md](ROADMAP.md), this file, and [AGENT.md](AGENT.md).
 - Scaffolded repo: `go.mod`, `main.go`, `internal/{cli,config,version}`,
   `Makefile`, `.gitignore`, `assets/`. Every PLAN §4 command exists as a stub.
@@ -212,11 +224,21 @@ make build && go vet ./... && go test ./...
 ## Notes for the next session
 - The **isolation model** (PLAN §2) is the defining constraint: never touch the
   user's `~/.zshrc`, `~/.tmux.conf`, `~/.config/nvim`, Homebrew, or global mise.
-  Everything lives under the karya prefix; `NVIM_APPNAME=karya` + `tmux -L karya`
-  are the isolation primitives.
+  Everything lives under the karya prefix; `NVIM_APPNAME=karya/nvim` +
+  `tmux -L karya` are the isolation primitives.
 - Source-of-truth behavior to port lives in:
   `dotfiles/scripts/dev.sh`, `ide-agent.sh`, `ide-run.sh`, `project-init.sh`,
   `languages.sh`; `dotfiles/{install,update,rebuild,link,doctor}.sh`;
   `dotfiles/bin/nvim-edit`; and the whole `nvim-config/` tree.
 - Keep the dependency list minimal (stdlib → add `cobra` only when the tree
   grows). No CGO.
+- **Keep ROADMAP.md and PLAN.md in sync** — when one changes, reflect it in
+  the other (and this file).
+- **Consolidating ≠ copying.** Port behavior from `nvim-config`/`dotfiles`
+  deliberately; do not carry over their bugs or bad design decisions
+  (e.g. dotfiles' symlink-over-user-config model — rejected in PLAN §2).
+- **Phase 7 cleanup:** strip all `nvim-config`/`dotfiles` references from the
+  **entire repo** — shipped surfaces (`--help`, README, docs, code comments)
+  *and* the internal design log (PLAN, this file, AGENT) — and sever the
+  build-time `../nvim-config` dependency. History stays in git. Tracked in
+  ROADMAP Phase 7.

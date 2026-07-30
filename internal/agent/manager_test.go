@@ -3,6 +3,8 @@ package agent
 import (
 	"strings"
 	"testing"
+
+	"github.com/drjzlyan/karya/internal/config"
 )
 
 func TestCycleIndex(t *testing.T) {
@@ -150,6 +152,31 @@ func TestSwitchInteractiveBuildsCallback(t *testing.T) {
 	callback := prompt[len(prompt)-1]
 	if !strings.Contains(callback, "/usr/local/bin/karya agent switch-to %%") {
 		t.Errorf("callback = %q, want it to call `agent switch-to %%%%`", callback)
+	}
+}
+
+// TestRecreateDevWindowNamespacesNvim guards the isolation primitive: when the
+// dev window has to be rebuilt, the editor pane must launch Neovim with the
+// namespaced NVIM_APPNAME (karya/nvim), otherwise it reads the wrong config dir.
+func TestRecreateDevWindowNamespacesNvim(t *testing.T) {
+	ft := &fakeTmux{opts: map[string]string{"@ide_workdir": "/home/me/proj"}}
+	m := NewManager(ft, newFakePrefs(), "proj", "karya")
+	m.detect = func() []string { return nil } // no agent relaunch noise
+
+	// No "dev" window exists (fake list-windows is empty) → recreateDevWindow.
+	if err := m.Reset(); err != nil {
+		t.Fatalf("Reset: %v", err)
+	}
+
+	want := "NVIM_APPNAME=" + config.NvimAppName + " nvim"
+	var got string
+	for _, r := range ft.runs {
+		if len(r) >= 4 && r[0] == "send-keys" && strings.HasSuffix(r[3], " nvim") {
+			got = r[3]
+		}
+	}
+	if got != want {
+		t.Errorf("editor launch = %q, want %q", got, want)
 	}
 }
 

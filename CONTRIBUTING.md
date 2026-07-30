@@ -18,7 +18,7 @@ participating you agree to uphold it.
 1. **The isolation guarantee is non-negotiable.** karya must never read or write
    the user's `~/.zshrc`, `~/.tmux.conf`, `~/.gitconfig`, `~/.config/nvim`,
    Homebrew, or global mise. Every path goes through `internal/config`. See
-   [docs/PLAN.md](docs/PLAN.md) §2.
+   [PLAN.md](PLAN.md) §2.
 2. **Test-driven development.** Write a failing test first, then the code to make
    it pass, then refactor. No behavior change lands without a test.
 3. **Keep it maintainable.** Follow SOLID and the design guidance in AGENT.md.
@@ -91,10 +91,15 @@ Keep the subject imperative and ≤ 72 characters. Explain the *why* in the body
 
 ## Documentation
 
+Docs are split by audience: **user-facing product docs** live in `docs/` (and
+ship embedded in the binary), while **internal engineering docs** (`PLAN.md`,
+`ROADMAP.md`, `PROGRESS.md`, `AGENT.md`) live at the repo root. Keep them on
+their separate paths — don't mix planning notes into user docs or vice versa.
+
 - Package- and function-level doc comments on all exported symbols.
 - User-facing features are documented in `docs/` and, where they involve
   keymaps or workflows, added to `docs/tutorial.md` and `docs/keymaps.md`.
-- If you add or change a command, update `docs/PLAN.md` §4 and the README.
+- If you add or change a command, update `PLAN.md` §4 and the README.
 
 ## Reporting bugs & requesting features
 

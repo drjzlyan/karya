@@ -5,7 +5,7 @@
 // The store keeps preferences that are not derivable from the code — chiefly the
 // agent chosen for a given project directory (key "agent.<workdir>"). Like every
 // piece of karya state it lives inside the karya prefix, never in the user's own
-// config, preserving the isolation guarantee (see docs/PLAN.md §2).
+// config, preserving the isolation guarantee (see PLAN.md §2).
 package prefs
 
 import (

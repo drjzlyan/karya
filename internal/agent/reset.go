@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/drjzlyan/karya/internal/config"
 )
 
 // Reset restores the default dev-window layout: the editor pane on the left and
@@ -44,7 +46,7 @@ func (m *Manager) recreateDevWindow(workdir string) error {
 		return fmt.Errorf("recreate dev window: %w", err)
 	}
 	_ = m.tmux.Run("select-pane", "-t", m.session+":dev.1", "-T", "editor")
-	_ = m.tmux.Run("send-keys", "-t", m.session+":dev.1", "NVIM_APPNAME=karya nvim", "Enter")
+	_ = m.tmux.Run("send-keys", "-t", m.session+":dev.1", "NVIM_APPNAME="+config.NvimAppName+" nvim", "Enter")
 	m.buildRightColumn(workdir)
 	m.relaunchCurrent()
 	_ = m.tmux.Run("select-pane", "-t", m.session+":dev.1")

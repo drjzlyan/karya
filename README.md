@@ -27,7 +27,7 @@ agent from an optional pane to a first-class, deeply-integrated feature.
 - **Single binary.** The Neovim and tmux configs are embedded and extracted on
   demand — one artifact, no manual assembly.
 - **Zero-impact install.** karya never edits your `~/.zshrc`, `~/.tmux.conf`,
-  `~/.gitconfig`, or `~/.config/nvim`. It uses `NVIM_APPNAME=karya` and a
+  `~/.gitconfig`, or `~/.config/nvim`. It uses `NVIM_APPNAME=karya/nvim` and a
   dedicated tmux socket, keeping everything under karya-owned directories.
   `karya uninstall` removes karya and nothing else.
 - **AI-first.** Detects and manages your existing agent CLIs (claude, codex,
@@ -55,10 +55,15 @@ make build                 # -> ./bin/karya
 
 ## Documentation
 
+**For users** (product docs, in `docs/`):
+
 - [docs/tutorial.md](docs/tutorial.md) — **self-guided tutorial**: learn every
   keymap, movement, and per-language workflow hands-on
 - [docs/keymaps.md](docs/keymaps.md) — full CLI / tmux / Neovim key reference
-- [docs/PLAN.md](docs/PLAN.md) — architecture, isolation model, subsystems
+
+**For contributors** (internal engineering docs, at the repo root):
+
+- [PLAN.md](PLAN.md) — architecture, isolation model, subsystems
 - [ROADMAP.md](ROADMAP.md) — phased build order
 - [PROGRESS.md](PROGRESS.md) — current status / resume point
 - [AGENT.md](AGENT.md) — engineering guide (TDD, SOLID, CI, isolation)

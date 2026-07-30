@@ -71,7 +71,7 @@ func Build(t *tmuxx.Tmux, o Options) error {
 	}
 
 	// Session environment: editor actions route into the editor pane and Neovim
-	// stays namespaced under NVIM_APPNAME=karya. New panes inherit these.
+	// stays namespaced under NVIM_APPNAME=karya/nvim. New panes inherit these.
 	for _, kv := range t.Env {
 		if name, val, ok := strings.Cut(kv, "="); ok {
 			_ = t.Run("set-environment", "-t", o.Name, name, val)

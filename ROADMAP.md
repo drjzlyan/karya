@@ -2,7 +2,7 @@
 
 Phased build order. Each phase is shippable and leaves the binary working.
 Track live status in [PROGRESS.md](PROGRESS.md). Full design in
-[docs/PLAN.md](docs/PLAN.md).
+[PLAN.md](PLAN.md).
 
 Legend: ☐ not started · ◐ in progress · ☑ done
 
@@ -30,7 +30,7 @@ work; every documented command exists as a stub.
 - ☑ `internal/tmuxx` — tmux wrapper on dedicated socket `-L karya`
 - ☑ Embed + extract `tmux.conf` (`internal/assets`); launch server with `-f`
 - ☑ `internal/session.Dev` — editor/agent/build panes + git window + `@ide_*` state
-- ☑ Session env: `NVIM_APPNAME=karya`, `EDITOR/VISUAL/GIT_EDITOR=karya edit`
+- ☑ Session env: `NVIM_APPNAME=karya/nvim`, `EDITOR/VISUAL/GIT_EDITOR=karya edit`
 - ☑ `karya edit <file> [line]` (port of `nvim-edit`)
 - ☑ `karya run [-d dir] <cmd>` / `--focus` (port of `ide-run`)
 - ☑ `-k` recreate / `-q` quit / attach-if-exists
@@ -135,9 +135,21 @@ without the repo or a browser.
 - ☐ Homebrew tap
 - ☐ Tag `v1.0.0`, CHANGELOG, release automation
 
+### Provenance cleanup (final pass — karya stands alone)
+- ☐ Remove **every** reference to the source projects (`nvim-config`, `dotfiles`)
+  from the entire repo — karya is the product, not a port. This covers both
+  shipped surfaces (`--help`, README, `docs/`, in-code comments) **and** the
+  internal design log (`PLAN.md`, `PROGRESS.md`, `AGENT.md`): rewrite
+  "port of X.sh" / consolidation-map language to describe karya on its own
+  terms. Historical provenance lives in git history, not the tree.
+- ☐ Sever the build-time dependency on `../nvim-config`: the vendored
+  `internal/assets/nvim/` becomes the sole source of truth; `scripts/sync-nvim.sh`
+  is either retired or repointed so a clean checkout builds with no sibling repos.
+
 **Done when:** clean install → working AI IDE → `karya doctor` all-green on a
 fresh macOS machine, and `karya help`/`karya tutorial` teach the whole workflow
-**offline from the binary alone**, with no repo checkout or network needed.
+**offline from the binary alone**, with no repo checkout or network needed —
+and no shipped surface still refers to `nvim-config`/`dotfiles`.
 
 ---
 

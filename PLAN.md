@@ -179,22 +179,28 @@ karya/
 │   ├── tools/                   # tool detection + install into karya prefix
 │   ├── prefs/                   # per-project key=value preference store
 │   ├── doctor/                  # health checks
-│   └── update/                  # self-update (GitHub releases + checksum)
-├── assets/                      # go:embed sources (single-binary payload)
-│   ├── nvim/                    # vendored copy of nvim-config (Lua)
-│   ├── tmux.conf                # karya tmux config
-│   ├── starship.toml            # optional prompt (never overwrites user)
-│   └── manifest.json            # asset version → drives update/extraction
-├── docs/
-│   ├── PLAN.md                  # this file
+│   ├── update/                  # self-update (GitHub releases + checksum)
+│   └── assets/                  # go:embed payload + extraction/versioning
+│       ├── nvim/                # vendored Neovim config (Lua)
+│       ├── tmux.conf            # karya tmux config
+│       └── *.go                 # embed + extract + manifest/version logic
+├── docs/                        # USER-FACING product docs (embedded in binary)
+│   ├── tutorial.md              # self-guided tutorial
+│   ├── keymaps.md               # CLI / tmux / nvim key reference
 │   ├── isolation.md             # deep dive on the zero-impact model
 │   ├── commands.md              # per-command reference
 │   └── languages.md             # per-language tooling
-├── ROADMAP.md                   # phased milestones
-├── PROGRESS.md                  # living status log (resume point)
-├── AGENT.md                     # instructions for the agent/dev resuming work
+├── PLAN.md                      # this file — architecture & design (internal)
+├── ROADMAP.md                   # phased milestones (internal)
+├── PROGRESS.md                  # living status log / resume point (internal)
+├── AGENT.md                     # engineering guide for contributors (internal)
 └── README.md                    # user-facing intro + quick start
 ```
+
+Documentation is split by audience: **`docs/`** holds user-facing product docs
+(tutorial, keymaps, command/language reference) — these are embedded in the
+binary (Phase 7). The **internal** engineering docs (`PLAN.md`, `ROADMAP.md`,
+`PROGRESS.md`, `AGENT.md`) live at the repo root and are never shipped to users.
 
 ### Dependency policy
 
@@ -218,7 +224,7 @@ karya/
   editor (65%) | agent (top-right) / build+test (bottom-right), plus a `git`
   window running lazygit. Pane IDs + agent state stored in tmux session options
   (`@ide_*`), same scheme as today so behavior is identical.
-- `NVIM_APPNAME=karya`, `EDITOR=karya edit`, `VISUAL=karya edit`,
+- `NVIM_APPNAME=karya/nvim`, `EDITOR=karya edit`, `VISUAL=karya edit`,
   `GIT_EDITOR=karya edit` are set in the session environment so all
   editor-opening actions route into the editor pane.
 
@@ -290,6 +296,15 @@ karya/
 - **Linux tool bootstrap** parity (no Homebrew) — designed for, validated later.
 - **Ghostty / terminal config** stays optional and never overwrites user files;
   may ship as a documented sample rather than an applied config.
+- **Provenance vs. product.** `nvim-config` and `dotfiles` are the *sources* this
+  binary consolidates; karya must not inherit their bugs or design choices (e.g.
+  `dotfiles`' symlink-over-user-config model — deliberately rejected, see §2).
+  Each ported behavior is re-evaluated, not copied verbatim. The final phase
+  (ROADMAP Phase 7) strips every reference to those projects from the **entire
+  repo** — shipped surfaces (`--help`, README, docs, code comments) *and* the
+  internal design log (this file, PROGRESS, AGENT) — and severs the build-time
+  dependency on `../nvim-config`. Historical provenance lives in git history,
+  not the tree.
 
-See [ROADMAP.md](../ROADMAP.md) for the phased build order and
-[PROGRESS.md](../PROGRESS.md) for the current resume point.
+See [ROADMAP.md](ROADMAP.md) for the phased build order and
+[PROGRESS.md](PROGRESS.md) for the current resume point.

@@ -7,9 +7,10 @@ Go, C/C++, and Rust — all inside one terminal IDE.
 
 > **Status:** karya is under active development. The CLI + tmux session are
 > available now; the editor experience (LSP, debugging, per-language keymaps) is
-> delivered by karya's embedded Neovim config, extracted on `karya install`
-> (Roadmap Phase 3). Sections describing editor features document the target
-> behavior — check [../ROADMAP.md](../ROADMAP.md) for what has shipped.
+> delivered by karya's embedded Neovim config, extracted on `karya install`.
+> Sections describing editor features document the target behavior — some may
+> not yet be present in your installed build. Run `karya version` and
+> `karya doctor` to see what's available.
 
 Conventions:
 
@@ -205,7 +206,7 @@ You get a 3-pane layout plus a `git` window:
 ```
 
 Move between panes with `Ctrl-a h/j/k/l`. The editor runs karya's Neovim
-(`NVIM_APPNAME=karya`, fully isolated). Anything that opens `$EDITOR` (git,
+(`NVIM_APPNAME=karya/nvim`, fully isolated). Anything that opens `$EDITOR` (git,
 lazygit, agents) routes back into the editor pane via `karya edit`.
 
 ### 1.4 Core editor movements you'll use everywhere
@@ -538,5 +539,4 @@ commit → `P` push → `q` back.
 | Check the environment | `karya doctor` |
 | Update everything | `karya update` |
 
-See also [keymaps.md](keymaps.md) for the full reference and
-[PLAN.md](PLAN.md) for the architecture.
+See also [keymaps.md](keymaps.md) for the full key reference.
