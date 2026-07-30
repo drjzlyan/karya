@@ -31,11 +31,12 @@ unit/race/integration tests are green. Go 1.26.
 2. ~~`karya tutorial` (self-working) + `Ctrl-a ?` in-session help.~~ **Done** (this branch).
 3. ~~`karya doctor` — tools/versions/isolation + per-language tooling.~~ **Done** (this branch).
 4. Distribution: ~~`karya completion`~~ **Done**; ~~Homebrew tap + release
-   automation~~ **wired** (this branch): GoReleaser + `.github/workflows/release.yml`
-   on `v*` tags produce cross-compiled tarballs + checksums with `install.sh`
-   attached, and `scripts/update-formula.sh` generates a cross-platform (macOS +
-   Linux) Homebrew formula committed to `main`. **Remaining:** cut `v0.1.0` (pipeline
-   shakedown) → then `v1.0.0`.
+   automation~~ **Done** (#21–#23): GoReleaser + `.github/workflows/release.yml` on
+   `v*` tags produce cross-compiled tarballs + checksums with `install.sh` attached,
+   and `scripts/update-formula.sh` generates a cross-platform (macOS + Linux) Homebrew
+   formula. Proven end-to-end by the **`v0.1.0`** release; on each tag the workflow
+   opens a formula PR and auto-merges it via the `RELEASE_TOKEN` PAT (`main` is
+   protected, so it never pushes directly). **Remaining:** tag `v1.0.0`.
 5. ~~Provenance cleanup (final pass): describe karya on its own terms across the
    whole repo and sever the build-time editor-config dependency.~~ **Done** (this
    branch): the vendored `internal/assets/nvim/` is now the sole source of truth
