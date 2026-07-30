@@ -40,6 +40,7 @@ reference. For a guided, hands-on path through it, see
 | `karya doctor` | Health check |
 | `karya shellenv` | Print opt-in shell integration (`eval "$(karya shellenv)"`) |
 | `karya version` | Version / build info |
+| `karya tutorial [n]` | Run the self-working tutorial (verifies against a sandbox) |
 | `karya docs [topic]` | Read the embedded docs offline (no topic lists them) |
 | `karya help [command]` | General help, or detailed help for one command |
 
@@ -77,6 +78,7 @@ Bindings marked *(default)* are standard tmux built-ins.
 | `Ctrl-a P` | New project (`language:name`) → `karya new` |
 | `Ctrl-a S` | Toggle synchronize-panes |
 | `Ctrl-a g` | Open lazygit (reuse or create the `git` window) |
+| `Ctrl-a ?` | Pop up this key map & command reference → `karya docs keymaps` |
 | `Ctrl-a Q` | Kill the IDE session (confirm) |
 
 ---

@@ -125,14 +125,14 @@ without the repo or a browser.
   `docs/keymaps.md`) so they travel with the binary (`make sync-docs` vendors them)
 - ☑ `karya help [command]` — rich, per-command help beyond the flag usage `flag`
   prints, pointing at the embedded docs; `karya help topics` lists the commands
-- ☐ `karya tutorial` — a **self-guided, self-working** tutorial launched from the
+- ☑ `karya tutorial` — a **self-guided, self-working** tutorial launched from the
   binary: numbered lessons a user can step through (`karya tutorial [lesson]`),
-  each runnable against a throwaway sandbox session so commands actually execute
-  and are verified, not just displayed
+  each runnable against a throwaway sandbox so commands actually execute and are
+  verified (isolation, scaffold, git-init, embedded docs, tmux, agents)
 - ☑ `karya docs [topic]` — browse the embedded docs offline (pager/`$PAGER`)
 - ☑ Single source of truth: `docs/*.md` are the source, embedded at build time; a
   test asserts the embedded content stays in sync with `docs/`
-- ☐ `Ctrl-a ?` keybinding opens help/tutorial inside the session
+- ☑ `Ctrl-a ?` keybinding opens the in-session help (key map & command reference)
 
 ### Doctor & distribution
 - ☐ `karya doctor` — tools, versions, isolation checks, per-language tooling
