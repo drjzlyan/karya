@@ -50,9 +50,12 @@ jobs:
             exit 0
           fi
           git commit -m "chore(release): Homebrew formula for ${GITHUB_REF_NAME}"
-          git push -f origin "$branch"
+          # Push as GH_TOKEN (the RELEASE_TOKEN PAT when set) rather than the
+          # checkout's default GITHUB_TOKEN, so the PR is authored by a real user
+          # and the required CI checks run — a prerequisite for auto-merge.
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
           gh pr create --base main --head "$branch" \
             --title "chore(release): Homebrew formula for ${GITHUB_REF_NAME}" \
             --body "Automated: updates \`HomebrewFormula/karya.rb\` for ${GITHUB_REF_NAME} from the release checksums. Merge to publish to the Homebrew tap." \
             || gh pr edit "$branch" --title "chore(release): Homebrew formula for ${GITHUB_REF_NAME}"
-          gh pr merge "$branch" --squash --auto || echo "Auto-merge not enabled; merge the formula PR manually."
+          gh pr merge "$branch" --squash --auto --delete-branch || echo "Auto-merge not enabled; merge the formula PR manually."
