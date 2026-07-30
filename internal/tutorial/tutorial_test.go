@@ -22,10 +22,12 @@ func TestLessonsWellFormed(t *testing.T) {
 	}
 }
 
-// TestVerifiedLessonsPass runs every self-working lesson against a real sandbox
-// and asserts each verification passes and prints a ✓ with detail. This is the
-// heart of the "self-working" guarantee.
-func TestVerifiedLessonsPass(t *testing.T) {
+// TestNoLessonFails runs every lesson against a real sandbox and asserts none
+// reports a hard Fail — so on any machine (with or without tmux/agents/git) the
+// tutorial never falsely reports karya as broken. Missing optional tools surface
+// as Notes, not failures. This is environment-robust: it must pass on the CI
+// unit runner, which has no tmux installed.
+func TestNoLessonFails(t *testing.T) {
 	sb, err := NewSandbox()
 	if err != nil {
 		t.Fatalf("NewSandbox: %v", err)
@@ -41,17 +43,35 @@ func TestVerifiedLessonsPass(t *testing.T) {
 			t.Errorf("lesson %d output missing its title", l.Num)
 		}
 		if !ok {
-			t.Errorf("lesson %d failed verification:\n%s", l.Num, out)
+			t.Errorf("lesson %d reported a failure:\n%s", l.Num, out)
 		}
 		if l.Run != nil {
 			verified++
-			if !strings.Contains(out, "✓") {
-				t.Errorf("lesson %d has a Run but printed no ✓:\n%s", l.Num, out)
+			if !strings.ContainsAny(out, "✓•") {
+				t.Errorf("lesson %d has a Run but printed no outcome marker:\n%s", l.Num, out)
 			}
 		}
 	}
 	if verified < 3 {
 		t.Errorf("expected several self-working lessons, got %d", verified)
+	}
+}
+
+// TestHermeticLessonsPass asserts the machine-independent verifications actually
+// pass (Pass, not just non-Fail) — these prove karya's own behavior works.
+func TestHermeticLessonsPass(t *testing.T) {
+	sb, err := NewSandbox()
+	if err != nil {
+		t.Fatalf("NewSandbox: %v", err)
+	}
+	t.Cleanup(func() { _ = sb.Cleanup() })
+
+	for _, fn := range []func(*Sandbox) (Outcome, string){
+		verifyIsolation, verifyScaffold, verifyEmbeddedDocs,
+	} {
+		if o, detail := fn(sb); o != Pass {
+			t.Errorf("expected Pass, got outcome %d: %s", o, detail)
+		}
 	}
 }
 
@@ -62,8 +82,8 @@ func TestRenderReportsFailure(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = sb.Cleanup() })
 
-	boom := Lesson{Num: 1, Title: "boom", Body: "b", Run: func(*Sandbox) (string, error) {
-		return "", os.ErrPermission
+	boom := Lesson{Num: 1, Title: "boom", Body: "b", Run: func(*Sandbox) (Outcome, string) {
+		return Fail, "kaboom"
 	}}
 	var buf bytes.Buffer
 	if Render(&buf, sb, boom) {
@@ -71,6 +91,17 @@ func TestRenderReportsFailure(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "✗") {
 		t.Errorf("failing lesson printed no ✗:\n%s", buf.String())
+	}
+
+	note := Lesson{Num: 1, Title: "note", Body: "b", Run: func(*Sandbox) (Outcome, string) {
+		return Note, "heads up"
+	}}
+	buf.Reset()
+	if !Render(&buf, sb, note) {
+		t.Error("Render returned false for a Note (should not count as failure)")
+	}
+	if !strings.Contains(buf.String(), "•") {
+		t.Errorf("note lesson printed no •:\n%s", buf.String())
 	}
 }
 
