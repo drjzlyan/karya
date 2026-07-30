@@ -12,22 +12,43 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 4 — Project scaffolding (`new`) (next)
-**Overall:** Phases 0–3 complete. `karya` launches a fully isolated tmux IDE
+**Active phase:** Phase 5 — Language & tool management (`lang`, tools) (next)
+**Overall:** Phases 0–4 complete. `karya` launches a fully isolated tmux IDE
 session (editor/agent/build panes + git window); `karya edit`/`run` route into
 panes; agent detection/switching/cycling/reset + per-project memory are wired;
-the full Neovim config now ships embedded in the binary and extracts to a
-karya-namespaced dir with zero impact on the user's own Neovim. Build + vet +
-golangci-lint + unit/race/integration tests are green. Go 1.26.
+the full Neovim config ships embedded and extracts to a karya-namespaced dir
+with zero impact on the user's own Neovim; `karya new` scaffolds all six
+languages and opens the project in an IDE session. Build + vet + golangci-lint +
+unit/race/integration tests are green. Go 1.26.
 
-### Resume point (do this next — Phase 4)
-1. `internal/project` — scaffold python/java/typescript/go/cpp/rust, a faithful
-   port of `dotfiles/scripts/project-init.sh` (same files/layout per language).
-2. `git init` the new project; when inside a karya session, open it in a new
-   `dev` window (reuse the session layout).
-3. Wire `Ctrl-a P` (tmux command-prompt `lang:name`) → `karya new`.
-4. TDD: table-driven per-language scaffold tests under `t.TempDir()`; keep file
-   generation pure/testable and the tmux/side effects thin.
+### Resume point (do this next — Phase 5)
+1. `internal/lang` — interactive language/version selector, versions from
+   `mise ls-remote`; write `languages.local`; generate an **isolated** mise
+   config inside the karya prefix (never touch the user's global mise).
+2. `internal/tools` — detect-or-install LSPs/formatters/adapters into the karya
+   tool prefix (`paths.ToolsBin()`); always-on servers + per-language selectable
+   servers (PLAN §6.4). Port `dotfiles/scripts/languages.sh`.
+3. TDD: keep version parsing / selection logic pure and unit-tested; the mise
+   invocation and installs are the thin side-effect layer.
+
+### Phase 4 — what shipped
+- **`internal/project`:** pure, deterministic scaffolds for python/java/
+  typescript/go/cpp/rust from embedded `text/template`s — a faithful port of
+  `dotfiles/scripts/project-init.sh` (same files/layout/greetings). It never
+  shells out to uv/cargo/go/npm, so generation is reproducible, offline, and
+  hermetic to test. `NewSpec` normalises language aliases and derives the
+  basename (last `/`- or `.`-separated component; module/group id preserved in
+  `Name`); `className` yields a valid Java identifier. `Scaffold` refuses to
+  overwrite an existing dir. `GitInit` is a separate best-effort side effect.
+- **CLI `karya new`:** accepts `<lang> <name> [dir]` **and** the `lang:name`
+  token form used by `Ctrl-a P`. Parent dir resolves as explicit arg → current
+  session's `@ide_workdir` → cwd. After scaffolding + git init it opens the new
+  project in its own IDE session (`session.Build` + `switch-client`) when run
+  inside a karya session, else prints the `karya dev` launch hint.
+- **Tests:** table-driven per-language scaffold assertions + basename/alias/
+  class-name/dir-exists cases under `t.TempDir()`; `parseNewArgs` unit test for
+  both invocation forms. Gate green: `gofmt`, `go vet`, `golangci-lint` v2,
+  `go test -race`, `go test -tags=integration`, `go build`.
 
 ### Phase 3 — what shipped
 - **Vendoring:** `scripts/sync-nvim.sh` (+ `make sync-nvim`) copies the runtime
@@ -76,8 +97,8 @@ make build && go vet ./... && go test ./...
 | 1 | Session orchestration (`dev`) | ☑ done |
 | 2 | Agent management | ☑ done |
 | 3 | Editor integration (embedded nvim) | ☑ done |
-| 4 | Project scaffolding (`new`) | ◐ next |
-| 5 | Language & tool management | ☐ |
+| 4 | Project scaffolding (`new`) | ☑ done |
+| 5 | Language & tool management | ◐ next |
 | 6 | Install / update / uninstall | ☐ |
 | 7 | Embedded help, self-guided tutorial, doctor & distribution | ☐ |
 | 8 | (Deferred) Native agent | ☐ |
@@ -85,6 +106,19 @@ make build && go vet ./... && go test ./...
 ---
 
 ## Changelog
+
+### 2026-07-30 — Phase 4 complete: project scaffolding (`karya new`)
+- **`internal/project`** ports `project-init.sh`: `ParseLanguage` (aliases),
+  `NewSpec` (basename/module/group derivation), and `Scaffold` writing pure,
+  deterministic per-language file sets from embedded templates for python, java,
+  typescript, go, cpp, rust. No external tools invoked → reproducible & offline.
+  `GitInit` is a separate best-effort step; existing target dirs are refused.
+- **CLI:** `karya new <lang> <name> [dir]` (+ `lang:name` form for `Ctrl-a P`).
+  Parent dir = arg → session `@ide_workdir` → cwd; opens the project in its own
+  IDE session via `session.Build` + `switch-client` when inside a karya session.
+- **Tests:** hermetic table-driven scaffold tests under `t.TempDir()` +
+  `parseNewArgs` cases. Gate green (`gofmt`/`vet`/`golangci-lint` v2/`-race`/
+  `-tags=integration`/`build`). The `Ctrl-a P` keybinding was already wired.
 
 ### 2026-07-30 — Phase 3 complete: embedded, isolated Neovim editor
 - **Vendoring:** `scripts/sync-nvim.sh` + `make sync-nvim` copy the runtime subset
