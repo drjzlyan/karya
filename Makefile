@@ -12,7 +12,7 @@ LDFLAGS := -s -w \
 # golangci-lint version: match CI, which installs `latest`. Override to pin.
 GOLANGCI_VERSION ?= latest
 
-.PHONY: build install fmt vet lint test tidy clean run sync-nvim gate
+.PHONY: build install fmt vet lint test tidy clean run sync-nvim sync-docs gate
 
 build: ## Build the karya binary into ./bin
 	@mkdir -p bin
@@ -20,6 +20,9 @@ build: ## Build the karya binary into ./bin
 
 sync-nvim: ## Vendor ../nvim-config into internal/assets/nvim for embedding
 	./scripts/sync-nvim.sh
+
+sync-docs: ## Vendor docs/*.md into internal/assets/docs for embedding
+	./scripts/sync-docs.sh
 
 install: ## Install karya into ~/.local/bin
 	go build -ldflags "$(LDFLAGS)" -o $$HOME/.local/bin/$(BINARY) .

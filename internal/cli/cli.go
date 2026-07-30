@@ -28,9 +28,13 @@ func Run(args []string) int {
 
 	cmd, rest := args[0], args[1:]
 	switch cmd {
-	case "-h", "--help", "help":
+	case "-h", "--help":
 		usage(os.Stdout)
 		return 0
+	case "help":
+		return cmdHelp(rest)
+	case "docs":
+		return cmdDocs(rest)
 	case "-v", "--version", "version":
 		fmt.Println(version.String())
 		return 0
@@ -431,8 +435,9 @@ Usage:
   karya doctor              Health check
   karya shellenv            Print opt-in shell integration (eval this)
   karya version             Print version / build info
-  karya help                Show this help
+  karya docs [topic]        Read the embedded docs offline (no topic lists them)
+  karya help [command]      Show this help, or detailed help for one command
 
-Docs: docs/tutorial.md · docs/keymaps.md
+Docs: karya docs tutorial · karya docs keymaps
 `)
 }
