@@ -56,7 +56,7 @@ func GenerateMiseConfig(s *Selection, vars MiseVars) string {
 		if tool == "" {
 			continue // system toolchain (cpp) — no managed runtime
 		}
-		b.WriteString(fmt.Sprintf("%s = [%s]\n", tool, quoteVersions(s.versions[lang])))
+		fmt.Fprintf(&b, "%s = [%s]\n", tool, quoteVersions(s.versions[lang]))
 	}
 
 	b.WriteString("\n[env]\n")
@@ -65,10 +65,10 @@ func GenerateMiseConfig(s *Selection, vars MiseVars) string {
 		b.WriteString("JAVA_HOME = { value = \"{{ exec(command='mise where java') }}\", tools = true }\n")
 	}
 	if hasGo {
-		b.WriteString(fmt.Sprintf("GOPATH = %q\n", vars.GoPath))
+		fmt.Fprintf(&b, "GOPATH = %q\n", vars.GoPath)
 	}
 	if hasRust {
-		b.WriteString(fmt.Sprintf("CARGO_HOME = %q\n", vars.CargoHome))
+		fmt.Fprintf(&b, "CARGO_HOME = %q\n", vars.CargoHome)
 	}
 
 	b.WriteString("\n[settings]\n")
