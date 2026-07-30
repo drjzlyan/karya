@@ -135,7 +135,7 @@ without the repo or a browser.
 - ☑ `Ctrl-a ?` keybinding opens the in-session help (key map & command reference)
 
 ### Doctor & distribution
-- ☐ `karya doctor` — tools, versions, isolation checks, per-language tooling
+- ☑ `karya doctor` — tools, versions, isolation checks, per-language tooling
 - ☐ `docs/` complete (isolation, commands, languages, troubleshooting)
 - ☐ Shell completions (`karya completion`)
 - ☐ Homebrew tap

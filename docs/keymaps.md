@@ -37,7 +37,7 @@ reference. For a guided, hands-on path through it, see
 | `karya install` | Set up karya (isolated, non-destructive) |
 | `karya update` | Self-update binary, configs, tools, editor plugins |
 | `karya uninstall` | Remove karya entirely (nothing else touched) |
-| `karya doctor` | Health check |
+| `karya doctor` | Health check: tools, versions, isolation & per-language tooling |
 | `karya shellenv` | Print opt-in shell integration (`eval "$(karya shellenv)"`) |
 | `karya version` | Version / build info |
 | `karya tutorial [n]` | Run the self-working tutorial (verifies against a sandbox) |

@@ -59,7 +59,7 @@ func Run(args []string) int {
 	case "uninstall":
 		return cmdUninstall(rest)
 	case "doctor":
-		return notImplemented("doctor", "run health checks")
+		return cmdDoctor(rest)
 	case "shellenv":
 		return cmdShellenv(rest)
 	case "completion":
