@@ -1,7 +1,7 @@
 package project
 
-// Language scaffold templates, ported verbatim from dotfiles/scripts/project-init.sh.
-// Single-field templates ({{.}}) take the project name; the java/go templates
+// Language scaffold templates. Single-field templates ({{.}}) take the project
+// name; the java/go templates
 // take a small struct. Static .gitignore/config files are plain constants.
 
 // ── Python ──────────────────────────────────────────────────────────────────

@@ -17,10 +17,10 @@ any of your existing settings**.
 
 ## Why
 
-The author's terminal IDE was assembled from a Neovim config, a tmux layout, and
-a dozen shell scripts (`dev.sh`, `ide-agent.sh`, `project-init.sh`, `install.sh`,
-…). karya consolidates all of it into one program, and promotes the AI coding
-agent from an optional pane to a first-class, deeply-integrated feature.
+A productive terminal IDE usually means hand-assembling a Neovim config, a tmux
+layout, a pile of shell scripts, and an AI agent — then re-doing it on every new
+machine. karya packages the whole workflow into one program, and promotes the AI
+coding agent from an optional pane to a first-class, deeply-integrated feature.
 
 ## Principles
 
@@ -37,6 +37,8 @@ agent from an optional pane to a first-class, deeply-integrated feature.
 
 ## Install
 
+The universal installer works the same on macOS and Linux:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/drjzlyan/karya/main/scripts/install.sh | sh
 ```
@@ -44,8 +46,16 @@ curl -fsSL https://raw.githubusercontent.com/drjzlyan/karya/main/scripts/install
 This downloads the right prebuilt binary from GitHub Releases, verifies its
 SHA-256 against the published checksums, installs it to `~/.local/bin/karya`, and
 runs the isolated `karya install` setup — **without touching your shell rc,
-Homebrew, or global mise**. Optionally wire karya into your shell (adds it to
-`PATH` and sets `$EDITOR`):
+Homebrew, or global mise**.
+
+Or via Homebrew (macOS and Linux):
+
+```bash
+brew tap drjzlyan/karya https://github.com/drjzlyan/karya
+brew install karya
+```
+
+Optionally wire karya into your shell (adds it to `PATH` and sets `$EDITOR`):
 
 ```bash
 eval "$(karya shellenv)"

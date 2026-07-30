@@ -12,8 +12,8 @@ import (
 )
 
 // nvimFS holds the vendored Neovim configuration (init.lua, lua/**, the plugin
-// lockfile and the after/ override dir). `all:` includes dotfiles such as
-// after/.gitkeep. Refresh the tree with `make sync-nvim`.
+// lockfile and the after/ override dir). `all:` includes hidden files such as
+// after/.gitkeep. This tree is the source of truth; edit it directly.
 //
 //go:embed all:nvim
 var nvimFS embed.FS

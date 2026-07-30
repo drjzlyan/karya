@@ -91,7 +91,7 @@ local function dev_reload()
   end
 end
 
----Update plugins via lazy.nvim and external tooling via dotfiles scripts.
+---Update editor plugins via lazy.nvim and refresh external tooling via karya.
 local function dev_update()
   -- Sync plugins first.
   if vim.fn.exists(":Lazy") == 2 then
@@ -100,10 +100,10 @@ local function dev_update()
     vim.notify("lazy.nvim is not loaded", vim.log.levels.WARN)
   end
 
-  -- Offer to update external tooling through the dotfiles update script.
-  local dotfiles = vim.fn.expand("~/Development/dotfiles/update.sh")
-  if vim.fn.filereadable(dotfiles) == 1 then
-    vim.fn.jobstart({ "bash", dotfiles }, {
+  -- Refresh external tooling (runtimes, LSPs, formatters) through karya, which
+  -- reinstalls them idempotently into the isolated karya prefix.
+  if vim.fn.executable("karya") == 1 then
+    vim.fn.jobstart({ "karya", "install" }, {
       detach = true,
       on_exit = function(_, code)
         vim.schedule(function()
@@ -116,7 +116,7 @@ local function dev_update()
       end,
     })
   else
-    vim.notify("dotfiles/update.sh not found; skipping external tooling update", vim.log.levels.INFO)
+    vim.notify("karya not found on PATH; skipping external tooling update", vim.log.levels.INFO)
   end
 end
 

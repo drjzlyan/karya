@@ -1,6 +1,5 @@
 // Package prefs is karya's per-project preference store: a flat key=value file
-// under the karya data prefix (config.Paths.PrefsFile). It is a faithful port of
-// the load_pref/save_pref helpers in dotfiles/scripts/ide-agent.sh.
+// under the karya data prefix (config.Paths.PrefsFile).
 //
 // The store keeps preferences that are not derivable from the code — chiefly the
 // agent chosen for a given project directory (key "agent.<workdir>"). Like every
