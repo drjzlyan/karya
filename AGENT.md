@@ -156,8 +156,19 @@ README.md CONTRIBUTING.md                  user landing + contributor entry
 ---
 
 ## Git & PR workflow
+- **Always start from an up-to-date remote.** Before any new work, fetch and
+  fast-forward `main` from the remote, then branch off it — never build on a
+  stale local `main` or reuse an existing feature branch:
+  ```bash
+  git fetch origin
+  git checkout main
+  git pull --ff-only origin main
+  git checkout -b feat/<slug>   # new branch per unit of work
+  ```
 - Branch from `main`: `feat/…`, `fix/…`, `docs/…`, `refactor/…`, `ci/…`,
   `test/…`, `chore/…`. Never commit directly to `main`.
+- **Every unit of work gets its own fresh branch and its own PR** — open a PR for
+  the change (`gh pr create`) rather than pushing to `main`.
 - [Conventional Commits](https://www.conventionalcommits.org):
   `feat(agent): cycle to next detected agent`. Imperative, ≤72-char subject.
 - One focused change per PR. Fill in the PR template. Link the issue.
