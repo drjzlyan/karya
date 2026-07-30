@@ -89,6 +89,41 @@ func (p Paths) PrefsFile() string { return filepath.Join(p.Data, "prefs") }
 // karya never mutates Homebrew or the user's global environment.
 func (p Paths) ToolsBin() string { return filepath.Join(p.Data, "tools", "bin") }
 
+// ToolsDir is the root of karya's private tool prefix (ToolsBin is ToolsDir/bin).
+// Standalone tool payloads (e.g. jdtls, lombok.jar) live directly under it.
+func (p Paths) ToolsDir() string { return filepath.Join(p.Data, "tools") }
+
+// LanguagesFile records the selected languages and runtime versions in
+// key=value form (e.g. python=3.14,3.13). It is the source of truth from which
+// karya regenerates its isolated mise config.
+func (p Paths) LanguagesFile() string { return filepath.Join(p.Data, "languages.local") }
+
+// MiseConfig is karya's generated, isolated mise config file. It is pinned via
+// MISE_GLOBAL_CONFIG_FILE so karya's runtimes never touch the user's own
+// ~/.config/mise/config.toml.
+func (p Paths) MiseConfig() string { return filepath.Join(p.Config, "mise", "config.toml") }
+
+// MiseData is karya's isolated mise data dir (installed runtimes + shims).
+func (p Paths) MiseData() string { return filepath.Join(p.Data, "mise") }
+
+// MiseCache is karya's isolated mise cache dir.
+func (p Paths) MiseCache() string { return filepath.Join(p.Cache, "mise") }
+
+// MiseShims is where mise writes runtime shims; kept on PATH inside sessions.
+func (p Paths) MiseShims() string { return filepath.Join(p.MiseData(), "shims") }
+
+// MiseEnv pins mise entirely inside the karya prefix so version selection and
+// `mise install` never read or write the user's global mise config, data, or
+// cache. Callers append these to os.Environ() when invoking mise.
+func (p Paths) MiseEnv() []string {
+	return []string{
+		"MISE_GLOBAL_CONFIG_FILE=" + p.MiseConfig(),
+		"MISE_DATA_DIR=" + p.MiseData(),
+		"MISE_CACHE_DIR=" + p.MiseCache(),
+		"MISE_STATE_DIR=" + filepath.Join(p.State, "mise"),
+	}
+}
+
 // TmuxSocket is the dedicated tmux server label (`tmux -L`) that isolates
 // karya's sessions from the user's default tmux server.
 const TmuxSocket = "karya"
@@ -99,10 +134,20 @@ const TmuxSocket = "karya"
 // $EDITOR resolves regardless of PATH. Callers append these to os.Environ().
 func (p Paths) Env(karyaBin string) []string {
 	edit := karyaBin + " edit"
-	return []string{
+	env := []string{
 		"NVIM_APPNAME=" + NvimAppName,
 		"EDITOR=" + edit,
 		"VISUAL=" + edit,
 		"GIT_EDITOR=" + edit,
 	}
+	// Pin mise, and put karya's managed tool bin + mise shims ahead of the user's
+	// PATH so the isolated toolchain wins inside karya sessions — without ever
+	// mutating the user's own PATH, Homebrew, or global mise (see PLAN.md §2, §6.4).
+	env = append(env, p.MiseEnv()...)
+	path := p.ToolsBin() + string(os.PathListSeparator) + p.MiseShims()
+	if cur := os.Getenv("PATH"); cur != "" {
+		path += string(os.PathListSeparator) + cur
+	}
+	env = append(env, "PATH="+path)
+	return env
 }

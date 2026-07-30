@@ -51,6 +51,43 @@ func TestEnvNamespacesNvimAndEditor(t *testing.T) {
 	}
 }
 
+// TestMiseIsolation asserts karya's mise config, data, and cache all live under
+// the karya prefix and that Env pins mise there and prepends karya's tool dirs to
+// PATH — so `karya lang` never touches the user's global mise or Homebrew.
+func TestMiseIsolation(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, e := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"} {
+		t.Setenv(e, "")
+	}
+	t.Setenv("PATH", "/usr/bin")
+
+	p := Resolve()
+	if !strings.HasPrefix(p.MiseConfig(), p.Config) {
+		t.Errorf("MiseConfig %q not under Config %q", p.MiseConfig(), p.Config)
+	}
+	if !strings.HasPrefix(p.MiseData(), p.Data) {
+		t.Errorf("MiseData %q not under Data %q", p.MiseData(), p.Data)
+	}
+	if !strings.HasPrefix(p.LanguagesFile(), p.Data) {
+		t.Errorf("LanguagesFile %q not under Data %q", p.LanguagesFile(), p.Data)
+	}
+
+	env := strings.Join(p.Env("/abs/karya"), "\n")
+	for _, want := range []string{
+		"MISE_GLOBAL_CONFIG_FILE=" + p.MiseConfig(),
+		"MISE_DATA_DIR=" + p.MiseData(),
+		"PATH=" + p.ToolsBin(),
+	} {
+		if !strings.Contains(env, want) {
+			t.Errorf("Env missing %q; got:\n%s", want, env)
+		}
+	}
+	if !strings.Contains(env, p.MiseShims()) || !strings.HasSuffix(env, "/usr/bin") {
+		t.Errorf("Env PATH must prepend tool dirs and preserve the user PATH; got:\n%s", env)
+	}
+}
+
 // TestNvimAppNameMatchesConfigDir guards the invariant that ties launch and
 // extraction together: NVIM_APPNAME must resolve, under XDG_CONFIG_HOME, to the
 // very directory ExtractNvimConfig writes to. If these drift, Neovim reads an

@@ -12,24 +12,58 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 5 — Language & tool management (`lang`, tools) (next)
-**Overall:** Phases 0–4 complete. `karya` launches a fully isolated tmux IDE
+**Active phase:** Phase 6 — Install / update / uninstall & self-update (next)
+**Overall:** Phases 0–5 complete. `karya` launches a fully isolated tmux IDE
 session (editor/agent/build panes + git window); `karya edit`/`run` route into
 panes; agent detection/switching/cycling/reset + per-project memory are wired;
 the full Neovim config ships embedded and extracts to a karya-namespaced dir
 with zero impact on the user's own Neovim; `karya new` scaffolds all six
-languages and opens the project in an IDE session. Build + vet + golangci-lint +
+languages and opens the project in an IDE session; `karya lang` selects languages
++ runtime versions and installs their LSP/formatter/adapter tooling into the
+karya prefix (isolated mise + tool bin). Build + vet + golangci-lint +
 unit/race/integration tests are green. Go 1.26.
 
-### Resume point (do this next — Phase 5)
-1. `internal/lang` — interactive language/version selector, versions from
-   `mise ls-remote`; write `languages.local`; generate an **isolated** mise
-   config inside the karya prefix (never touch the user's global mise).
-2. `internal/tools` — detect-or-install LSPs/formatters/adapters into the karya
-   tool prefix (`paths.ToolsBin()`); always-on servers + per-language selectable
-   servers (PLAN §6.4). Port `dotfiles/scripts/languages.sh`.
-3. TDD: keep version parsing / selection logic pure and unit-tested; the mise
-   invocation and installs are the thin side-effect layer.
+### Resume point (do this next — Phase 6)
+1. `karya install` — first-run setup: extract configs, generate an isolated mise
+   config, install tools; change no user settings.
+2. `karya update [--check]` — self-replace the binary from GitHub Releases
+   (checksum-verified, atomic rename), re-extract configs, refresh tools, run
+   `Lazy! sync`; `karya uninstall` removes only the karya prefix + binary.
+3. `karya shellenv` — opt-in PATH/alias/EDITOR integration (the karya tool bin +
+   mise shims are already assembled by `config.Paths.Env`).
+
+### Phase 5 — what shipped
+- **`internal/lang`:** pure, deterministic core — a language catalog (mise tool,
+  fallback, dedup mode) with alias resolution; version discovery composed from a
+  `VersionLister` interface (`MiseLister` shells out to `mise ls-remote`) →
+  prerelease filtering → dedup by major/major.minor, with Java specially ranked
+  per major (plain > temurin > corretto > zulu). Everything degrades to the
+  catalog fallback offline. `Selection` is an ordered `languages.local` store
+  (parse/render/round-trip); `GenerateMiseConfig` emits an **isolated** mise
+  `config.toml` (`[tools]`, `JAVA_HOME`/`GOPATH`/`CARGO_HOME` under the karya
+  prefix, `experimental`). `InstallRuntimes` is the thin `mise install` side
+  effect.
+- **`internal/tools`:** `Plan(langs)` (pure, tested) = always-on servers
+  (lua_ls/json/yaml/bash/taplo/marksman) + per-language tools in catalog order.
+  `Installer` is detect-first and best-effort: uv (→ `UV_TOOL_BIN_DIR`), npm
+  (isolated `--prefix`), go (`GOBIN`), rustup components, and download-based
+  jdtls/lombok/Java-DAP VSIX (tar/zip extraction with a traversal guard).
+  Homebrew-class servers (lua_ls, clangd, taplo, marksman) are **detect-only**
+  with an install hint — karya never runs `brew install`, honouring the
+  no-Homebrew-mutation guarantee.
+- **Isolation:** `config.Paths` gained `LanguagesFile`, `MiseConfig/Data/Cache`,
+  `MiseEnv`, and `ToolsDir`; `Paths.Env` now pins mise inside the karya prefix
+  and prepends the karya tool bin + mise shims to `PATH` for sessions — without
+  touching the user's PATH, Homebrew, or global mise. Verified live: `gopls`,
+  `dlv`, and the npm servers install under `~/.local/share/karya/tools/bin`.
+- **CLI:** `karya lang [list|add <lang> [versions]|remove <lang>|all]` plus a
+  bare-`karya lang` interactive selector; every mutation rewrites
+  `languages.local`, regenerates the isolated mise config, installs runtimes, and
+  installs tools, printing an install summary.
+- **Tests:** dedup/Java-ranking/offline-fallback, selection round-trip, mise-gen,
+  plan ordering, detect-first availability, archive traversal guard. Gate green:
+  `gofmt`, `go vet`, `golangci-lint` v2 (0 issues), `go test -race`,
+  `-tags=integration`, `go build`.
 
 ### Phase 4 — what shipped
 - **`internal/project`:** pure, deterministic scaffolds for python/java/
@@ -98,14 +132,33 @@ make build && go vet ./... && go test ./...
 | 2 | Agent management | ☑ done |
 | 3 | Editor integration (embedded nvim) | ☑ done |
 | 4 | Project scaffolding (`new`) | ☑ done |
-| 5 | Language & tool management | ◐ next |
-| 6 | Install / update / uninstall | ☐ |
+| 5 | Language & tool management | ☑ done |
+| 6 | Install / update / uninstall | ◐ next |
 | 7 | Embedded help, self-guided tutorial, doctor & distribution | ☐ |
 | 8 | (Deferred) Native agent | ☐ |
 
 ---
 
 ## Changelog
+
+### 2026-07-30 — Phase 5 complete: language & tool management (`karya lang`)
+- **`internal/lang`** manages the language/version selection and generates an
+  **isolated** mise config. Pure core (dedup by major/major.minor, Java
+  distribution ranking, `languages.local` parse/render, mise-config gen) is
+  unit-tested behind a `VersionLister` interface; `MiseLister`/`InstallRuntimes`
+  are the thin `mise` side effects. Falls back to catalog defaults offline.
+- **`internal/tools`** plans (always-on + per-language, pure/tested) and installs
+  LSPs/formatters/adapters detect-first into the karya tool prefix: uv/npm/go/
+  rustup + download-based jdtls/lombok/Java-DAP VSIX (with an archive-traversal
+  guard). Homebrew-class servers are detect-only with a hint — no `brew install`.
+- **Isolation:** `config.Paths` gained mise paths + `MiseEnv` + `ToolsDir`;
+  `Paths.Env` pins mise inside the karya prefix and prepends the karya tool bin +
+  mise shims to `PATH`, never touching the user's PATH, Homebrew, or global mise.
+- **CLI:** `karya lang [list|add|remove|all]` + interactive selector; each
+  mutation persists the selection, regenerates the mise config, and installs
+  runtimes + tools. Verified live: tools land under `~/.local/share/karya/tools`.
+- Gate green: `gofmt`, `go vet`, `golangci-lint` v2 (0 issues), `go test -race`,
+  `go test -tags=integration`, `go build`.
 
 ### 2026-07-30 — Fix: agent-reset editor pane used the wrong NVIM_APPNAME
 - **Bug:** `agent.recreateDevWindow` (rebuild path when the `dev` window was

@@ -9,7 +9,10 @@ LDFLAGS := -s -w \
 	-X $(PKG)/internal/version.Commit=$(COMMIT) \
 	-X $(PKG)/internal/version.Date=$(DATE)
 
-.PHONY: build install fmt vet test tidy clean run sync-nvim
+# golangci-lint version: match CI, which installs `latest`. Override to pin.
+GOLANGCI_VERSION ?= latest
+
+.PHONY: build install fmt vet lint test tidy clean run sync-nvim gate
 
 build: ## Build the karya binary into ./bin
 	@mkdir -p bin
@@ -30,8 +33,19 @@ fmt: ## Format sources
 vet: ## Static analysis
 	go vet ./...
 
+lint: ## Run golangci-lint (matches CI: golangci-lint v2 @ $(GOLANGCI_VERSION))
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION) run ./...
+
 test: ## Run tests
 	go test ./...
+
+gate: ## Full pre-PR gate (mirrors CI): fmt-check, vet, lint, race + integration tests, build
+	gofmt -l . | tee /dev/stderr | (! read)
+	go vet ./...
+	$(MAKE) lint
+	go test -race ./...
+	go test -tags=integration ./...
+	go build ./...
 
 tidy: ## Tidy modules
 	go mod tidy
