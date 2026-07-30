@@ -8,6 +8,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -122,6 +123,28 @@ func (p Paths) MiseEnv() []string {
 		"MISE_CACHE_DIR=" + p.MiseCache(),
 		"MISE_STATE_DIR=" + filepath.Join(p.State, "mise"),
 	}
+}
+
+// ShellEnv returns POSIX-sh shell integration a user opts into with
+// `eval "$(karya shellenv)"` (never written to an rc file by karya). It puts the
+// karya bin dir on PATH so `karya` resolves, routes $EDITOR through karya, and
+// adds a short `k` alias. It deliberately does NOT prepend the managed tool bin or
+// mise shims: that toolchain is session-scoped (see Env) so it never shadows the
+// user's global tools. The PATH edit is guarded so repeated evals don't stack
+// duplicates. karyaBin is the absolute path to the running binary.
+func (p Paths) ShellEnv(karyaBin string) string {
+	edit := karyaBin + " edit"
+	return fmt.Sprintf(`# karya shell integration — opt in by adding to your shell rc:
+#   eval "$(karya shellenv)"
+case ":$PATH:" in
+  *":%[1]s:"*) ;;
+  *) export PATH="%[1]s:$PATH" ;;
+esac
+export EDITOR="%[2]s"
+export VISUAL="%[2]s"
+export GIT_EDITOR="%[2]s"
+alias k="%[3]s"
+`, p.Bin, edit, karyaBin)
 }
 
 // TmuxSocket is the dedicated tmux server label (`tmux -L`) that isolates

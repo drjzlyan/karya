@@ -47,15 +47,15 @@ func Run(args []string) int {
 	case "lang":
 		return cmdLang(rest)
 	case "install":
-		return notImplemented("install", "set up karya (isolated); extract configs, fetch tools")
+		return cmdInstall(rest)
 	case "update":
-		return notImplemented("update", "self-update binary, configs, tools, editor plugins")
+		return cmdUpdate(rest)
 	case "uninstall":
-		return notImplemented("uninstall", "remove karya entirely (nothing else touched)")
+		return cmdUninstall(rest)
 	case "doctor":
 		return notImplemented("doctor", "run health checks")
 	case "shellenv":
-		return notImplemented("shellenv", "print opt-in shell integration")
+		return cmdShellenv(rest)
 	case "completion":
 		return notImplemented("completion", "print shell completions")
 	default:
