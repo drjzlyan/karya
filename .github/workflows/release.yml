@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   goreleaser:
@@ -26,20 +27,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Regenerate the cross-platform Homebrew formula from the release checksums
-      # and commit it back to main. Uses a plain formula (macOS + Linux) rather
-      # than GoReleaser's deprecated `brews`/macOS-only casks.
+      # Regenerate the cross-platform Homebrew formula (macOS + Linux) from the
+      # release checksums and open a PR to update the tap. `main` is protected
+      # (PR + required checks), so we never push to it directly; this step opens a
+      # PR instead and is best-effort so a formula hiccup never fails the release.
+      # For fully hands-off merges, set a RELEASE_TOKEN PAT secret (a GITHUB_TOKEN
+      # PR does not trigger the required CI checks); otherwise merge the PR by hand.
       - name: Update Homebrew formula
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+          branch="release-formula/${GITHUB_REF_NAME}"
           git config user.name "goreleaser[bot]"
           git config user.email "goreleaser@users.noreply.github.com"
-          git fetch origin main
-          git checkout -B main origin/main
+          git checkout -B "$branch" origin/main
           scripts/update-formula.sh "${GITHUB_REF_NAME}" dist/checksums.txt
           git add HomebrewFormula/karya.rb
           if git diff --cached --quiet; then
-            echo "Homebrew formula unchanged."
-          else
-            git commit -m "chore(release): Homebrew formula for ${GITHUB_REF_NAME} [skip ci]"
-            git push origin main
+            echo "Homebrew formula unchanged; nothing to do."
+            exit 0
           fi
+          git commit -m "chore(release): Homebrew formula for ${GITHUB_REF_NAME}"
+          git push -f origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "chore(release): Homebrew formula for ${GITHUB_REF_NAME}" \
+            --body "Automated: updates \`HomebrewFormula/karya.rb\` for ${GITHUB_REF_NAME} from the release checksums. Merge to publish to the Homebrew tap." \
+            || gh pr edit "$branch" --title "chore(release): Homebrew formula for ${GITHUB_REF_NAME}"
+          gh pr merge "$branch" --squash --auto || echo "Auto-merge not enabled; merge the formula PR manually."
