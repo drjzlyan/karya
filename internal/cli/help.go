@@ -90,6 +90,14 @@ var helpByCommand = map[string]commandHelp{
 		summary: "Print opt-in shell integration to eval in your rc file.",
 		details: []string{`Add: eval "$(karya shellenv)"`},
 	},
+	"tutorial": {
+		syntax:  "karya tutorial [list|<lesson>]",
+		summary: "Run the self-working tutorial; lessons verify against a sandbox.",
+		details: []string{
+			"No argument runs every lesson; a number runs just that one.",
+			"`karya tutorial list` prints the lesson titles.",
+		},
+	},
 	"docs": {
 		syntax:  "karya docs [topic]",
 		summary: "Read the embedded documentation offline (no topic lists them).",

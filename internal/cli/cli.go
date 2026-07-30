@@ -35,6 +35,8 @@ func Run(args []string) int {
 		return cmdHelp(rest)
 	case "docs":
 		return cmdDocs(rest)
+	case "tutorial":
+		return cmdTutorial(rest)
 	case "-v", "--version", "version":
 		fmt.Println(version.String())
 		return 0
@@ -435,6 +437,7 @@ Usage:
   karya doctor              Health check
   karya shellenv            Print opt-in shell integration (eval this)
   karya version             Print version / build info
+  karya tutorial [n]        Run the self-working tutorial (a sandbox verifies it)
   karya docs [topic]        Read the embedded docs offline (no topic lists them)
   karya help [command]      Show this help, or detailed help for one command
 
