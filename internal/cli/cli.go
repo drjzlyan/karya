@@ -63,7 +63,7 @@ func Run(args []string) int {
 	case "shellenv":
 		return cmdShellenv(rest)
 	case "completion":
-		return notImplemented("completion", "print shell completions")
+		return cmdCompletion(rest)
 	default:
 		fmt.Fprintf(os.Stderr, "karya: unknown command %q\n\n", cmd)
 		usage(os.Stderr)
@@ -412,11 +412,6 @@ func fail(err error) int {
 	return 1
 }
 
-func notImplemented(name, desc string) int {
-	fmt.Printf("karya %s — %s\n(not yet implemented; see ROADMAP.md)\n", name, desc)
-	return 0
-}
-
 func usage(w *os.File) {
 	fmt.Fprint(w, `karya — an AI-first, terminal-based IDE in a single binary
 
@@ -436,6 +431,7 @@ Usage:
 
   karya doctor              Health check
   karya shellenv            Print opt-in shell integration (eval this)
+  karya completion <shell>  Print a bash/zsh/fish completion script
   karya version             Print version / build info
   karya tutorial [n]        Run the self-working tutorial (a sandbox verifies it)
   karya docs [topic]        Read the embedded docs offline (no topic lists them)

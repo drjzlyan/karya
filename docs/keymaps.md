@@ -39,6 +39,7 @@ reference. For a guided, hands-on path through it, see
 | `karya uninstall` | Remove karya entirely (nothing else touched) |
 | `karya doctor` | Health check: tools, versions, isolation & per-language tooling |
 | `karya shellenv` | Print opt-in shell integration (`eval "$(karya shellenv)"`) |
+| `karya completion <shell>` | Print a bash/zsh/fish completion script to source |
 | `karya version` | Version / build info |
 | `karya tutorial [n]` | Run the self-working tutorial (verifies against a sandbox) |
 | `karya docs [topic]` | Read the embedded docs offline (no topic lists them) |

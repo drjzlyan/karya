@@ -30,7 +30,8 @@ unit/race/integration tests are green. Go 1.26.
 1. ~~Embed the user docs + `karya help`/`karya docs`.~~ **Done** (#17).
 2. ~~`karya tutorial` (self-working) + `Ctrl-a ?` in-session help.~~ **Done** (this branch).
 3. ~~`karya doctor` — tools/versions/isolation + per-language tooling.~~ **Done** (this branch).
-4. Distribution: `karya completion`, a Homebrew tap, and cut `v1.0.0`.
+4. Distribution: ~~`karya completion`~~ **Done** (this branch); a Homebrew tap and
+   cut `v1.0.0` remain.
 5. Provenance cleanup (final pass): strip every `nvim-config`/`dotfiles` reference
    from the whole repo and sever the build-time `../nvim-config` dependency.
 
@@ -64,6 +65,13 @@ unit/race/integration tests are green. Go 1.26.
   per-language + always-on editor tooling via `tools.Plan`. Three severity
   levels (`OK ✓ / Warn • / Problem ✗`); the command exits non-zero only on a
   Problem. Exposed `tools.Installer.Available` as the read-only tooling probe.
+- **`karya completion <bash|zsh|fish>`:** generates a shell completion script
+  from a single `completionModel` (command order mirrors the dispatcher;
+  descriptions reuse the `karya help` summaries). Completes top-level commands,
+  each command's static subcommands/values (agent/lang/new/docs/help/completion/
+  tutorial) and file args for edit/run. Native scripts per shell (bash
+  `complete -F`, zsh `#compdef`/`_describe`/`compadd`, fish `complete -c`).
+  Retired the `notImplemented` stub now that every command is wired.
 
 ### Phase 6 — what shipped
 - **`internal/update`:** self-update core with all network/OS side effects behind
