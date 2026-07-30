@@ -6,14 +6,16 @@
 
 **An AI-first, terminal-based IDE in a single binary.**
 
-karya (कार्य — "work") orchestrates Neovim, tmux, and your coding agent into one
-cohesive terminal IDE. It installs, launches, manages, and updates the whole
-stack from a single self-contained Go binary — and it does so **without touching
-any of your existing settings**.
+karya (कार्य — "work") turns Neovim, tmux, and your AI coding agent — Claude,
+Codex, Crush, Gemini, aider, or Copilot — into one cohesive terminal IDE, with
+LSP, debugging (DAP), git, and per-language tooling built in. It installs,
+launches, manages, and updates the whole stack from a single self-contained Go
+binary — and it does so **without touching any of your existing settings**.
 
-> Status: **early development.** Planning is complete and the CLI skeleton
-> builds; features are being implemented phase by phase. See
-> [ROADMAP.md](ROADMAP.md) and [PROGRESS.md](PROGRESS.md).
+> Status: **actively developed, pre-1.0.** Installable today (`v0.1.x` on macOS and
+> Linux) — the core IDE, AI-agent management, project scaffolding, language
+> tooling, and self-update all work. See [ROADMAP.md](ROADMAP.md) and
+> [PROGRESS.md](PROGRESS.md).
 
 ## Why
 
@@ -22,18 +24,31 @@ layout, a pile of shell scripts, and an AI agent — then re-doing it on every n
 machine. karya packages the whole workflow into one program, and promotes the AI
 coding agent from an optional pane to a first-class, deeply-integrated feature.
 
-## Principles
+## Features
 
-- **Single binary.** The Neovim and tmux configs are embedded and extracted on
-  demand — one artifact, no manual assembly.
-- **Zero-impact install.** karya never edits your `~/.zshrc`, `~/.tmux.conf`,
-  `~/.gitconfig`, or `~/.config/nvim`. It uses `NVIM_APPNAME=karya/nvim` and a
-  dedicated tmux socket, keeping everything under karya-owned directories.
-  `karya uninstall` removes karya and nothing else.
-- **AI-first.** Detects and manages your existing agent CLIs (claude, codex,
-  crush, gemini, aider, copilot) as a core pane with per-project memory.
-- **Self-updating.** `karya update` upgrades the binary, configs, tools, and
-  editor plugins.
+- **AI coding agents, first-class.** Auto-detects and manages Claude, Codex,
+  Crush, Gemini, aider, and Copilot in a dedicated pane — switch, cycle, and reset
+  with per-project memory.
+- **Full Neovim IDE, preconfigured.** LSP, autocompletion, debugging (DAP),
+  Treesitter, and git (lazygit) work out of the box — no plugin wrangling.
+- **6 languages, zero setup.** Python, Java, TypeScript, Go, C/C++, and Rust, with
+  runtimes, LSP servers, and formatters installed into an isolated toolchain.
+- **tmux IDE layout.** Editor, agent, and build/test panes plus a git window,
+  driven by simple `karya` commands and keymaps.
+- **Single Go binary, self-updating.** One checksum-verified, atomically
+  self-replacing artifact; no runtime dependencies, no manual assembly.
+- **Fully isolated & reversible.** Namespaced under karya-owned directories; never
+  edits your shell rc, tmux, git, or Neovim config. `karya uninstall` leaves no
+  trace.
+
+## Zero-impact by design
+
+karya's defining constraint: **installing it changes nothing you already have.**
+It never edits your `~/.zshrc`, `~/.tmux.conf`, `~/.gitconfig`, or
+`~/.config/nvim`. The editor runs under `NVIM_APPNAME=karya/nvim` and tmux on a
+dedicated socket, so every config, plugin, tool, and cache lives under
+karya-owned directories — isolated from your existing setup and your global
+Homebrew/mise. `karya uninstall` removes karya and nothing else.
 
 ## Install
 
@@ -64,7 +79,7 @@ eval "$(karya shellenv)"
 Keep it current with `karya update` (checksum-verified, atomic self-replace), and
 remove it — and only it — with `karya uninstall`.
 
-## Quick start (target UX)
+## Quick start
 
 ```bash
 karya                      # launch/attach the IDE for the current directory
