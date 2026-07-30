@@ -220,3 +220,13 @@ make build && go vet ./... && go test ./...
   `dotfiles/bin/nvim-edit`; and the whole `nvim-config/` tree.
 - Keep the dependency list minimal (stdlib → add `cobra` only when the tree
   grows). No CGO.
+- **Keep ROADMAP.md and docs/PLAN.md in sync** — when one changes, reflect it in
+  the other (and this file).
+- **Consolidating ≠ copying.** Port behavior from `nvim-config`/`dotfiles`
+  deliberately; do not carry over their bugs or bad design decisions
+  (e.g. dotfiles' symlink-over-user-config model — rejected in PLAN §2).
+- **Phase 7 cleanup:** strip all `nvim-config`/`dotfiles` references from the
+  **entire repo** — shipped surfaces (`--help`, README, docs, code comments)
+  *and* the internal design log (PLAN, this file, AGENT) — and sever the
+  build-time `../nvim-config` dependency. History stays in git. Tracked in
+  ROADMAP Phase 7.

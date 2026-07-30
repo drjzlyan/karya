@@ -290,6 +290,15 @@ karya/
 - **Linux tool bootstrap** parity (no Homebrew) — designed for, validated later.
 - **Ghostty / terminal config** stays optional and never overwrites user files;
   may ship as a documented sample rather than an applied config.
+- **Provenance vs. product.** `nvim-config` and `dotfiles` are the *sources* this
+  binary consolidates; karya must not inherit their bugs or design choices (e.g.
+  `dotfiles`' symlink-over-user-config model — deliberately rejected, see §2).
+  Each ported behavior is re-evaluated, not copied verbatim. The final phase
+  (ROADMAP Phase 7) strips every reference to those projects from the **entire
+  repo** — shipped surfaces (`--help`, README, docs, code comments) *and* the
+  internal design log (this file, PROGRESS, AGENT) — and severs the build-time
+  dependency on `../nvim-config`. Historical provenance lives in git history,
+  not the tree.
 
 See [ROADMAP.md](../ROADMAP.md) for the phased build order and
 [PROGRESS.md](../PROGRESS.md) for the current resume point.
