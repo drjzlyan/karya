@@ -35,6 +35,25 @@ agent from an optional pane to a first-class, deeply-integrated feature.
 - **Self-updating.** `karya update` upgrades the binary, configs, tools, and
   editor plugins.
 
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/drjzlyan/karya/main/scripts/install.sh | sh
+```
+
+This downloads the right prebuilt binary from GitHub Releases, verifies its
+SHA-256 against the published checksums, installs it to `~/.local/bin/karya`, and
+runs the isolated `karya install` setup — **without touching your shell rc,
+Homebrew, or global mise**. Optionally wire karya into your shell (adds it to
+`PATH` and sets `$EDITOR`):
+
+```bash
+eval "$(karya shellenv)"
+```
+
+Keep it current with `karya update` (checksum-verified, atomic self-replace), and
+remove it — and only it — with `karya uninstall`.
+
 ## Quick start (target UX)
 
 ```bash

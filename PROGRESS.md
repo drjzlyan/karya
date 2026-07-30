@@ -12,25 +12,61 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 6 — Install / update / uninstall & self-update (next)
-**Overall:** Phases 0–5 complete. `karya` launches a fully isolated tmux IDE
+**Active phase:** Phase 7 — Embedded help, tutorial, doctor & distribution (next)
+**Overall:** Phases 0–6 complete. `karya` launches a fully isolated tmux IDE
 session (editor/agent/build panes + git window); `karya edit`/`run` route into
 panes; agent detection/switching/cycling/reset + per-project memory are wired;
 the full Neovim config ships embedded and extracts to a karya-namespaced dir
 with zero impact on the user's own Neovim; `karya new` scaffolds all six
 languages and opens the project in an IDE session; `karya lang` selects languages
 + runtime versions and installs their LSP/formatter/adapter tooling into the
-karya prefix (isolated mise + tool bin). Build + vet + golangci-lint +
+karya prefix (isolated mise + tool bin). Full lifecycle is live: `karya install`
+(isolated setup), `karya update [--check]` (checksum-verified atomic self-replace
+from GitHub Releases), `karya uninstall` (karya-only removal), `karya shellenv`
+(opt-in), plus a `curl | sh` installer. Build + vet + golangci-lint +
 unit/race/integration tests are green. Go 1.26.
 
-### Resume point (do this next — Phase 6)
-1. `karya install` — first-run setup: extract configs, generate an isolated mise
-   config, install tools; change no user settings.
-2. `karya update [--check]` — self-replace the binary from GitHub Releases
-   (checksum-verified, atomic rename), re-extract configs, refresh tools, run
-   `Lazy! sync`; `karya uninstall` removes only the karya prefix + binary.
-3. `karya shellenv` — opt-in PATH/alias/EDITOR integration (the karya tool bin +
-   mise shims are already assembled by `config.Paths.Env`).
+### Resume point (do this next — Phase 7)
+1. Embed the user docs (`docs/tutorial.md`, `docs/keymaps.md`, per-command
+   reference) via `go:embed`; add `karya help [command]` / `karya docs [topic]`
+   rendered from them, with a test asserting embedded content stays in sync with
+   `docs/`.
+2. `karya tutorial` — a self-guided, self-working tutorial (numbered lessons run
+   against a throwaway sandbox session and verified, not just displayed).
+3. `karya doctor` — tools/versions/isolation checks + per-language tooling; add
+   `karya completion`, a Homebrew tap, and cut `v1.0.0`.
+4. Provenance cleanup (final pass): strip every `nvim-config`/`dotfiles` reference
+   from the whole repo and sever the build-time `../nvim-config` dependency.
+
+### Phase 6 — what shipped
+- **`internal/update`:** self-update core with all network/OS side effects behind
+  seams so the logic is hermetically tested (httptest, no real GitHub/network).
+  `Updater.Latest` queries the GitHub Releases API; `FetchBinary` downloads the
+  platform `karya_<ver>_<os>_<arch>.tar.gz` + `checksums.txt`, verifies the
+  SHA-256, and extracts the binary (base-name match, traversal-guarded);
+  `Apply` writes a temp file in the destination dir and renames over the running
+  binary (atomic, same-filesystem). `IsNewer` does numeric (not lexical) semver
+  compare and treats `dev` as always-updatable.
+- **CLI:** `karya install` (isolated, non-destructive: extract configs → apply the
+  current language selection → install runtimes + tools → sync editor plugins →
+  print the `shellenv` hint); `karya update [--check]` (query → compare → fetch →
+  verify → atomic replace → re-exec the **new** binary's `install` so the freshly
+  shipped embedded configs/tools/plugins refresh); `karya uninstall` (removes only
+  Config/Data/State/Cache + the binary, confirmed unless `-y`); `karya shellenv`.
+- **`config.Paths.ShellEnv`:** opt-in `eval "$(karya shellenv)"` integration —
+  puts the karya bin dir on PATH (guarded against duplicate evals), sets
+  `$EDITOR/$VISUAL/$GIT_EDITOR`, and adds a `k` alias. Deliberately does **not**
+  leak the managed tool bin / mise shims onto the global PATH — that toolchain is
+  session-scoped via `config.Paths.Env`, preserving isolation.
+- **`scripts/install.sh`:** POSIX `curl | sh` installer — detects OS/arch, resolves
+  the latest tag (or `KARYA_VERSION`), downloads + checksum-verifies the archive,
+  installs to `~/.local/bin/karya`, and runs `karya install`. Touches no rc file.
+- **Tests:** version compare/`IsNewer`, asset naming, checksum parse/verify,
+  tar.gz extraction (nested dir, missing binary, traversal reject), atomic
+  `Apply`, full `Latest`+`FetchBinary` flow + checksum-mismatch/unsupported-
+  platform via httptest; `ShellEnv` isolation; `confirm` prompt parsing. Gate
+  green: `gofmt`, `go vet`, `golangci-lint` v2 (0 issues), `go test -race`,
+  `-tags=integration`, `go build`.
 
 ### Phase 5 — what shipped
 - **`internal/lang`:** pure, deterministic core — a language catalog (mise tool,
@@ -133,13 +169,32 @@ make build && go vet ./... && go test ./...
 | 3 | Editor integration (embedded nvim) | ☑ done |
 | 4 | Project scaffolding (`new`) | ☑ done |
 | 5 | Language & tool management | ☑ done |
-| 6 | Install / update / uninstall | ◐ next |
-| 7 | Embedded help, self-guided tutorial, doctor & distribution | ☐ |
+| 6 | Install / update / uninstall | ☑ done |
+| 7 | Embedded help, self-guided tutorial, doctor & distribution | ◐ next |
 | 8 | (Deferred) Native agent | ☐ |
 
 ---
 
 ## Changelog
+
+### 2026-07-30 — Phase 6 complete: install / update / uninstall & self-update
+- **`internal/update`** self-updates karya from GitHub Releases: query latest →
+  download the platform `tar.gz` + `checksums.txt` → verify SHA-256 → extract the
+  binary → atomically replace the running binary (temp file + rename). All side
+  effects sit behind seams; the pure logic (numeric semver compare, asset naming,
+  checksum parse/verify, tar.gz extraction with a traversal guard, atomic `Apply`)
+  and the full network flow are unit-tested via `httptest` — no real network.
+- **CLI lifecycle:** `karya install` (isolated, non-destructive setup), `karya
+  update [--check]` (verify + atomic replace, then re-exec the new binary's
+  `install` to refresh the freshly shipped configs/tools/plugins), `karya
+  uninstall` (removes only the karya prefix + binary, confirmed unless `-y`),
+  `karya shellenv` (opt-in PATH/`$EDITOR`/alias — session toolchain stays
+  session-scoped, so nothing leaks onto the global PATH).
+- **`scripts/install.sh`** is the `curl | sh` installer: OS/arch detection, tag
+  resolution, checksum-verified download to `~/.local/bin/karya`, then `karya
+  install`. No rc file, Homebrew, or global mise is touched.
+- Gate green: `gofmt`, `go vet`, `golangci-lint` v2 (0 issues), `go test -race`,
+  `go test -tags=integration`, `go build`.
 
 ### 2026-07-30 — Phase 5 complete: language & tool management (`karya lang`)
 - **`internal/lang`** manages the language/version selection and generates an

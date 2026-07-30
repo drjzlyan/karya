@@ -99,15 +99,16 @@ without modifying Homebrew or the user's global mise.
 
 ---
 
-## Phase 6 — Install / update / uninstall & self-update
+## Phase 6 — Install / update / uninstall & self-update ✅
 **Goal:** lifecycle management, including binary self-replacement.
 
-- ☐ `karya install` — extract configs, fetch tools, no user-setting changes
-- ☐ `karya update [--check]` — self-replace binary + re-extract configs + tools + `Lazy! sync`
-- ☐ `karya uninstall` — remove karya prefix + binary only
-- ☐ GitHub Releases integration + checksum verification + atomic replace
-- ☐ `curl | sh` install script
-- ☐ `karya shellenv` (opt-in PATH/alias/EDITOR)
+- ☑ `karya install` — extract configs, fetch tools, no user-setting changes
+- ☑ `karya update [--check]` — self-replace binary + re-extract configs + tools + `Lazy! sync`
+- ☑ `karya uninstall` — remove karya prefix + binary only (confirmed, `-y` to skip)
+- ☑ GitHub Releases integration + checksum verification + atomic replace
+  (`internal/update`, hermetically tested via httptest)
+- ☑ `curl | sh` install script (`scripts/install.sh`)
+- ☑ `karya shellenv` (opt-in PATH/alias/EDITOR; session toolchain stays session-scoped)
 
 **Done when:** a user can install via one command, update in place, and fully
 uninstall leaving no trace beyond their own pre-existing config.

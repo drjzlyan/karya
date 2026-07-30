@@ -88,6 +88,35 @@ func TestMiseIsolation(t *testing.T) {
 	}
 }
 
+// TestShellEnvIsOptInAndSafe asserts karya's shell integration only exposes where
+// karya lives and sets the editor — it never leaks the session-scoped managed
+// toolchain onto the user's global PATH (that stays inside karya sessions), and it
+// mutates no user rc file (it is meant to be eval'd voluntarily).
+func TestShellEnvIsOptInAndSafe(t *testing.T) {
+	p := Paths{Bin: "/home/u/.local/bin", Data: "/home/u/.local/share/karya"}
+	script := p.ShellEnv("/home/u/.local/bin/karya")
+
+	if !strings.Contains(script, p.Bin) {
+		t.Errorf("ShellEnv must put the karya bin dir on PATH; got:\n%s", script)
+	}
+	for _, want := range []string{
+		"EDITOR=", "VISUAL=", "GIT_EDITOR=", "/home/u/.local/bin/karya edit",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("ShellEnv missing %q; got:\n%s", want, script)
+		}
+	}
+	// The managed tool bin and mise shims are session-scoped (config.Env), so they
+	// must NOT appear in the global shell integration.
+	if strings.Contains(script, p.ToolsBin()) || strings.Contains(script, p.MiseShims()) {
+		t.Errorf("ShellEnv must not leak the session toolchain onto global PATH; got:\n%s", script)
+	}
+	// Guarded PATH edit so repeated evals don't stack duplicates.
+	if !strings.Contains(script, "case ") {
+		t.Errorf("ShellEnv should guard the PATH edit against duplication; got:\n%s", script)
+	}
+}
+
 // TestNvimAppNameMatchesConfigDir guards the invariant that ties launch and
 // extraction together: NVIM_APPNAME must resolve, under XDG_CONFIG_HOME, to the
 // very directory ExtractNvimConfig writes to. If these drift, Neovim reads an
