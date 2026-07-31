@@ -6,6 +6,13 @@ local function in_git_repo()
   return vim.trim(result) == "true"
 end
 
+-- Agent-driven ship: stage, let the agent author the commit message, then
+-- commit (and push with --push). Set at import time so it works without waiting
+-- for a git plugin to load; karya routes the git operations itself.
+vim.keymap.set("n", "<leader>gc", function()
+  require("features.terminal").send(nil, require("util.karya").bin() .. " ship", { dir = vim.fn.getcwd() })
+end, { silent = true, desc = "Ship (agent commit)" })
+
 return {
   {
     "lewis6991/gitsigns.nvim",

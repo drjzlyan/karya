@@ -12,8 +12,8 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 7 — Embedded help, tutorial, doctor & distribution (in progress)
-**Overall:** Phases 0–6 complete. `karya` launches a fully isolated tmux IDE
+**Active phase:** Phase 8 — Cohesion & UX **complete**; next is tagging `v1.0`.
+**Overall:** Phases 0–8 complete. `karya` launches a fully isolated tmux IDE
 session (editor/agent/build panes + git window); `karya edit`/`run` route into
 panes; agent detection/switching/cycling/reset + per-project memory are wired;
 the full Neovim config ships embedded and extracts to a karya-namespaced dir
@@ -26,7 +26,37 @@ from GitHub Releases), `karya uninstall` (karya-only removal), `karya shellenv`
 (opt-in), plus a `curl | sh` installer. Build + vet + golangci-lint +
 unit/race/integration tests are green. Go 1.26.
 
-### Resume point (do this next — Phase 7)
+### Resume point (do this next)
+1. Tag **`v1.0`** — Phases 0–8 are complete and the full gate is green.
+2. Optional: manually smoke-test `karya ship` end-to-end with a headless-capable
+   agent (`claude -p`) and with a fallback agent, inside a live session.
+
+### Phase 8 — what shipped (Cohesion & UX)
+- **Unified keymaps (Workstream A):** `util/langmaps.lua` now hard-codes the
+  `<leader>c` prefix and is the single registration point; all six language modules
+  route through it (Python and Java converted from their bespoke `<leader>p`/`<leader>j`
+  blocks, with language-only extras via a new `spec.extra` hook — e.g. Java
+  `<leader>cw*` workspace, Python `<leader>cm/cs/cv`). `features/whichkey.lua` collapsed
+  ~8 groups to `Code` + `Agent`; `<leader>T`/`<leader>m`/`<leader>W` removed;
+  close-buffer moved to `<leader>x`.
+- **Editor↔agent bridge (Workstream B):** `agent.Manager.Send`/`Focus`
+  (`internal/agent/send.go`, unit-tested) paste editor context into the agent pane via
+  set-buffer/paste-buffer; `karya agent send [--file --line --label]`/`focus` in
+  `cli.go`; `features/agent.lua` binds `<leader>a{a,b,s,c,d,f}`. Binary resolved from
+  `$EDITOR` via `util/karya.lua`.
+- **Agent-driven ship (Workstream C):** `internal/ship` (deterministic git behind a
+  Runner, unit-tested: stage/diff/commit-via-`-F`/push/PR + message sanitization);
+  `agent.HeadlessPrompt` capability map (claude/codex/gemini) with conversational
+  fallback via `Send`; `karya ship [--push --pr --no-verify]` (`internal/cli/ship.go`),
+  `Ctrl-a G` popup, `<leader>gc`.
+- **Cohesion + guardrail (Workstream D):** tmux panes/status read `karya · …`;
+  `karya keys` alias; `internal/assets/keymaps_integration_test.go` +
+  `testdata/keymap_guard.lua` drive headless nvim (plugins stubbed, no network) to
+  assert the identical `<leader>c` interface across all languages and that
+  close-buffer left `<leader>c`.
+- **Gate:** gofmt/vet/golangci-lint/`go test -race`/`-tags=integration`/build all green.
+
+### Resume point (superseded — Phase 7)
 1. ~~Embed the user docs + `karya help`/`karya docs`.~~ **Done** (#17).
 2. ~~`karya tutorial` (self-working) + `Ctrl-a ?` in-session help.~~ **Done** (this branch).
 3. ~~`karya doctor` — tools/versions/isolation + per-language tooling.~~ **Done** (this branch).

@@ -7,6 +7,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -35,6 +36,9 @@ func Run(args []string) int {
 		return cmdHelp(rest)
 	case "docs":
 		return cmdDocs(rest)
+	case "keys":
+		// A discoverable alias for the full CLI/tmux/Neovim key reference.
+		return cmdDocs([]string{"keymaps"})
 	case "tutorial":
 		return cmdTutorial(rest)
 	case "-v", "--version", "version":
@@ -50,6 +54,8 @@ func Run(args []string) int {
 		return cmdRun(rest)
 	case "new":
 		return cmdNew(rest)
+	case "ship":
+		return cmdShip(rest)
 	case "lang":
 		return cmdLang(rest)
 	case "install":
@@ -311,7 +317,9 @@ func cmdAgent(args []string) int {
 		return agentStatus(a)
 	case "prefs":
 		return agentPrefs(a)
-	case "switch", "switch-to", "next", "prev", "reset", "clear":
+	case "send":
+		return agentSend(a, rest)
+	case "switch", "switch-to", "next", "prev", "reset", "clear", "focus":
 		return agentInSession(a, sub, rest)
 	default:
 		fmt.Fprintf(os.Stderr, "karya agent: unknown subcommand %q\n", sub)
@@ -354,11 +362,56 @@ func agentInSession(a *app, sub string, rest []string) int {
 		err = m.Reset()
 	case "clear":
 		err = m.ClearPref()
+	case "focus":
+		err = m.Focus()
 	}
 	if err != nil {
 		return fail(err)
 	}
 	return 0
+}
+
+// agentSend reads a payload from stdin and pastes it into the current session's
+// agent pane, prefixed with an optional context header built from the flags. It
+// is the CLI half of the editor↔agent bridge: nvim's <leader>a maps pipe the
+// buffer, a visual selection, or a diagnostic through this command.
+func agentSend(a *app, args []string) int {
+	fs := flag.NewFlagSet("agent send", flag.ContinueOnError)
+	file := fs.String("file", "", "file path for the context header")
+	line := fs.String("line", "", "line or range (e.g. 10 or 10-20)")
+	label := fs.String("label", "", "instruction/label prepended to the context")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	m, ok := agentManager(a)
+	if !ok {
+		fmt.Fprintln(os.Stderr, "karya agent: not in a karya session")
+		return 1
+	}
+	body, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return fail(err)
+	}
+	if err := m.Send(agentSendHeader(*label, *file, *line), string(body)); err != nil {
+		return fail(err)
+	}
+	return 0
+}
+
+// agentSendHeader builds the context header from the label and file:line flags.
+func agentSendHeader(label, file, line string) string {
+	var parts []string
+	if label != "" {
+		parts = append(parts, label)
+	}
+	if file != "" {
+		ref := file
+		if line != "" {
+			ref += ":" + line
+		}
+		parts = append(parts, "From "+ref)
+	}
+	return strings.Join(parts, "\n")
 }
 
 // agentStatus prints the current agent and availability. Inside a session it
@@ -423,6 +476,7 @@ Usage:
   karya edit <file> [line]  Open a file in the editor pane (used as $EDITOR)
   karya run <cmd...>        Run a command in the build/test pane
   karya new <lang> <name>   Scaffold a project (python|java|typescript|go|cpp|rust)
+  karya ship [--push --pr]  Stage, agent-write the commit message, commit (--no-verify)
   karya lang <cmd>          list | add <lang> [versions] | remove <lang> | all
 
   karya install             Set up karya (isolated, non-destructive)
@@ -435,6 +489,7 @@ Usage:
   karya version             Print version / build info
   karya tutorial [n]        Run the self-working tutorial (a sandbox verifies it)
   karya docs [topic]        Read the embedded docs offline (no topic lists them)
+  karya keys                Show the full CLI / tmux / Neovim key reference
   karya help [command]      Show this help, or detailed help for one command
 
 Docs: karya docs tutorial · karya docs keymaps

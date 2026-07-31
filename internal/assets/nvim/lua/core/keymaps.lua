@@ -11,8 +11,8 @@ map("n", "<Esc>", "<cmd>nohlsearch<CR>", opts)
 map("n", "<leader>S", "<cmd>w!<CR>", { desc = "Save" })
 map("n", "<leader>Z", "<cmd>q!<CR>", { desc = "Quit" })
 
--- Buffers
-map("n", "<leader>c", "<cmd>bdelete!<CR>", { desc = "Close buffer" })
+-- Buffers (close on <leader>x; <leader>c is the language-agnostic Code group)
+map("n", "<leader>x", "<cmd>bdelete!<CR>", { desc = "Close buffer" })
 
 -- Window navigation
 map("n", "<C-h>", "<C-w>h", opts)

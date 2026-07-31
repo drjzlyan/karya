@@ -84,7 +84,6 @@ vim.api.nvim_create_autocmd("FileType", {
     setup_lsp()
     require("util.langmaps").register(args.buf, {
       lang = "Cpp",
-      prefix = "<leader>C",
       format = format_cpp,
     })
   end,
