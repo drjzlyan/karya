@@ -137,32 +137,73 @@ func Scaffold(parentDir string, s Spec) (string, error) {
 func render(s Spec) ([]file, error) {
 	switch s.Lang {
 	case Python:
-		return renderPython(s), nil
+		return renderPython(s)
 	case Java:
-		return renderJava(s), nil
+		return renderJava(s)
 	case TypeScript:
-		return renderTypeScript(s), nil
+		return renderTypeScript(s)
 	case Go:
-		return renderGo(s), nil
+		return renderGo(s)
 	case Cpp:
-		return renderCpp(s), nil
+		return renderCpp(s)
 	case Rust:
-		return renderRust(s), nil
+		return renderRust(s)
 	default:
 		return nil, fmt.Errorf("unsupported language %q", s.Lang)
 	}
 }
 
-// tmpl renders a static template with the given data. The templates are
-// compile-time constants with no user-controlled delimiters, so parsing and
-// execution cannot fail at runtime; a parse error is a programmer error.
-func tmpl(name, text string, data any) string {
-	var b strings.Builder
-	t := template.Must(template.New(name).Parse(text))
-	if err := t.Execute(&b, data); err != nil {
-		panic(fmt.Sprintf("project: rendering %s: %v", name, err))
+// execTemplate renders a static template with the given data. The templates are
+// compile-time constants with no user-controlled delimiters, so a failure here
+// is a programming error — but it is surfaced as a normal error rather than a
+// panic so karya never crashes with a stack trace in front of a user.
+func execTemplate(name, text string, data any) (string, error) {
+	t, err := template.New(name).Parse(text)
+	if err != nil {
+		return "", fmt.Errorf("project: parse %s template: %w", name, err)
 	}
-	return b.String()
+	var b strings.Builder
+	if err := t.Execute(&b, data); err != nil {
+		return "", fmt.Errorf("project: render %s template: %w", name, err)
+	}
+	return b.String(), nil
+}
+
+// fileSet accumulates project files, capturing the first template error so the
+// per-language render functions stay concise literal lists.
+type fileSet struct {
+	files []file
+	err   error
+}
+
+// tmpl appends a file at path whose content is the named template rendered with
+// data. Once an error has occurred it becomes a no-op so the first error wins.
+func (fs *fileSet) tmpl(path, name, text string, data any) {
+	if fs.err != nil {
+		return
+	}
+	content, err := execTemplate(name, text, data)
+	if err != nil {
+		fs.err = err
+		return
+	}
+	fs.files = append(fs.files, file{path, content})
+}
+
+// raw appends a file with static content.
+func (fs *fileSet) raw(path, content string) {
+	if fs.err != nil {
+		return
+	}
+	fs.files = append(fs.files, file{path, content})
+}
+
+// result returns the accumulated files or the first error encountered.
+func (fs *fileSet) result() ([]file, error) {
+	if fs.err != nil {
+		return nil, fs.err
+	}
+	return fs.files, nil
 }
 
 // className derives a valid Java class name from a project basename: it strips
@@ -207,64 +248,64 @@ func GitInit(dir string) error {
 
 // ── Language templates ─────────────────────────────────────────────────────
 
-func renderPython(s Spec) []file {
+func renderPython(s Spec) ([]file, error) {
 	n := s.Basename
-	return []file{
-		{"pyproject.toml", tmpl("pyproject", pyprojectTmpl, n)},
-		{filepath.Join("src", n, "__init__.py"), ""},
-		{filepath.Join("src", n, "main.py"), tmpl("pymain", pyMainTmpl, n)},
-		{filepath.Join("tests", "test_main.py"), tmpl("pytest", pyTestTmpl, n)},
-		{".gitignore", pythonGitignore},
-	}
+	var fs fileSet
+	fs.tmpl("pyproject.toml", "pyproject", pyprojectTmpl, n)
+	fs.raw(filepath.Join("src", n, "__init__.py"), "")
+	fs.tmpl(filepath.Join("src", n, "main.py"), "pymain", pyMainTmpl, n)
+	fs.tmpl(filepath.Join("tests", "test_main.py"), "pytest", pyTestTmpl, n)
+	fs.raw(".gitignore", pythonGitignore)
+	return fs.result()
 }
 
-func renderJava(s Spec) []file {
+func renderJava(s Spec) ([]file, error) {
 	class := className(s.Basename)
 	pkgPath := strings.ReplaceAll(s.Name, ".", "/")
 	data := struct{ Name, GroupID, Class string }{s.Basename, s.Name, class}
-	return []file{
-		{"pom.xml", tmpl("pom", pomTmpl, data)},
-		{filepath.Join("src/main/java", pkgPath, class+".java"), tmpl("javamain", javaMainTmpl, data)},
-		{filepath.Join("src/test/java", pkgPath, class+"Test.java"), tmpl("javatest", javaTestTmpl, data)},
-		{".gitignore", javaGitignore},
-	}
+	var fs fileSet
+	fs.tmpl("pom.xml", "pom", pomTmpl, data)
+	fs.tmpl(filepath.Join("src/main/java", pkgPath, class+".java"), "javamain", javaMainTmpl, data)
+	fs.tmpl(filepath.Join("src/test/java", pkgPath, class+"Test.java"), "javatest", javaTestTmpl, data)
+	fs.raw(".gitignore", javaGitignore)
+	return fs.result()
 }
 
-func renderTypeScript(s Spec) []file {
+func renderTypeScript(s Spec) ([]file, error) {
 	n := s.Basename
-	return []file{
-		{"package.json", tmpl("pkgjson", packageJSONTmpl, n)},
-		{"tsconfig.json", tsconfig},
-		{filepath.Join("src", "index.ts"), tmpl("tsindex", tsIndexTmpl, n)},
-		{filepath.Join("test", "index.test.ts"), tsTest},
-		{".gitignore", tsGitignore},
-	}
+	var fs fileSet
+	fs.tmpl("package.json", "pkgjson", packageJSONTmpl, n)
+	fs.raw("tsconfig.json", tsconfig)
+	fs.tmpl(filepath.Join("src", "index.ts"), "tsindex", tsIndexTmpl, n)
+	fs.raw(filepath.Join("test", "index.test.ts"), tsTest)
+	fs.raw(".gitignore", tsGitignore)
+	return fs.result()
 }
 
-func renderGo(s Spec) []file {
+func renderGo(s Spec) ([]file, error) {
 	data := struct{ Module, App string }{s.Name, s.Basename}
-	return []file{
-		{"go.mod", tmpl("gomod", goModTmpl, data)},
-		{filepath.Join("cmd", s.Basename, "main.go"), tmpl("gomain", goMainTmpl, data)},
-		{".gitignore", goGitignore},
-	}
+	var fs fileSet
+	fs.tmpl("go.mod", "gomod", goModTmpl, data)
+	fs.tmpl(filepath.Join("cmd", s.Basename, "main.go"), "gomain", goMainTmpl, data)
+	fs.raw(".gitignore", goGitignore)
+	return fs.result()
 }
 
-func renderCpp(s Spec) []file {
+func renderCpp(s Spec) ([]file, error) {
 	n := s.Basename
-	return []file{
-		{"CMakeLists.txt", tmpl("cmake", cmakeTmpl, n)},
-		{filepath.Join("src", "main.cpp"), tmpl("cppmain", cppMainTmpl, n)},
-		{filepath.Join("tests", "test_main.cpp"), cppTest},
-		{".gitignore", cppGitignore},
-	}
+	var fs fileSet
+	fs.tmpl("CMakeLists.txt", "cmake", cmakeTmpl, n)
+	fs.tmpl(filepath.Join("src", "main.cpp"), "cppmain", cppMainTmpl, n)
+	fs.raw(filepath.Join("tests", "test_main.cpp"), cppTest)
+	fs.raw(".gitignore", cppGitignore)
+	return fs.result()
 }
 
-func renderRust(s Spec) []file {
+func renderRust(s Spec) ([]file, error) {
 	n := s.Basename
-	return []file{
-		{"Cargo.toml", tmpl("cargo", cargoTmpl, n)},
-		{filepath.Join("src", "main.rs"), tmpl("rustmain", rustMainTmpl, n)},
-		{".gitignore", rustGitignore},
-	}
+	var fs fileSet
+	fs.tmpl("Cargo.toml", "cargo", cargoTmpl, n)
+	fs.tmpl(filepath.Join("src", "main.rs"), "rustmain", rustMainTmpl, n)
+	fs.raw(".gitignore", rustGitignore)
+	return fs.result()
 }

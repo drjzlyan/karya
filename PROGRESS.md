@@ -12,7 +12,7 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 8 — Cohesion & UX **complete**; next is tagging `v1.0`.
+**Active phase:** Phase 8 — Cohesion & UX **complete**; next is tagging `v0.2.0`.
 **Overall:** Phases 0–8 complete. `karya` launches a fully isolated tmux IDE
 session (editor/agent/build panes + git window); `karya edit`/`run` route into
 panes; agent detection/switching/cycling/reset + per-project memory are wired;
@@ -23,13 +23,36 @@ languages and opens the project in an IDE session; `karya lang` selects language
 karya prefix (isolated mise + tool bin). Full lifecycle is live: `karya install`
 (isolated setup), `karya update [--check]` (checksum-verified atomic self-replace
 from GitHub Releases), `karya uninstall` (karya-only removal), `karya shellenv`
-(opt-in), plus a `curl | sh` installer. Build + vet + golangci-lint +
-unit/race/integration tests are green. Go 1.26.
+(opt-in), plus a `curl | sh` installer. karya is now **self-contained in
+operation**: a fresh machine with only the binary bootstraps its own core
+runtime (tmux, Neovim) and language toolchains via a karya-vendored, isolated
+mise (see below). Build + vet + golangci-lint + unit/race/integration tests are
+green. Go 1.26.
 
 ### Resume point (do this next)
-1. Tag **`v1.0`** — Phases 0–8 are complete and the full gate is green.
+1. Tag **`v0.2.0`** — Phases 0–8 plus the self-contained runtime bootstrap are
+   done and the full gate is green (`v1.0` deferred; ship incremental tags first).
 2. Optional: manually smoke-test `karya ship` end-to-end with a headless-capable
    agent (`claude -p`) and with a fallback agent, inside a live session.
+
+### Production-hardening pass (self-contained + clean errors) — 2026-07-31
+- **Self-contained runtime bootstrap.** New `internal/tools/mise.go`
+  (`EnsureMise`: checksum-verified mise download into the karya prefix) and
+  `internal/tools/bootstrap.go` (`EnsureCore` = tmux+neovim, `EnsureToolchains`
+  = + node/go/rust/uv, via isolated `mise use --global`). `karya`/`dev`/`new`
+  auto-install missing core deps then continue; `karya install` runs the full
+  toolchain bootstrap; `karya lang` provisions mise on demand. New
+  `config.Paths.ActivateManagedEnv()` (PATH + `MISE_*`) lets karya's own process
+  resolve **and run** the shim-backed tools it installed. Verified end-to-end on
+  a scrubbed-`PATH` fresh HOME: mise → tmux 3.7b + neovim 0.12.4 installed,
+  `doctor` reports them found.
+- **No stack traces / clean errors.** Removed the template `panic()` in
+  `internal/project` (now propagates via a `fileSet` accumulator);
+  `ship.ExecRunner.Output` + the ship agent-exec now fold subprocess stderr into
+  the error instead of a bare `exit status N`; softened raw HTTP-status leaks in
+  `internal/tools/download.go`. Offline runs degrade to clean `warning:` lines,
+  never a trace.
+- Docs: PLAN.md §2 + §6.4 updated with the runtime-bootstrap model.
 
 ### Phase 8 — what shipped (Cohesion & UX)
 - **Unified keymaps (Workstream A):** `util/langmaps.lua` now hard-codes the
@@ -66,7 +89,7 @@ unit/race/integration tests are green. Go 1.26.
    and `scripts/update-formula.sh` generates a cross-platform (macOS + Linux) Homebrew
    formula. Proven end-to-end by the **`v0.1.0`** release; on each tag the workflow
    opens a formula PR and auto-merges it via the `RELEASE_TOKEN` PAT (`main` is
-   protected, so it never pushes directly). **Remaining:** tag `v1.0.0`.
+   protected, so it never pushes directly). **Remaining:** tag `v0.2.0`.
 5. ~~Provenance cleanup (final pass): describe karya on its own terms across the
    whole repo and sever the build-time editor-config dependency.~~ **Done** (this
    branch): the vendored `internal/assets/nvim/` is now the sole source of truth

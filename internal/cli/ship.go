@@ -121,8 +121,15 @@ func shipMessage(name, dir, diff string) string {
 	fmt.Printf("Asking %s to write a commit message…\n", name)
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if err != nil {
+		// Explain why we are falling back to the conversational pane instead of
+		// silently producing no message.
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			fmt.Fprintf(os.Stderr, "karya ship: %s could not draft a message: %s\n", name, msg)
+		}
 		return ""
 	}
 	return ship.SanitizeMessage(string(out))

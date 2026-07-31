@@ -252,11 +252,17 @@ func applySelection(a *app, sel *lang.Selection) int {
 	}
 	fmt.Printf("Saved selection to %s\n", a.paths.LanguagesFile())
 
+	// Provision the isolated mise on demand so `karya lang` works on a machine
+	// that never ran `karya install`. Best-effort: stay usable offline.
+	if _, err := tools.EnsureMise(a.paths, os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	}
+
 	env := append(os.Environ(), a.env...)
 	if ran, err := lang.InstallRuntimes(env, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	} else if !ran {
-		fmt.Println("mise not found — runtimes not installed. Install mise, then run `karya lang all`.")
+		fmt.Println("Could not provision mise — runtimes not installed. Re-run `karya lang all` when back online.")
 	}
 
 	if err := a.paths.EnsureDirs(); err == nil {

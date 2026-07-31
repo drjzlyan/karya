@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -131,5 +132,39 @@ func TestNvimAppNameMatchesConfigDir(t *testing.T) {
 	wantConfig := filepath.Join(home, ".config", NvimAppName)
 	if p.NvimConfig() != wantConfig {
 		t.Errorf("NvimConfig() = %q, want %q (XDG_CONFIG_HOME/NVIM_APPNAME)", p.NvimConfig(), wantConfig)
+	}
+}
+
+// TestActivateManagedEnv verifies karya prepends its managed tool dirs to its
+// own PATH exactly once (idempotent), preserves existing entries, and exports
+// the MISE_* variables so shim-backed tools resolve karya's isolated runtimes.
+func TestActivateManagedEnv(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	for _, v := range []string{"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME"} {
+		t.Setenv(v, "")
+	}
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	p := Resolve()
+	p.ActivateManagedEnv()
+
+	sep := string(os.PathListSeparator)
+	got := os.Getenv("PATH")
+	wantPrefix := p.ToolsBin() + sep + p.MiseShims() + sep
+	if !strings.HasPrefix(got, wantPrefix) {
+		t.Fatalf("PATH = %q, want prefix %q", got, wantPrefix)
+	}
+	if !strings.Contains(got, "/usr/bin") {
+		t.Errorf("PATH dropped existing entries: %q", got)
+	}
+	if got := os.Getenv("MISE_DATA_DIR"); got != p.MiseData() {
+		t.Errorf("MISE_DATA_DIR = %q, want %q", got, p.MiseData())
+	}
+
+	// Second activation must not duplicate the managed dirs.
+	p.ActivateManagedEnv()
+	if n := strings.Count(os.Getenv("PATH"), p.ToolsBin()); n != 1 {
+		t.Errorf("ToolsBin appears %d times after re-activation, want 1", n)
 	}
 }

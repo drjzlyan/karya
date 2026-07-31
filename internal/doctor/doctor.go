@@ -116,10 +116,10 @@ type coreTool struct {
 }
 
 var coreTools = []coreTool{
-	{"tmux", "tmux", true, "install tmux — it hosts the IDE session"},
-	{"Neovim", "nvim", true, "install Neovim — karya's editor"},
+	{"tmux", "tmux", true, "run `karya install` to set up karya's isolated runtime"},
+	{"Neovim", "nvim", true, "run `karya install` to set up karya's isolated runtime"},
 	{"git", "git", false, "install git for version control"},
-	{"mise", "mise", false, "install mise so `karya lang` can manage runtimes"},
+	{"mise", "mise", false, "run `karya install` to provision karya's isolated mise"},
 	{"lazygit", "lazygit", false, "install lazygit for the in-session git UI (Ctrl-a g)"},
 }
 

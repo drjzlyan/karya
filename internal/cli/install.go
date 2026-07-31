@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/drjzlyan/karya/internal/editor"
+	"github.com/drjzlyan/karya/internal/tools"
 	"github.com/drjzlyan/karya/internal/update"
 	"github.com/drjzlyan/karya/internal/version"
 )
@@ -28,6 +29,15 @@ func cmdInstall(args []string) int {
 	a, err := newApp()
 	if err != nil {
 		return fail(err)
+	}
+
+	// Bootstrap karya's own runtime into its isolated prefix: the vendored mise,
+	// the tmux + Neovim core, and the language toolchain managers (node, go, rust,
+	// uv). On a fresh machine this is what makes the single binary self-contained;
+	// on a machine that already has these it is a fast no-op. A failure here is not
+	// fatal — the config is still extracted and any tooling that can install will.
+	if err := tools.EnsureToolchains(a.paths, os.Stdout, os.Stderr); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
 
 	// Apply whatever languages are already selected (empty on a truly fresh

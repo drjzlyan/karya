@@ -93,6 +93,11 @@ from the binary, with zero impact on the user's own Neovim.
   servers are detect-only with a hint (never `brew install`)
 - ☑ Always-on servers + per-language selectable servers (PLAN §6.4)
 - ☑ `karya lang [list|add|remove|all]` + interactive selector
+- ☑ **Self-contained core runtime** (2026-07-31) — detect-or-install now extends
+  to tmux, Neovim, and the toolchain managers via a karya-vendored, isolated
+  mise (`internal/tools/{mise,bootstrap}.go`; `EnsureMise`/`EnsureCore`/
+  `EnsureToolchains`). A fresh machine with only the binary bootstraps the whole
+  stack; `ActivateManagedEnv` lets karya run its own shim-backed tools. (PLAN §6.4)
 
 **Done when:** selecting a language installs its tooling into the karya prefix
 without modifying Homebrew or the user's global mise.
@@ -145,7 +150,7 @@ without the repo or a browser.
   `RELEASE_TOKEN` PAT), keeping the tap current hands-off.
 - ☑ Release automation — GoReleaser (`.goreleaser.yaml`) + `.github/workflows/release.yml`
   on `v*` tags: cross-compiled tarballs + checksums, `install.sh` attached, changelog
-  from commits. Proven end-to-end by the `v0.1.0` release. **Remaining:** tag `v1.0.0`.
+  from commits. Proven end-to-end by the `v0.1.0` release. **Remaining:** tag `v0.2.0`.
 
 ### Provenance cleanup (final pass — karya stands alone) ✅
 - ☑ Describe karya on its own terms across the **entire repo** — karya is the
@@ -169,7 +174,7 @@ and karya's tree stands alone as its own product.
 ## Phase 8 — Cohesion & UX (make karya feel like one product) ✅
 **Goal:** the amalgamation of Neovim + tmux + agents reads as a single entity —
 consistent, non-bloated keymaps; the agent fused into the editor; the
-scaffold → implement → ship loop closed with the agent's help. Ships in `v1.0`.
+scaffold → implement → ship loop closed with the agent's help. Ships in `v0.2.0`.
 
 - ☑ **Unified keymaps** — one context-aware `<leader>c` "Code" group, identical in
   every language (no per-language `<leader>p/o/j/r/C/y` prefixes; `<leader>ct`
@@ -190,7 +195,7 @@ scaffold → implement → ship loop closed with the agent's help. Ships in `v1.
   close-buffer moved off `<leader>c`, so consistency can't silently regress.
 
 **Done when:** the same keys drive every language; the agent takes editor context
-and authors commits; and the guardrail + full gate are green. **Ready for `v1.0`.**
+and authors commits; and the guardrail + full gate are green. **Ready for `v0.2.0`.**
 
 ---
 

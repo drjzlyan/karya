@@ -74,7 +74,10 @@ Key mechanisms:
   `eval "$(karya shellenv)"`. karya never rewrites shell rc files itself.
 - **Tool management** — karya prefers tools already on `PATH`; anything it needs
   and cannot find, it installs into its own prefix (never into Homebrew or the
-  user's global env). Homebrew is optional, not required.
+  user's global env). This extends to the **core runtime**: a fresh machine with
+  only the karya binary gets tmux, Neovim, and the language toolchains installed
+  via a karya-vendored, isolated mise (see §6.4). Homebrew is optional, not
+  required.
 
 **Uninstall guarantee:** `karya uninstall` deletes the karya prefix directories
 and the binary, and nothing else. No user config is mutated at any point, so
@@ -278,6 +281,28 @@ binary (Phase 7). The **internal** engineering docs (`PLAN.md`, `ROADMAP.md`,
   Always-on: lua_ls, jsonls, yamlls, bashls, taplo, marksman. Selectable per
   language: basedpyright+ruff, jdtls+google-java-format, ts-language-server,
   gopls, clangd, rust-analyzer.
+
+#### Self-contained runtime bootstrap (`internal/tools/{mise,bootstrap}.go`)
+
+karya is self-contained **in operation**, not just packaging: on a fresh
+machine the single binary installs every runtime dependency itself, into the
+karya prefix — never Homebrew or the user's global mise.
+
+- `EnsureMise` downloads the platform mise release from GitHub, **SHA-256
+  verified** against the release `SHASUMS256.txt`, into `tools/bin/mise`. No-op
+  when mise already resolves. (Checksum filenames carry a `./` prefix, stripped
+  by `parseShasums`.)
+- `EnsureCore` (tmux + neovim) and `EnsureToolchains` (+ node/go/rust/uv) run
+  `mise use --global <tool>@latest` against the **isolated** `MISE_*` env, so
+  everything lands under `MiseData`/`MiseShims`. Detect-first, best-effort.
+- Wiring: `karya`/`karya dev`/`karya new` auto-install missing **core** deps
+  then continue (`ensureRuntime`); `karya install` runs the full
+  `EnsureToolchains`; `karya lang` provisions mise on demand.
+- **Tool resolution rule:** `config.Paths.ActivateManagedEnv()` prepends
+  `ToolsBin` + `MiseShims` to karya's *own* process PATH **and** exports the
+  `MISE_*` vars so shim-backed tools both resolve and run (PATH alone yields
+  "not a valid shim"). Called in `newApp` and `cmdDoctor`; child processes get
+  the same via `Paths.Env`.
 
 ### 6.5 Self-update (`internal/update`)
 

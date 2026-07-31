@@ -28,6 +28,10 @@ func newApp() (*app, error) {
 	if err := p.EnsureDirs(); err != nil {
 		return nil, err
 	}
+	// Let karya resolve and run the tools it installed into its isolated prefix
+	// (tmux, Neovim, agents, toolchain managers) without relying on the user's
+	// PATH or global mise.
+	p.ActivateManagedEnv()
 	bin, err := os.Executable()
 	if err != nil || bin == "" {
 		bin = "karya"
