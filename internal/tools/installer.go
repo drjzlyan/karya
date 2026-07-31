@@ -161,6 +161,36 @@ func (d *Dispatcher) Install(tools []toolreg.Tool, ctx Context) []Result {
 	return results
 }
 
+// Reinstall installs a tool unconditionally (skipping the detect-first check),
+// so an already-present tool is refreshed to its latest version. It is the
+// primitive the update manager uses. Detect-only tools cannot be updated by
+// karya and report Missing/Skipped as usual.
+func (d *Dispatcher) Reinstall(t toolreg.Tool, ctx Context) Result {
+	m := d.methods[t.Method]
+	if m == nil {
+		return Result{Tool: t.Name, Status: Failed, Err: fmt.Errorf("unknown install method %q", t.Method)}
+	}
+	if t.Method == toolreg.MethodDetect {
+		return d.one(t, ctx) // nothing to update; report availability
+	}
+	if d.layout != nil {
+		ctx.ToolsDir, ctx.BinDir = d.layout(t)
+	}
+	if ctx.BinDir != "" {
+		_ = os.MkdirAll(ctx.BinDir, 0o755)
+	}
+	if ctx.ToolsDir != "" {
+		_ = os.MkdirAll(ctx.ToolsDir, 0o755)
+	}
+	logf(ctx.Out, "updating %s…", t.Name)
+	if err := m.Install(t, ctx); err != nil {
+		warnf(ctx.ErrOut, "could not update %s: %v", t.Name, err)
+		return Result{Tool: t.Name, Status: Failed, Err: err}
+	}
+	logf(ctx.Out, "✓ updated %s", t.Name)
+	return Result{Tool: t.Name, Status: Installed}
+}
+
 func (d *Dispatcher) one(t toolreg.Tool, ctx Context) Result {
 	m := d.methods[t.Method]
 	if m == nil {

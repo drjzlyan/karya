@@ -66,8 +66,17 @@ Status legend: ☐ not started · ◐ in progress · ☑ done
 - Note: auto-provisioning a project's pinned runtime (`mise install` in the workdir on open) is not
   yet wired — project versions are used when already installed. Follow-up.
 
-## Phase 7 — Health/Version/Update in doctor
-- ☐ `HealthChecker`, `VersionManager`, `UpdateManager`; doctor `--check-updates`; `tools.state`; rollback
+## Phase 7 — Health / update surface ✅ (via `karya tool`; deeper doctor+version deferred)
+- ☑ `toolreg.HealthChecker` (`HealthStatus`: installed/version/location/source/repair-hint), injectable
+      version probe; tests
+- ☑ `Dispatcher.Reinstall` (force) primitive for updates
+- ☑ `karya tool list` (health of all tools grouped by category) + `karya tool update <id>|all`
+      (independent per-tool updates; pinned/manual reported, not touched)
+- ☑ `util/health.lua`: removed Homebrew/system-JVM + global-`nvim/languages.local` leaks
+      (now reads karya's isolated prefix + delegates lombok to `util.java`); brew hints → karya hints
+- ◐ Deferred: `VersionManager` latest-vs-installed / update-available detection (LatestVersion stubs),
+      `tools.state` LastValidated persistence, rollback, and folding health into `karya doctor`
+      (the `karya tool` command is the primary health surface for now).
 
 ## Phase 8 — Cleanup
 - ☐ Delete retired shims/dead code; update docs; `//go:build integration` end-to-end

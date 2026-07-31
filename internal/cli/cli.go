@@ -62,6 +62,8 @@ func Run(args []string) int {
 		return cmdLang(rest)
 	case "profile":
 		return cmdProfile(rest)
+	case "tool", "tools":
+		return cmdTool(rest)
 	case "install":
 		return cmdInstall(rest)
 	case "update":
