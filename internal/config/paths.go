@@ -266,3 +266,17 @@ func (p Paths) Env(karyaBin string) []string {
 	env = append(env, "PATH="+path)
 	return env
 }
+
+// EnvForProject is Env plus per-project isolation: it trusts the project's own
+// mise/.tool-versions config (via MISE_TRUSTED_CONFIG_PATHS) so that, when karya
+// runs tools with the project as the working directory, mise layers the project's
+// runtime versions over karya's global managed ones — without touching the user's
+// global mise trust store. projectRoot is the detected project directory; an empty
+// projectRoot yields the same result as Env.
+func (p Paths) EnvForProject(karyaBin, projectRoot string) []string {
+	env := p.Env(karyaBin)
+	if projectRoot != "" {
+		env = append(env, "MISE_TRUSTED_CONFIG_PATHS="+projectRoot)
+	}
+	return env
+}

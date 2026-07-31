@@ -55,9 +55,16 @@ Status legend: ☐ not started · ◐ in progress · ☑ done
 - Note: `EnsureCore`/`EnsureToolchains` (bootstrap.go) still used by launch + `cmdInstall`; folding
   them into a `core` profile is deferred to the Phase 8 cleanup to avoid destabilizing launch.
 
-## Phase 6 — Per-project isolation
-- ☐ `DetectProject`, `Paths.EnvForProject`, `MISE_TRUSTED_CONFIG_PATHS`, `cmd.Dir=projectRoot`
-- ☐ Resolver project source (highest priority)
+## Phase 6 — Per-project isolation ✅
+- ☑ `toolreg.DetectProject(dir)` walks up for mise.toml/.mise.toml/.tool-versions → `ProjectEnv`
+- ☑ `config.Paths.EnvForProject(bin, root)` adds `MISE_TRUSTED_CONFIG_PATHS` (no global trust touched)
+- ☑ Resolver `WithProject(pe)` + `SourceProject`: runtime tools resolved via `mise which` in the
+      project dir (injectable for tests); falls back to managed
+- ☑ `cmdDev` detects the project from the workdir and launches the session with `EnvForProject`, so
+      shims layer the project's versions over global inside the session
+- ☑ Tests: nearest-config detection, EnvForProject trust var, resolver prefers project + falls back
+- Note: auto-provisioning a project's pinned runtime (`mise install` in the workdir on open) is not
+  yet wired — project versions are used when already installed. Follow-up.
 
 ## Phase 7 — Health/Version/Update in doctor
 - ☐ `HealthChecker`, `VersionManager`, `UpdateManager`; doctor `--check-updates`; `tools.state`; rollback

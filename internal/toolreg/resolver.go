@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/drjzlyan/karya/internal/config"
 )
@@ -61,6 +62,12 @@ type Resolver struct {
 	managedDirs []string
 	// lookPath resolves a bare name on PATH; injectable for tests.
 	lookPath func(string) (string, error)
+	// project, when set, layers the project's runtime versions over the managed
+	// ones (highest priority) for runtime tools.
+	project *ProjectEnv
+	// projectWhich resolves a runtime executable within the project (default runs
+	// mise in the project dir); injectable for tests.
+	projectWhich func(root, exe string) (string, bool)
 }
 
 // NewResolver builds a resolver over karya's managed prefix and the registry.
@@ -73,6 +80,43 @@ func NewResolver(p config.Paths, r *Registry) *Resolver {
 	}
 }
 
+// WithProject returns a copy of the resolver that prefers the given project's
+// runtime versions. When pe is nil the resolver is returned unchanged. Runtime
+// tools are resolved via mise run in the project directory, so a project's
+// mise.toml/.tool-versions wins over karya's global managed versions.
+func (rv *Resolver) WithProject(pe *ProjectEnv) *Resolver {
+	if pe == nil {
+		return rv
+	}
+	clone := *rv
+	clone.project = pe
+	if clone.projectWhich == nil {
+		clone.projectWhich = rv.miseWhich
+	}
+	return &clone
+}
+
+// miseWhich resolves a runtime executable within a project by running mise in the
+// project directory with karya's isolated, project-trusting environment.
+func (rv *Resolver) miseWhich(root, exe string) (string, bool) {
+	mise, err := rv.lookPath("mise")
+	if err != nil {
+		return "", false
+	}
+	cmd := exec.Command(mise, "which", exe)
+	cmd.Dir = root
+	cmd.Env = append(os.Environ(), rv.paths.EnvForProject("", root)...)
+	out, err := cmd.Output()
+	if err != nil {
+		return "", false
+	}
+	path := strings.TrimSpace(string(out))
+	if path == "" || !fileExists(path) {
+		return "", false
+	}
+	return path, true
+}
+
 // Resolve returns the executable for a tool. id may be a registry ID (resolved
 // to its Executable/Artifact) or a bare command name. Resolution order is
 // managed prefix → ambient PATH → missing. Artifact-only tools (e.g. lombok.jar)
@@ -80,6 +124,7 @@ func NewResolver(p config.Paths, r *Registry) *Resolver {
 func (rv *Resolver) Resolve(id string) (Resolved, bool) {
 	exe := id
 	var artifact string
+	var category Category
 	if t, ok := rv.reg.Get(id); ok {
 		if t.Executable != "" {
 			exe = t.Executable
@@ -87,6 +132,14 @@ func (rv *Resolver) Resolve(id string) (Resolved, bool) {
 			exe = ""
 		}
 		artifact = t.Artifact
+		category = t.Category
+	}
+
+	// A project's own runtime versions take precedence for runtime tools.
+	if rv.project != nil && rv.projectWhich != nil && category == Runtime && exe != "" {
+		if p, ok := rv.projectWhich(rv.project.Root, exe); ok {
+			return Resolved{ID: id, Path: p, Source: SourceProject}, true
+		}
 	}
 
 	if artifact != "" {

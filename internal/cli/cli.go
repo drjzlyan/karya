@@ -17,6 +17,7 @@ import (
 	"github.com/drjzlyan/karya/internal/editor"
 	"github.com/drjzlyan/karya/internal/project"
 	"github.com/drjzlyan/karya/internal/session"
+	"github.com/drjzlyan/karya/internal/toolreg"
 	"github.com/drjzlyan/karya/internal/tools"
 	"github.com/drjzlyan/karya/internal/version"
 )
@@ -133,6 +134,12 @@ func cmdDev(args []string) int {
 	}
 	if err := ensureRuntime(a); err != nil {
 		return fail(err)
+	}
+	// Per-project isolation: when the workdir pins its own runtime versions,
+	// launch the session with an environment that trusts and layers the project's
+	// mise/.tool-versions over karya's global managed versions.
+	if pe, ok := toolreg.DetectProject(workdir); ok {
+		a.tmux.Env = a.paths.EnvForProject(a.bin, pe.Root)
 	}
 	if err := session.Dev(a.tmux, session.Options{
 		Name:     name,
