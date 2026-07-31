@@ -67,6 +67,22 @@ var helpByCommand = map[string]commandHelp{
 			"remove <lang>          drop a language; list shows the current selection",
 		},
 	},
+	"profile": {
+		syntax:  "karya profile <list|install <id>>",
+		summary: "Install a bundle of managed tools for an ecosystem.",
+		details: []string{
+			"list                   show each profile and how many tools are installed",
+			"install <id>           core | docs | python | go | rust | java | typescript | cpp",
+		},
+	},
+	"tool": {
+		syntax:  "karya tool <list|update <id>|all>",
+		summary: "Show managed tool health and update tools independently.",
+		details: []string{
+			"list                   health of every managed tool, grouped by category",
+			"update <id>|all        reinstall a tool (or all) to its latest version",
+		},
+	},
 	"install": {
 		syntax:  "karya install",
 		summary: "Set up karya: extract configs, install tools, sync plugins.",

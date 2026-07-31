@@ -507,6 +507,8 @@ Usage:
   karya new <lang> <name>   Scaffold a project (python|java|typescript|go|cpp|rust)
   karya ship [--push --pr]  Stage, agent-write the commit message, commit (--no-verify)
   karya lang <cmd>          list | add <lang> [versions] | remove <lang> | all
+  karya profile <cmd>       list | install <id>  (core|docs|python|go|rust|java|typescript|cpp)
+  karya tool <cmd>          list | update <id>|all  (managed tool health & updates)
 
   karya install             Set up karya (isolated, non-destructive)
   karya update [--check]    Self-update binary, configs, tools, plugins

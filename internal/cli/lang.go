@@ -255,7 +255,7 @@ func applySelection(a *app, sel *lang.Selection) int {
 		GoPath:    filepath.Join(a.paths.Data, "go"),
 		CargoHome: filepath.Join(a.paths.Data, "cargo"),
 	}
-	if err := lang.WriteMiseConfig(a.paths.MiseConfig(), sel, vars, alwaysOnMiseTools()); err != nil {
+	if err := lang.WriteMiseConfig(a.paths.MiseConfig(), sel, vars, alwaysOnMiseTools(a.reg)); err != nil {
 		return fail(err)
 	}
 	fmt.Printf("Saved selection to %s\n", a.paths.LanguagesFile())
@@ -295,11 +295,12 @@ func loadSelection(a *app) (*lang.Selection, error) {
 // alwaysOnMiseTools maps karya's mise-backed always-on servers into the form the
 // mise config generator declares, so their shims resolve regardless of the
 // language selection.
-func alwaysOnMiseTools() []lang.MiseTool {
-	specs := tools.AlwaysOnMise()
-	out := make([]lang.MiseTool, 0, len(specs))
-	for _, s := range specs {
-		out = append(out, lang.MiseTool{Key: s.Pkg, Version: s.Version})
+func alwaysOnMiseTools(reg *toolreg.Registry) []lang.MiseTool {
+	var out []lang.MiseTool
+	for _, id := range toolreg.AlwaysOnIDs() {
+		if t, ok := reg.Get(id); ok && t.Method == toolreg.MethodMise {
+			out = append(out, lang.MiseTool{Key: t.Pkg, Version: t.Version})
+		}
 	}
 	return out
 }

@@ -78,8 +78,27 @@ Status legend: ☐ not started · ◐ in progress · ☑ done
       `tools.state` LastValidated persistence, rollback, and folding health into `karya doctor`
       (the `karya tool` command is the primary health surface for now).
 
-## Phase 8 — Cleanup
-- ☐ Delete retired shims/dead code; update docs; `//go:build integration` end-to-end
+## Phase 8 — Cleanup ✅ (integration test deferred)
+- ☑ Migrated the last legacy callers to the registry: `doctor` (Probe now has `Registry` +
+      `ToolInstalled(id)`, driven by the resolver) and `alwaysOnMiseTools` (toolreg-based)
+- ☑ Deleted `internal/tools/catalog.go` (ToolSpec/Kind/alwaysOn/perLanguage/Plan/PlanFor/AlwaysOnMise);
+      trimmed `install.go` to `Status`/`Result`/`Summarize`; removed the `Installer` facade + bridge;
+      pruned obsolete tests
+- ☑ `karya profile`/`karya tool` added to usage, `karya help`, and shell completion
+- ☑ Full suite green, `golangci-lint ./...` 0 issues; smoke-tested `karya tool list` + `karya help profile`
+- ◐ Deferred: `//go:build integration` end-to-end (real mise profile install → resolve → doctor) — needs
+      network + mise; unit coverage is comprehensive.
+
+---
+
+## Summary
+All eight phases landed as sequenced, independently-green commits. The tool system now has a single
+pure registry (`internal/toolreg`) with a metadata model, a pluggable installer `Dispatcher` with
+category-based layout, a unified `Resolver` (managed→system, project-layered), profiles, per-project
+isolation, and a health/update surface (`karya tool`, `karya profile`). The `java.lua`/`health.lua`
+isolation leaks are fixed. Remaining deferred items (all noted above): formal `RuntimeManager`
+extraction, folding `bootstrap.go` into a core profile, `VersionManager` latest/rollback +
+`tools.state`, auto-provisioning project-pinned runtimes on open, and the integration test.
 
 ## Notes / decisions
 - Registry = Go struct literals (zero-dep rule); no TOML parser.
