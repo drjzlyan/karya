@@ -17,6 +17,7 @@ import (
 	"github.com/drjzlyan/karya/internal/editor"
 	"github.com/drjzlyan/karya/internal/project"
 	"github.com/drjzlyan/karya/internal/session"
+	"github.com/drjzlyan/karya/internal/tools"
 	"github.com/drjzlyan/karya/internal/version"
 )
 
@@ -128,6 +129,9 @@ func cmdDev(args []string) int {
 	if resolved != "" {
 		_ = a.prefs.Set("agent."+workdir, resolved)
 	}
+	if err := ensureRuntime(a); err != nil {
+		return fail(err)
+	}
 	if err := session.Dev(a.tmux, session.Options{
 		Name:     name,
 		Workdir:  workdir,
@@ -138,6 +142,17 @@ func cmdDev(args []string) int {
 		return fail(err)
 	}
 	return 0
+}
+
+// ensureRuntime makes sure karya's essential launch dependencies (tmux and
+// Neovim) are present, installing any that are missing into karya's isolated
+// prefix via the vendored mise. It is a no-op on the common path where both
+// already resolve, so it is cheap to call before every launch.
+func ensureRuntime(a *app) error {
+	if tools.CoreReady() {
+		return nil
+	}
+	return tools.EnsureCore(a.paths, os.Stdout, os.Stderr)
 }
 
 // cmdEdit opens a file in the editor pane (also used as $EDITOR).
@@ -226,6 +241,9 @@ func cmdNew(args []string) int {
 	}
 	fmt.Printf("Created %s project: %s\n", spec.Lang, dir)
 
+	if err := ensureRuntime(a); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	}
 	if !openInSession(a, spec.Basename, dir) {
 		fmt.Printf("Launch it with: karya dev %s %s\n", spec.Basename, dir)
 	}

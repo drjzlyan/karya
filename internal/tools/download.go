@@ -114,7 +114,7 @@ func fetchText(url string) (string, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GET %s: %s", url, resp.Status)
+		return "", fmt.Errorf("could not download %s (%s) — check your network and retry", url, resp.Status)
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
 	return string(b), err
@@ -127,7 +127,7 @@ func download(url string, dst io.Writer) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("GET %s: %s", url, resp.Status)
+		return fmt.Errorf("could not download %s (%s) — check your network and retry", url, resp.Status)
 	}
 	_, err = io.Copy(dst, resp.Body)
 	return err

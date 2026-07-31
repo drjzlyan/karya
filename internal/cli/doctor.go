@@ -17,6 +17,10 @@ import (
 func cmdDoctor(args []string) int {
 	_ = args
 	p := config.Resolve()
+	// See and run the tools karya installed into its isolated prefix (tmux,
+	// Neovim, mise, …) so the report reflects karya's managed runtime, including
+	// version probes, not just the user's PATH.
+	p.ActivateManagedEnv()
 	sel, err := lang.LoadSelection(p.LanguagesFile())
 	if err != nil {
 		// A malformed selection file should not stop the rest of the diagnosis.

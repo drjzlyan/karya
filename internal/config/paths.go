@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // AppName is the karya prefix used for all XDG subdirectories.
@@ -62,6 +63,41 @@ func Resolve() Paths {
 		State:  filepath.Join(xdg("XDG_STATE_HOME", filepath.Join(".local", "state")), AppName),
 		Cache:  filepath.Join(xdg("XDG_CACHE_HOME", ".cache"), AppName),
 		Bin:    filepath.Join(home, ".local", "bin"),
+	}
+}
+
+// ActivateManagedEnv configures the current karya process to use the tools it
+// installed into its isolated prefix. It prepends the managed tool bin and mise
+// shims to PATH (guarded against duplicates) and exports the MISE_* variables
+// so those shims resolve karya's isolated runtimes rather than the user's global
+// mise. This brings karya's own tool lookups — doctor version probes, `karya
+// edit`'s Neovim, tmux/agent detection — in line with the child processes it
+// launches via Paths.Env. It mutates only the karya process environment; the
+// user's shell PATH, Homebrew, and global mise are never touched.
+func (p Paths) ActivateManagedEnv() {
+	cur := os.Getenv("PATH")
+	have := make(map[string]bool)
+	for _, d := range strings.Split(cur, string(os.PathListSeparator)) {
+		have[d] = true
+	}
+	var add []string
+	for _, d := range []string{p.ToolsBin(), p.MiseShims()} {
+		if !have[d] {
+			add = append(add, d)
+		}
+	}
+	if len(add) > 0 {
+		next := strings.Join(add, string(os.PathListSeparator))
+		if cur != "" {
+			next += string(os.PathListSeparator) + cur
+		}
+		_ = os.Setenv("PATH", next)
+	}
+	// Pin mise to karya's prefix so shim-backed tools resolve karya's runtimes.
+	for _, kv := range p.MiseEnv() {
+		if name, val, ok := strings.Cut(kv, "="); ok {
+			_ = os.Setenv(name, val)
+		}
 	}
 }
 
