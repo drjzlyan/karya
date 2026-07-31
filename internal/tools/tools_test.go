@@ -92,6 +92,22 @@ func TestAvailableDetectsArtifact(t *testing.T) {
 	}
 }
 
+func TestAlwaysOnMise(t *testing.T) {
+	got := AlwaysOnMise()
+	want := map[string]bool{"lua-language-server": true, "taplo": true, "marksman": true}
+	if len(got) != len(want) {
+		t.Fatalf("AlwaysOnMise() returned %d tools, want %d: %v", len(got), len(want), names(got))
+	}
+	for _, s := range got {
+		if s.Kind != KindMise {
+			t.Errorf("%s should be KindMise, got %q", s.Name, s.Kind)
+		}
+		if !want[s.Pkg] {
+			t.Errorf("unexpected always-on mise tool: %q", s.Pkg)
+		}
+	}
+}
+
 func TestDetectKindReportsMissing(t *testing.T) {
 	in := Installer{ToolsDir: t.TempDir(), BinDir: t.TempDir()}
 	r := in.one(ToolSpec{Name: "clangd", Bin: "definitely-not-a-real-binary-xyz", Kind: KindDetect, Hint: "install it"})

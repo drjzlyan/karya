@@ -22,9 +22,15 @@ const (
 	KindRustup Kind = "rustup"
 	// KindDetect only checks whether a tool is already on PATH; if it is missing
 	// karya prints Hint rather than installing, because these servers ship
-	// through channels (Homebrew, LLVM, distro packages) karya must not mutate
-	// under the isolation model (PLAN.md §2).
+	// through channels (LLVM, distro packages) karya must not mutate under the
+	// isolation model (PLAN.md §2).
 	KindDetect Kind = "detect"
+	// KindMise installs a tool from mise's default registry into karya's isolated
+	// prefix. Unlike KindDetect it never touches Homebrew: the tool is declared in
+	// karya's generated mise config (so its shim resolves) and provisioned by the
+	// same vendored mise that installs karya's runtimes. Pkg is the mise registry
+	// key (e.g. "taplo").
+	KindMise Kind = "mise"
 	// KindJDTLS downloads and unpacks the Eclipse JDT language server.
 	KindJDTLS Kind = "jdtls"
 	// KindLombok downloads the Lombok jar.
@@ -53,14 +59,14 @@ type ToolSpec struct {
 // alwaysOn are the language servers karya provides regardless of the selected
 // languages: config/markup/shell support that every project benefits from
 // (PLAN.md §6.4). npm servers install into karya's isolated npm prefix; the
-// others use Homebrew when present.
+// KindMise servers install from mise's registry into the same isolated prefix.
 var alwaysOn = []ToolSpec{
-	{Name: "lua-language-server", Bin: "lua-language-server", Kind: KindDetect, Hint: "brew install lua-language-server (or your distro's package)"},
+	{Name: "lua-language-server", Bin: "lua-language-server", Kind: KindMise, Pkg: "lua-language-server"},
 	{Name: "json/html/css (vscode-langservers-extracted)", Bin: "vscode-json-language-server", Kind: KindNPM, Pkg: "vscode-langservers-extracted"},
 	{Name: "yaml-language-server", Bin: "yaml-language-server", Kind: KindNPM, Pkg: "yaml-language-server"},
 	{Name: "bash-language-server", Bin: "bash-language-server", Kind: KindNPM, Pkg: "bash-language-server"},
-	{Name: "taplo (TOML)", Bin: "taplo", Kind: KindDetect, Hint: "brew install taplo, or cargo install taplo-cli"},
-	{Name: "marksman (Markdown)", Bin: "marksman", Kind: KindDetect, Hint: "brew install marksman (or download from its GitHub releases)"},
+	{Name: "taplo (TOML)", Bin: "taplo", Kind: KindMise, Pkg: "taplo"},
+	{Name: "marksman (Markdown)", Bin: "marksman", Kind: KindMise, Pkg: "marksman"},
 }
 
 // perLanguage maps a canonical language name to the tools it needs. LSP/formatter
@@ -127,4 +133,17 @@ func Plan(langs []string) []ToolSpec {
 // used when adding one language interactively.
 func PlanFor(lang string) []ToolSpec {
 	return perLanguage[lang]
+}
+
+// AlwaysOnMise returns the always-on servers provisioned through the vendored
+// mise. The CLI declares these in karya's generated mise config so their shims
+// resolve and `mise install` provisions them into the isolated prefix.
+func AlwaysOnMise() []ToolSpec {
+	var out []ToolSpec
+	for _, s := range alwaysOn {
+		if s.Kind == KindMise {
+			out = append(out, s)
+		}
+	}
+	return out
 }

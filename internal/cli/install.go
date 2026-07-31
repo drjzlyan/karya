@@ -48,6 +48,13 @@ func cmdInstall(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
+	// Onboard a fresh, interactive install straight into language selection so the
+	// chosen languages' tools install in this same pass. Non-interactive installs
+	// (CI, brew) skip the picker and get the pointer printed below.
+	if sel.Empty() && isTerminal(os.Stdin) {
+		fmt.Println("\nLet's set up your languages (Enter to skip and do it later with `karya lang`).")
+		selectLanguages(a, sel)
+	}
 	if code := applySelection(a, sel); code != 0 {
 		return code
 	}
@@ -59,6 +66,9 @@ func cmdInstall(args []string) int {
 	}
 
 	fmt.Println("\nkarya is installed (fully isolated; no user settings changed).")
+	if sel.Empty() {
+		fmt.Println("No languages selected yet — run `karya lang` to add them.")
+	}
 	fmt.Println("Optional shell integration (adds karya to PATH + sets $EDITOR):")
 	fmt.Println(`  eval "$(karya shellenv)"`)
 	fmt.Println("Launch the IDE with: karya")

@@ -129,20 +129,28 @@ func langAll(a *app) int {
 	return applySelection(a, sel)
 }
 
-// langInteractive runs the menu loop: choose a language to configure, r<N> to
-// remove, a to select all, Enter to finish and apply.
+// langInteractive runs the menu loop then applies the resulting selection.
 func langInteractive(a *app) int {
 	sel, err := loadSelection(a)
 	if err != nil {
 		return fail(err)
 	}
+	selectLanguages(a, sel)
+	return applySelection(a, sel)
+}
+
+// selectLanguages runs the interactive menu loop against sel, mutating it in
+// place: choose a language to configure, r<N> to remove, a to select all, n to
+// clear, Enter to finish. It does not persist or apply — callers do that so the
+// picker can be reused (e.g. inline during `karya install`).
+func selectLanguages(a *app, sel *lang.Selection) {
 	in := bufio.NewReader(os.Stdin)
 	for {
 		printLangMenu(sel)
 		fmt.Print("  > ")
 		line, err := in.ReadString('\n')
 		choice := strings.TrimSpace(line)
-		if choice == "" || (err != nil && choice == "") {
+		if choice == "" {
 			break
 		}
 		switch {
@@ -151,7 +159,7 @@ func langInteractive(a *app) int {
 				sel.Set(l.Name, []string{l.Fallback})
 			}
 		case choice == "n" || choice == "N":
-			sel = lang.NewSelection()
+			sel.Clear()
 		case strings.HasPrefix(strings.ToLower(choice), "r"):
 			if n, e := strconv.Atoi(choice[1:]); e == nil && n >= 1 && n <= len(lang.Catalog) {
 				sel.Remove(lang.Catalog[n-1].Name)
@@ -172,7 +180,6 @@ func langInteractive(a *app) int {
 			break // EOF on stdin
 		}
 	}
-	return applySelection(a, sel)
 }
 
 // printLangMenu draws the selection state.
@@ -247,7 +254,7 @@ func applySelection(a *app, sel *lang.Selection) int {
 		GoPath:    filepath.Join(a.paths.Data, "go"),
 		CargoHome: filepath.Join(a.paths.Data, "cargo"),
 	}
-	if err := lang.WriteMiseConfig(a.paths.MiseConfig(), sel, vars); err != nil {
+	if err := lang.WriteMiseConfig(a.paths.MiseConfig(), sel, vars, alwaysOnMiseTools()); err != nil {
 		return fail(err)
 	}
 	fmt.Printf("Saved selection to %s\n", a.paths.LanguagesFile())
@@ -283,6 +290,18 @@ func applySelection(a *app, sel *lang.Selection) int {
 // loadSelection reads the current selection from the karya prefix.
 func loadSelection(a *app) (*lang.Selection, error) {
 	return lang.LoadSelection(a.paths.LanguagesFile())
+}
+
+// alwaysOnMiseTools maps karya's mise-backed always-on servers into the form the
+// mise config generator declares, so their shims resolve regardless of the
+// language selection.
+func alwaysOnMiseTools() []lang.MiseTool {
+	specs := tools.AlwaysOnMise()
+	out := make([]lang.MiseTool, 0, len(specs))
+	for _, s := range specs {
+		out = append(out, lang.MiseTool{Key: s.Pkg, Version: s.Version})
+	}
+	return out
 }
 
 // langLister returns a mise-backed version lister pinned to karya's isolated
