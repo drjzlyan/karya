@@ -41,9 +41,19 @@ Status legend: ☐ not started · ◐ in progress · ☑ done
 - ☑ Tests: layout routing, migration idempotency, new-tool catalog presence; lint 0 issues
 - Note: the new tools are provisioned once the install path is registry-driven (Phase 5).
 
-## Phase 5 — ProfileManager + RuntimeManager + CLI
-- ☐ `Profile`/`ProfileManager`; refactor `EnsureCore`/`EnsureToolchains` into `core` profile
-- ☐ Extract `RuntimeManager`; add `karya profile …`; rewire `cmdInstall`
+## Phase 5 — ProfileManager + install rewire + CLI ✅ (RuntimeManager extraction deferred)
+- ☑ `toolreg.Profile` + `Registry.Profiles/Profile/LanguageIDs/AlwaysOnIDs` (core & docs explicit;
+      language profiles derived from `LocLang`); tests
+- ☑ Install path is registry-driven: `applySelection` installs always-on + per-language via
+      `installToolIDs` → `NewLayoutDispatcher` (category dirs); manifest refreshed after install
+- ☑ `karya profile list|install <id>` (`cmdProfile`); dispatcher wired in `cli.go`
+- ☑ `cmdInstall` installs the `core` + `docs` baseline profiles (best-effort)
+- ☑ Dispatcher creates category bin/tools dirs on demand before install
+- ☑ Smoke-tested `karya profile list`; build/tests/lint green
+- Note: formal `RuntimeManager` type not extracted — runtime provisioning still inline in
+  `applySelection` (`WriteMiseConfig` + `InstallRuntimes`); works, extraction is cosmetic, deferred.
+- Note: `EnsureCore`/`EnsureToolchains` (bootstrap.go) still used by launch + `cmdInstall`; folding
+  them into a `core` profile is deferred to the Phase 8 cleanup to avoid destabilizing launch.
 
 ## Phase 6 — Per-project isolation
 - ☐ `DetectProject`, `Paths.EnvForProject`, `MISE_TRUSTED_CONFIG_PATHS`, `cmd.Dir=projectRoot`

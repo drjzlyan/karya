@@ -59,6 +59,8 @@ func Run(args []string) int {
 		return cmdShip(rest)
 	case "lang":
 		return cmdLang(rest)
+	case "profile":
+		return cmdProfile(rest)
 	case "install":
 		return cmdInstall(rest)
 	case "update":

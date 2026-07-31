@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/drjzlyan/karya/internal/lang"
+	"github.com/drjzlyan/karya/internal/toolreg"
 	"github.com/drjzlyan/karya/internal/tools"
 )
 
@@ -272,17 +273,16 @@ func applySelection(a *app, sel *lang.Selection) int {
 		fmt.Println("Could not provision mise — runtimes not installed. Re-run `karya lang all` when back online.")
 	}
 
-	if err := a.paths.EnsureDirs(); err == nil {
-		_ = os.MkdirAll(a.paths.ToolsBin(), 0o755)
+	_ = a.paths.EnsureDirs()
+	// Install the always-on servers plus each selected language's tooling from the
+	// registry, into karya's category-based prefix. Dependencies (runtimes, uv)
+	// are pulled in and skipped when already present.
+	ids := toolreg.AlwaysOnIDs()
+	for _, l := range sel.Langs() {
+		ids = append(ids, a.reg.LanguageIDs(l)...)
 	}
-	installer := tools.Installer{
-		ToolsDir: a.paths.ToolsDir(),
-		BinDir:   a.paths.ToolsBin(),
-		Env:      env,
-		Out:      os.Stdout,
-		ErrOut:   os.Stderr,
-	}
-	results := installer.Install(tools.Plan(sel.Langs()))
+	results := a.installToolIDs(ids)
+	a.refreshToolManifest()
 	fmt.Printf("Tools: %s\n", tools.Summarize(results))
 	return 0
 }

@@ -181,6 +181,14 @@ func (d *Dispatcher) one(t toolreg.Tool, ctx Context) Result {
 		return Result{Tool: t.Name, Status: Missing}
 	}
 	logf(ctx.Out, "installing %s…", t.Name)
+	// Ensure the destination dirs exist so npm/uv/go installers have somewhere to
+	// write (category dirs are created on demand, not up front).
+	if ctx.BinDir != "" {
+		_ = os.MkdirAll(ctx.BinDir, 0o755)
+	}
+	if ctx.ToolsDir != "" {
+		_ = os.MkdirAll(ctx.ToolsDir, 0o755)
+	}
 	if err := m.Install(t, ctx); err != nil {
 		warnf(ctx.ErrOut, "could not install %s: %v", t.Name, err)
 		return Result{Tool: t.Name, Status: Failed, Err: err}
