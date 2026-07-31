@@ -195,9 +195,12 @@ func TestGenerateMiseConfig(t *testing.T) {
 	s.Set("java", []string{"25"})
 	s.Set("rust", []string{"1.97"})
 
-	out := GenerateMiseConfig(s, MiseVars{GoPath: "/k/go", CargoHome: "/k/cargo"})
+	always := []MiseTool{{Key: "taplo"}, {Key: "marksman", Version: "1.2.3"}}
+	out := GenerateMiseConfig(s, MiseVars{GoPath: "/k/go", CargoHome: "/k/cargo"}, always)
 
 	for _, want := range []string{
+		`taplo = "latest"`,   // always-on tool, empty version → latest
+		`marksman = "1.2.3"`, // always-on tool with an explicit version
 		`python = ["3.14", "3.13"]`,
 		`node = ["24"]`, // typescript maps to node
 		`go = ["1.26"]`,
@@ -222,7 +225,7 @@ func TestWriteMiseConfig(t *testing.T) {
 	s := NewSelection()
 	s.Set("go", []string{"1.26"})
 	path := filepath.Join(t.TempDir(), "mise", "config.toml")
-	if err := WriteMiseConfig(path, s, MiseVars{GoPath: "/k/go"}); err != nil {
+	if err := WriteMiseConfig(path, s, MiseVars{GoPath: "/k/go"}, []MiseTool{{Key: "taplo"}}); err != nil {
 		t.Fatalf("WriteMiseConfig: %v", err)
 	}
 	b, err := os.ReadFile(path)
@@ -231,5 +234,8 @@ func TestWriteMiseConfig(t *testing.T) {
 	}
 	if !strings.Contains(string(b), `go = ["1.26"]`) {
 		t.Errorf("written config missing go tools; got:\n%s", b)
+	}
+	if !strings.Contains(string(b), `taplo = "latest"`) {
+		t.Errorf("written config missing always-on tool; got:\n%s", b)
 	}
 }

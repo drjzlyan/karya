@@ -74,6 +74,8 @@ func (in Installer) one(s ToolSpec) Result {
 		err = in.installGo(s)
 	case KindRustup:
 		err = in.installRustup(s)
+	case KindMise:
+		err = in.installMise(s)
 	case KindDetect:
 		in.warnf("%s not found — %s", s.Name, s.Hint)
 		return Result{Tool: s.Name, Status: Missing}
@@ -143,6 +145,29 @@ func (in Installer) installNPM(s ToolSpec) error {
 		pkg += "@" + s.Version
 	}
 	return in.run(nil, "npm", "install", "-g", "--prefix", in.ToolsDir, pkg)
+}
+
+// installMise provisions a tool from mise's registry into karya's isolated
+// prefix. The tool is also declared in karya's generated mise config (by the
+// CLI) so its shim resolves; here we just ensure the binary is downloaded and
+// reshim so it lands on karya's PATH. It deliberately uses `mise install` rather
+// than `mise use`, which would rewrite the generated config and be clobbered on
+// the next regeneration.
+func (in Installer) installMise(s ToolSpec) error {
+	mise, err := exec.LookPath("mise")
+	if err != nil {
+		return fmt.Errorf("mise not found — run `karya install` to provision it")
+	}
+	ver := s.Version
+	if ver == "" {
+		ver = "latest"
+	}
+	if err := in.run(nil, mise, "install", s.Pkg+"@"+ver); err != nil {
+		return err
+	}
+	// Regenerate shims so the freshly installed tool resolves on karya's PATH.
+	_ = in.run(nil, mise, "reshim")
+	return nil
 }
 
 // installGo installs a Go tool with GOBIN pinned to karya's BinDir.

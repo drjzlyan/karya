@@ -52,6 +52,12 @@ func (s *Selection) Remove(lang string) {
 	}
 }
 
+// Clear removes every selected language, leaving an empty selection.
+func (s *Selection) Clear() {
+	s.order = nil
+	s.versions = map[string][]string{}
+}
+
 // Has reports whether a language is selected.
 func (s *Selection) Has(lang string) bool { _, ok := s.versions[lang]; return ok }
 
