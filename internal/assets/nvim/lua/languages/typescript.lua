@@ -77,7 +77,6 @@ vim.api.nvim_create_autocmd("FileType", {
     end, { buffer = bufnr, silent = true, desc = "Format (prettier)" })
     require("util.langmaps").register(bufnr, {
       lang = "TypeScript",
-      prefix = "<leader>y",
       format = format_typescript,
       organize_imports = organize_imports,
     })

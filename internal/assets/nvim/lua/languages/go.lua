@@ -101,7 +101,6 @@ vim.api.nvim_create_autocmd("FileType", {
     end, { buffer = bufnr, silent = true, desc = "Organize imports (goimports)" })
     require("util.langmaps").register(bufnr, {
       lang = "Go",
-      prefix = "<leader>o",
       format = format_go,
       organize_imports = organize_imports,
       debug = true,

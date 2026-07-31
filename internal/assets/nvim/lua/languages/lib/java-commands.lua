@@ -176,31 +176,26 @@ function M.register_commands(bufnr)
   end
 end
 
+-- Route Java through the shared <leader>c "Code" interface (via langmaps). The
+-- core actions (format, imports, refactor, build, run, test, debug, calls) match
+-- every other language; Java-only workspace and navigation actions live under
+-- the <leader>cw* subgroup so they stay discoverable without polluting the core.
 function M.register_keymaps(bufnr)
-  local map = function(keys, fn, modes, desc)
-    modes = modes or "n"
-    vim.keymap.set(modes, keys, fn, { buffer = bufnr, silent = true, desc = desc })
-  end
-
-  local testing = require("util.testing")
-
-  map("<leader>jf", M.format_java, { "n", "v" }, "Format Java")
-  map("<leader>ji", source_action("source.organizeImports"), "n", "Organize imports")
-  map("<leader>jr", function()
-    vim.lsp.buf.code_action({ context = { only = { "refactor" } } })
-  end, { "n", "v" }, "Refactor")
-  map("<leader>jc", M.run_project_cmd("compile"), "n", "Compile project")
-  map("<leader>jp", M.run_project_cmd("package"), "n", "Package project")
-  map("<leader>jv", M.run_project_cmd("verify"), "n", "Verify project")
-
-  map("<leader>jt", testing.run_nearest, "n", "Run nearest test")
-  map("<leader>jT", testing.run_current_class, "n", "Run test class")
-  map("<leader>jd", testing.debug_nearest, "n", "Debug nearest test")
-  map("<leader>jD", testing.debug_current_class, "n", "Debug test class")
-
-  map("<leader>jh", M.open_type_hierarchy, "n", "Call / type hierarchy")
-  map("<leader>jl", M.open_workspace_logs, "n", "Workspace logs")
-  map("<leader>jw", M.restart_jdtls, "n", "Restart workspace")
+  require("util.langmaps").register(bufnr, {
+    lang = "Java",
+    format = M.format_java,
+    organize_imports = source_action("source.organizeImports"),
+    debug = true,
+    extra = function(map)
+      map("wb", M.build_workspace, "n", "Build workspace")
+      map("wr", M.reload_workspace, "n", "Reload workspace configuration")
+      map("ww", M.restart_jdtls, "n", "Restart jdtls")
+      map("wc", M.clear_workspace_cache, "n", "Clear workspace cache")
+      map("wl", M.open_workspace_logs, "n", "Open workspace logs")
+      map("wh", M.open_type_hierarchy, "n", "Type hierarchy")
+      map("wv", M.run_project_cmd("verify"), "n", "Verify project")
+    end,
+  })
 end
 
 return M

@@ -24,11 +24,14 @@ reference. For a guided, hands-on path through it, see
 | `karya agent switch` | Interactive agent switcher (in session) |
 | `karya agent next` / `prev` | Cycle agents |
 | `karya agent reset` | Reset pane layout (preserves the editor) |
+| `karya agent focus` | Jump to the agent pane |
+| `karya agent send [--file f --line n --label t]` | Paste stdin into the agent pane (editor↔agent bridge) |
 | `karya agent prefs` / `clear` | Show / clear per-project agent preference |
 | `karya edit <file> [line]` | Open a file in the editor pane (used as `$EDITOR`) |
 | `karya run [-d dir] <cmd>` | Run a command in the build/test pane |
 | `karya run --focus` | Focus the build/test pane |
 | `karya new <lang> <name>` | Scaffold a project (python/java/typescript/go/cpp/rust) |
+| `karya ship [--push --pr --no-verify]` | Stage, let the agent write the commit message, commit (& push / open PR) |
 | `karya lang` | Interactive language + runtime-version selector |
 | `karya lang list` | Show the selected languages and versions |
 | `karya lang add <lang> [versions]` | Add/change a language (installs its tooling) |
@@ -40,6 +43,7 @@ reference. For a guided, hands-on path through it, see
 | `karya doctor` | Health check: tools, versions, isolation & per-language tooling |
 | `karya shellenv` | Print opt-in shell integration (`eval "$(karya shellenv)"`) |
 | `karya completion <shell>` | Print a bash/zsh/fish completion script to source |
+| `karya keys` | Show this full CLI / tmux / Neovim key reference |
 | `karya version` | Version / build info |
 | `karya tutorial [n]` | Run the self-working tutorial (verifies against a sandbox) |
 | `karya docs [topic]` | Read the embedded docs offline (no topic lists them) |
@@ -77,6 +81,7 @@ Bindings marked *(default)* are standard tmux built-ins.
 | `Ctrl-a N` | Next agent → `karya agent next` |
 | `Ctrl-a D` | Reset layout → `karya agent reset` |
 | `Ctrl-a P` | New project (`language:name`) → `karya new` |
+| `Ctrl-a G` | Ship: agent writes the commit message, then commit & push → `karya ship --push` |
 | `Ctrl-a S` | Toggle synchronize-panes |
 | `Ctrl-a g` | Open lazygit (reuse or create the `git` window) |
 | `Ctrl-a ?` | Pop up this key map & command reference → `karya docs keymaps` |
@@ -93,7 +98,7 @@ Bindings marked *(default)* are standard tmux built-ins.
 | `<Esc>` | n | Clear search highlight |
 | `<leader>S` | n | Save |
 | `<leader>Z` | n | Quit |
-| `<leader>c` | n | Close buffer |
+| `<leader>x` | n | Close buffer |
 | `<leader>-` / `<leader>\|` | n | Split below / right |
 | `<leader>=` | n | Equalize splits |
 | `<C-h/j/k/l>` | n | Navigate windows |
@@ -157,22 +162,50 @@ Bindings marked *(default)* are standard tmux built-ins.
 | `<leader>du` | Toggle DAP UI |
 | `<leader>dt` / `<leader>dx` | Terminate / clear breakpoints |
 
-### Testing (generic) & tasks
+### Code — `<leader>c` (identical in every language)
 
-| Key | Action |
-|---|---|
-| `<leader>Tt` / `<leader>Tc` | Run nearest test / test class |
-| `<leader>Tp` / `<leader>Tm` | Run package / module tests |
-| `<leader>Tl` | Re-run last test |
-| `<leader>Td` / `<leader>TD` | Debug nearest / test class |
-| `<leader>mb` / `<leader>ms` | Build / test task |
-| `<leader>mc` / `<leader>mp` | Clean / run project task |
-| `<leader>t` | Focus tmux build/test pane |
+One context-aware group. The **same keys** work whatever the file is: karya
+dispatches to the active buffer's language. No per-language prefixes to remember.
+
+| Key | Mode | Action |
+|---|---|---|
+| `<leader>cf` | n/v | Format |
+| `<leader>ci` | n | Organize imports *(languages with an organizer)* |
+| `<leader>cr` | n/v | Refactor (code actions) |
+| `<leader>cc` | n | Build / compile project |
+| `<leader>cp` | n | Run project |
+| `<leader>cR` | n | Run current file |
+| `<leader>ct` / `<leader>cT` | n | Run nearest test / test file · class |
+| `<leader>cl` | n | Re-run last test |
+| `<leader>cd` / `<leader>cD` | n | Debug nearest test / test file *(debug-capable langs)* |
+| `<leader>ch` / `<leader>cH` | n | Incoming / outgoing calls |
+| `<leader>t` | n | Focus tmux build/test pane |
+
+Language-specific extras stay under the same prefix, e.g. Python `<leader>cm`
+(run module) / `<leader>cs` (run selection) / `<leader>cv` (show venv), and Java
+`<leader>cw*` workspace actions (build/reload/restart jdtls/clear cache/logs/type
+hierarchy/verify). Every action also exists as a command, e.g. `:GoTestNearest`,
+`:RustRunFile`, `:CppBuild`.
+
+### Agent — `<leader>a` (editor↔agent bridge)
+
+Send editor context straight into the coding-agent pane — the agent feels part of
+the editor, not a separate CLI. Text is pasted unsubmitted so you stay in control.
+
+| Key | Mode | Action |
+|---|---|---|
+| `<leader>aa` | n | Focus the agent pane |
+| `<leader>ab` | n | Send the whole buffer |
+| `<leader>as` | v | Send the visual selection (with `file:line`) |
+| `<leader>ac` | n/v | Explain code under cursor / selection |
+| `<leader>ad` | n | Send the diagnostic on this line |
+| `<leader>af` | n | Send a reference to the current file |
 
 ### Git
 
 | Key | Mode | Action |
 |---|---|---|
+| `<leader>gc` | n | **Ship**: stage, agent-write the commit message, commit → `karya ship` |
 | `<leader>gd` | n | Diffview (current changes) |
 | `<leader>gh` | n | Preview hunk |
 | `<leader>gb` | n | Blame line |
@@ -181,27 +214,7 @@ Bindings marked *(default)* are standard tmux built-ins.
 | `<leader>gn` / `<leader>gp` | n | Next / previous hunk |
 | `<leader>gD` | n | Diff against index |
 
-(Commit/push/branch live in lazygit: `Ctrl-a g`.)
-
-### Per-language prefixes
-
-Every language shares the same suffixes under its own leader prefix, registered
-buffer-locally: `f` format · `i` organize imports · `r` refactor · `c` build ·
-`p` run project · `R` run file · `t`/`T` test nearest/class · `d`/`D` debug ·
-`h`/`H` call hierarchy.
-
-| Language | Prefix | Example |
-|---|---|---|
-| Python | `<leader>p` | `<leader>pt` pytest file, `<leader>ptf` test under cursor |
-| Java | `<leader>j` | `<leader>jc` compile, `<leader>jt` nearest test |
-| TypeScript/JS | `<leader>y` | `<leader>yt` nearest `node:test`, `<leader>yi` imports |
-| Go | `<leader>o` | `<leader>ot` nearest test, `<leader>od` debug, `<leader>lI` imports |
-| C/C++ | `<leader>C` | test maps run the `ctest` suite in `build/` |
-| Rust | `<leader>r` | `<leader>rt` nearest `#[test]` |
-
-Java also has workspace commands under `<leader>W` (build/reload/restart
-jdtls/clear cache/logs). Each action also exists as a command, e.g.
-`:GoTestNearest`, `:RustRunFile`, `:CppBuild`.
+(Manual commit/push/branch also live in lazygit: `Ctrl-a g`.)
 
 ### Developer commands (from the embedded config)
 

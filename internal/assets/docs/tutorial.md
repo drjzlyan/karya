@@ -129,7 +129,7 @@ join lines, `>>`/`<<` indent line.
 ### 0.5 Splits and the command line
 
 Splits: `<leader>-` below, `<leader>|` right, `<leader>=` equalize, `<C-h/j/k/l>`
-move focus, `<leader>c` close buffer, `:q` close split.
+move focus, `<leader>x` close buffer, `:q` close split.
 
 Command line (`:`): `:w` save, `:q` quit, `:wq`/`:x` save+quit, `:q!` discard,
 `:e <file>` open, `:bn`/`:bp` next/prev buffer, `:%s/old/new/g` replace all,
@@ -220,7 +220,7 @@ Open a scratch file and practice the file/search/LSP keys:
 | `<leader><space>` | Switch buffers |
 | `<leader>s/` / `<leader>s*` | Live grep / grep word under cursor |
 | `<leader>st` | Search TODO/FIXME |
-| `<leader>S` / `<leader>c` / `<leader>Z` | Save / close buffer / quit |
+| `<leader>S` / `<leader>x` / `<leader>Z` | Save / close buffer / quit |
 | `gcc` / `gc` | Toggle line / motion comment |
 | `sa(` / `sd(` / `sr({` | Add / delete / replace surround |
 
@@ -228,6 +228,13 @@ Shared LSP keys (work once a server attaches): `gd` definition, `gD`
 declaration, `gr` references, `gi` implementation, `gt` type, `K` hover,
 `<C-k>` signature, `<leader>la` code action, `<leader>lr` rename, `<leader>lf`
 format, `<leader>ls`/`<leader>ld` symbols.
+
+**The `<leader>c` "Code" group is the same in every language.** Learn it once and
+it works whether you're in Python, Go, Rust, Java, TypeScript, or C/C++ —
+`<leader>ct` runs the nearest test, `<leader>cf` formats, `<leader>cc` builds,
+`<leader>cp` runs the project, `<leader>cR` runs the file, `<leader>cr` refactors,
+`<leader>ci` organizes imports, `<leader>cd` debugs the nearest test. karya
+dispatches to whichever language owns the current buffer.
 
 Press `<leader>` and pause — `which-key` shows every group.
 
@@ -262,6 +269,19 @@ karya agent clear      # forget this project's preference
 
 `Ctrl-a D` is the escape hatch: if you break the layout, it rebuilds the default
 and relaunches the current agent.
+
+**Send context straight from the editor (the `<leader>a` group).** Instead of
+copy-pasting into the agent, push what you're looking at into its pane — pasted
+unsubmitted, so you review before hitting Enter:
+
+| Key | Action |
+|---|---|
+| `<leader>aa` | Focus the agent pane |
+| `<leader>ab` | Send the whole buffer |
+| `<leader>as` | Send the visual selection (with `file:line`) |
+| `<leader>ac` | Explain the code under cursor / selection |
+| `<leader>ad` | Send the diagnostic on this line |
+| `<leader>af` | Send a reference to the current file |
 
 You're ready. Quit with `<leader>Z` and pick a language below.
 
@@ -309,16 +329,18 @@ def test_divide_by_zero():
 **Save** with `<leader>S`. In Python buffers, save organizes imports and formats
 with Ruff automatically. `basedpyright` provides diagnostics/navigation.
 
-**Run & test** (Python keys under `<leader>p`, active in Python buffers):
+**Run & test** — the shared `<leader>c` group, active in Python buffers:
 
 | Key | Action |
 |---|---|
-| `<leader>pr` | Run current file |
-| `<leader>pt` | pytest current file |
-| `<leader>ptf` | pytest function/method under cursor |
-| `<leader>ptp` | pytest whole project |
-| `<leader>pi` / `<leader>pf` | Organize imports / format (Ruff) |
-| `<leader>pv` | Show the detected interpreter |
+| `<leader>cR` | Run current file |
+| `<leader>cT` | pytest current file |
+| `<leader>ct` | pytest function/method under cursor |
+| `<leader>ci` / `<leader>cf` | Organize imports / format (Ruff) |
+| `<leader>cm` / `<leader>cs` | Run module / run selection (visual) |
+| `<leader>cv` | Show the detected interpreter |
+
+Whole-project tests: `:PythonTestProject`.
 
 Test output appears in the tmux build/test pane.
 
@@ -374,22 +396,23 @@ class AppTest {
 }
 ```
 
-Format on save runs `google-java-format`. Java keys under `<leader>j`:
+Format on save runs `google-java-format`. The shared `<leader>c` group in Java:
 
 | Key | Action |
 |---|---|
-| `<leader>ji` / `<leader>jf` | Organize imports / format |
-| `<leader>jc` / `<leader>jp` / `<leader>jv` | Compile / package / verify |
-| `<leader>jt` / `<leader>jT` | Run nearest test / test class |
-| `<leader>jd` / `<leader>jD` | Debug nearest test / test class |
-| `<leader>jr` / `<leader>jh` | Refactor menu / call-type hierarchy |
+| `<leader>ci` / `<leader>cf` | Organize imports / format |
+| `<leader>cc` / `<leader>cp` | Build / package project |
+| `<leader>ct` / `<leader>cT` | Run nearest test / test class |
+| `<leader>cd` / `<leader>cD` | Debug nearest test / test class |
+| `<leader>cr` / `<leader>ch` | Refactor / incoming calls |
+| `<leader>cw*` | Workspace: `cwb` build, `cwr` reload, `cww` restart jdtls, `cwc` clear cache, `cwl` logs, `cwh` type hierarchy, `cwv` verify |
 
 Refactor commands: `:JavaExtractMethod`, `:JavaExtractVariable`,
 `:JavaInlineVariable`, `:JavaMoveType`, and more. Navigate with the shared LSP
 keys (`gd`, `gr`, `<leader>lr` to rename across the project).
 
-Workspace management under `<leader>W`: `<leader>Ww` restart jdtls, `<leader>Wc`
-clear cache, `<leader>Wl` logs — use these if imports/rename look stale.
+Workspace management under `<leader>cw`: `<leader>cww` restart jdtls, `<leader>cwc`
+clear cache, `<leader>cwl` logs — use these if imports/rename look stale.
 
 ---
 
@@ -414,11 +437,11 @@ export function divide(a: number, b: number): number {
 }
 ```
 
-`ts_ls` attaches automatically; format on save runs through it. TS keys under
-`<leader>y` (e.g. `<leader>yt` nearest `node:test`, `<leader>yi` organize
-imports). Build/run/test via the generic task layer: `<leader>mb` build,
-`<leader>ms` test, `<leader>mp` start, `<leader>mc` clean. Shared LSP keys work
-identically (`gd`, `gr`, `<leader>la`, `<leader>lr`).
+`ts_ls` attaches automatically; format on save runs through it. The shared
+`<leader>c` group applies: `<leader>ct` nearest `node:test`, `<leader>ci`
+organize imports, `<leader>cc` build, `<leader>cT` test file, `<leader>cp` start,
+`<leader>cf` format. Shared LSP keys work identically (`gd`, `gr`, `<leader>la`,
+`<leader>lr`).
 
 ---
 
@@ -435,11 +458,11 @@ karya
 
 | Action | Key |
 |---|---|
-| Build | `<leader>mb` → `go build ./...` |
-| Test | `<leader>ms` → `go test ./...` |
-| Run | `<leader>mp` → `go run .` |
-| Nearest test | `<leader>ot` |
-| Organize imports | `<leader>lI` |
+| Build | `<leader>cc` → `go build ./...` |
+| Test | `<leader>cT` → `go test ./...` |
+| Run | `<leader>cp` → `go run .` |
+| Nearest test | `<leader>ct` |
+| Organize imports | `<leader>ci` (or `<leader>lI`) |
 
 **Debug with Delve** (`<leader>d*`): breakpoint `<leader>db`, start `<leader>dc`
 (pick Debug file / package / test / attach), step `<leader>do`/`di`/`dO`. Same
@@ -467,11 +490,11 @@ Format on save runs `clang-format`. Build/test via tasks:
 
 | Action | Key |
 |---|---|
-| Build | `<leader>mb` → `cmake --build build` |
-| Test | `<leader>ms` → `ctest --output-on-failure` |
-| Clean | `<leader>mc` → `rm -rf build` |
+| Build | `<leader>cc` → `cmake --build build` |
+| Test | `<leader>ct` → `ctest --output-on-failure` |
+| Clean | `:CppBuild` / task layer |
 
-Shared LSP keys apply. C/C++ maps live under `<leader>C`.
+Shared LSP keys apply. C/C++ uses the same `<leader>c` group as every language.
 
 ---
 
@@ -488,12 +511,13 @@ Write code plus a `#[cfg(test)]` module, then:
 
 | Action | Key |
 |---|---|
-| Build | `<leader>mb` → `cargo build` |
-| Test | `<leader>ms` → `cargo test` |
-| Run | `<leader>mp` → `cargo run` |
-| Nearest test | `<leader>rt` |
+| Build | `<leader>cc` → `cargo build` |
+| Test | `<leader>cT` → `cargo test` |
+| Run | `<leader>cp` → `cargo run` |
+| Nearest test | `<leader>ct` |
 
-Format on save runs `rustfmt`. Shared LSP keys apply; Rust maps under `<leader>r`.
+Format on save runs `rustfmt`. Shared LSP keys apply; Rust uses the same
+`<leader>c` group as every language.
 
 ---
 
@@ -509,13 +533,19 @@ Git tooling loads only inside a repo. Initialize one if needed
 **Review changes** (diffview): `<leader>gd` opens all current changes;
 `:DiffviewOpen branch...HEAD`, `:DiffviewFileHistory %`, `:DiffviewClose`.
 
-**Commit/push/branch — lazygit** (`Ctrl-a g`): opens the dedicated `git` window
-(reuses it if open). Panels `1`–`5` (Status/Files/Branches/Commits/Stash). Keys:
-`<space>` stage/unstage, `a` stage all, `c` commit, `P` push, `p` pull, `e` edit
-in the editor pane, `?` all keys, `q` quit back to the dev window.
+**Ship with the agent** (`<leader>gc` / `Ctrl-a G` / `karya ship`): stages the work
+tree, has the active coding agent write a Conventional-Commit message from the
+staged diff, shows it for confirmation, then commits — add `--push` to push and
+`--pr` to open a pull request. `Ctrl-a G` runs it in a popup and pushes. This is
+the scaffold → implement → ship loop finished from inside the IDE.
 
-A full round-trip: edit in nvim → `<leader>gd` review → `Ctrl-a g` → stage → `c`
-commit → `P` push → `q` back.
+**Manual commit/push/branch — lazygit** (`Ctrl-a g`): opens the dedicated `git`
+window (reuses it if open). Panels `1`–`5` (Status/Files/Branches/Commits/Stash).
+Keys: `<space>` stage/unstage, `a` stage all, `c` commit, `P` push, `p` pull, `e`
+edit in the editor pane, `?` all keys, `q` quit back to the dev window.
+
+A full round-trip: edit in nvim → `<leader>gd` review → `<leader>gc` agent-ship
+(or `Ctrl-a g` → stage → `c` commit → `P` push → `q` back).
 
 ---
 
@@ -530,10 +560,11 @@ commit → `P` push → `q` back.
 | Format the buffer | `<leader>lf` |
 | New project | `karya new <lang> <name>` or `Ctrl-a P` |
 | Switch coding agent | `Ctrl-a A` (pick) or `Ctrl-a N` (cycle) |
-| Run current Python file / test under cursor | `<leader>pr` / `<leader>ptf` |
+| Send buffer / selection to the agent | `<leader>ab` / `<leader>as` |
+| Run current file / test under cursor (any language) | `<leader>cR` / `<leader>ct` |
 | Debug (Python/Java/Go) | `<leader>db` then `<leader>dc` |
-| Compile Java / nearest test | `<leader>jc` / `<leader>jt` |
-| Build/test any project | `<leader>mb` / `<leader>ms` |
+| Build / test any project (any language) | `<leader>cc` / `<leader>cT` |
+| Ship: agent commit (& push) | `<leader>gc` / `Ctrl-a G` / `karya ship` |
 | Open lazygit / review changes | `Ctrl-a g` / `<leader>gd` |
 | Select or change languages | `karya lang` |
 | Check the environment | `karya doctor` |

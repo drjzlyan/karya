@@ -93,7 +93,6 @@ vim.api.nvim_create_autocmd("FileType", {
     setup_lsp()
     require("util.langmaps").register(args.buf, {
       lang = "Rust",
-      prefix = "<leader>r",
       format = format_rust,
     })
   end,

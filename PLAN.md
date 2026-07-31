@@ -119,6 +119,8 @@ karya agent status            Show current/available agents + saved preference
 karya agent switch            Interactive agent picker (in-session)
 karya agent next | prev       Cycle agents
 karya agent reset             Reset the pane layout (preserves editor)
+karya agent focus             Jump to the agent pane
+karya agent send [flags]      Paste stdin (+ --file/--line/--label header) into the agent pane
 karya agent prefs | clear     Inspect / clear per-project preference
 
 karya edit <file> [line]      Open a file in the editor pane (used as $EDITOR)
@@ -126,6 +128,7 @@ karya run [-d dir] <cmd...>   Run a command in the build/test pane
 karya run --focus             Focus the build/test pane
 
 karya new <lang> <name> [dir] Scaffold a project (python|java|typescript|go|cpp|rust)
+karya ship [--push --pr]      Stage, agent-write the commit message, commit (--no-verify)
 
 karya lang                    Interactive language + version selector
 karya lang list | add | remove | all
@@ -138,7 +141,18 @@ karya doctor                  Health check (tools, versions, isolation, LSPs)
 karya shellenv                Print opt-in shell integration (eval this)
 karya version                 Print version / build info
 karya completion <shell>      Shell completions
+karya keys                    Show the full CLI / tmux / Neovim key reference
 ```
+
+Neovim leader scheme (Phase 8): one context-aware `<leader>c` **"Code"** group is
+identical in every language — `<leader>ct` nearest test, `<leader>cf` format,
+`<leader>cc` build, `<leader>cp` run project, `<leader>cR` run file, `<leader>cr`
+refactor, `<leader>ci` organize imports, `<leader>cd` debug — dispatched to the
+active buffer's language (no per-language `<leader>p/o/j/r/C/y` prefixes). A
+`<leader>a` **"Agent"** group bridges editor→agent (`ab` buffer, `as` selection,
+`ad` diagnostic, `af` file ref, `ac` explain, `aa` focus). Close-buffer is
+`<leader>x`. `util/langmaps.lua` is the single registration point; an integration
+test enforces the cross-language interface.
 
 In-session tmux keybindings (embedded `tmux.conf`, prefix `Ctrl-a`), preserved
 from the current setup and wired to karya:
@@ -149,6 +163,7 @@ from the current setup and wired to karya:
 | `Ctrl-a N` | Next agent | `karya agent next` |
 | `Ctrl-a D` | Reset layout | `karya agent reset` |
 | `Ctrl-a P` | New project (`lang:name`) | `karya new` |
+| `Ctrl-a G` | Ship (agent commit & push) | `karya ship --push` |
 | `Ctrl-a S` | Toggle synchronize-panes | tmux native |
 | `Ctrl-a g` | Git window (lazygit) | tmux native |
 | `Ctrl-a Q` | Kill session (confirm) | `karya dev -q` |
@@ -169,8 +184,9 @@ karya/
 │   ├── version/                 # version string + build metadata
 │   ├── tmuxx/                   # tmux command wrapper (isolated socket)
 │   ├── session/                 # `dev`: build layout, panes, git window, quit
-│   ├── agent/                   # detection, switch/next/prev/reset, prefs
+│   ├── agent/                   # detection, switch/next/prev/reset/focus/send, prefs, headless
 │   ├── editor/                  # nvim launch (NVIM_APPNAME), `edit` routing
+│   ├── ship/                     # `ship`: deterministic git + agent-authored commit message
 │   ├── project/                 # `new`: per-language scaffolds
 │   ├── lang/                    # language selection + isolated mise generation
 │   ├── tools/                   # tool detection + install into karya prefix
@@ -288,7 +304,9 @@ binary (Phase 7). The **internal** engineering docs (`PLAN.md`, `ROADMAP.md`,
 ## 8. Open questions / deferred decisions
 
 - **Native agent** (own LLM API loop) is explicitly deferred; the agent
-  interface is designed to allow plugging one in later (see ROADMAP Phase 8).
+  interface is designed to allow plugging one in later (see ROADMAP Phase 9).
+  The Phase 8 headless-agent capability map (`agent.HeadlessPrompt`) and the
+  editor↔agent bridge already exercise that interface from the BYO-CLI side.
 - **Linux tool bootstrap** parity (no Homebrew) — designed for, validated later.
 - **Ghostty / terminal config** stays optional and never overwrites user files;
   may ship as a documented sample rather than an applied config.

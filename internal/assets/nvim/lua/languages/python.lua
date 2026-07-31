@@ -371,29 +371,29 @@ local function register_commands(bufnr)
   end
 end
 
+-- Route Python through the shared <leader>c "Code" interface (via langmaps),
+-- adding Python-only actions under the same prefix through the extra hook. The
+-- core test/run/build actions resolve through the registered testing and tasks
+-- providers below, so <leader>ct, <leader>cR, <leader>cp, etc. work uniformly.
 local function register_keymaps(bufnr)
-  local map = function(keys, fn, modes, desc)
-    modes = modes or "n"
-    vim.keymap.set(modes, keys, fn, { buffer = bufnr, silent = true, desc = desc })
-  end
-
-  map("<leader>pr", run_file, { "n" }, "Run file")
-  map("<leader>pm", run_module, { "n" }, "Run module")
-  map("<leader>ps", run_selection, { "v" }, "Run selection")
-  map("<leader>pt", pytest_file, { "n" }, "Test file")
-  map("<leader>ptf", pytest_function, { "n" }, "Test function")
-  map("<leader>ptc", pytest_class, { "n" }, "Test class")
-  map("<leader>ptp", pytest_project, { "n" }, "Test project")
-  map("<leader>pi", organize_imports, { "n" }, "Organize imports")
-  map("<leader>pf", format_python, { "n", "v" }, "Format")
-  map("<leader>pv", function()
-    local interp = python_interpreter(0)
-    if interp then
-      vim.notify("Python interpreter: " .. interp, vim.log.levels.INFO)
-    else
-      vim.notify("No virtual environment detected", vim.log.levels.WARN)
-    end
-  end, { "n" }, "Show active venv")
+  require("util.langmaps").register(bufnr, {
+    lang = "Python",
+    format = format_python,
+    organize_imports = organize_imports,
+    debug = true,
+    extra = function(map)
+      map("m", run_module, "n", "Run module")
+      map("s", run_selection, "v", "Run selection")
+      map("v", function()
+        local interp = python_interpreter(0)
+        if interp then
+          vim.notify("Python interpreter: " .. interp, vim.log.levels.INFO)
+        else
+          vim.notify("No virtual environment detected", vim.log.levels.WARN)
+        end
+      end, "n", "Show active venv")
+    end,
+  })
 end
 
 -- ============================================================================

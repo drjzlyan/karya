@@ -166,7 +166,35 @@ and karya's tree stands alone as its own product.
 
 ---
 
-## Phase 8 — (Deferred) Native agent option
+## Phase 8 — Cohesion & UX (make karya feel like one product) ✅
+**Goal:** the amalgamation of Neovim + tmux + agents reads as a single entity —
+consistent, non-bloated keymaps; the agent fused into the editor; the
+scaffold → implement → ship loop closed with the agent's help. Ships in `v1.0`.
+
+- ☑ **Unified keymaps** — one context-aware `<leader>c` "Code" group, identical in
+  every language (no per-language `<leader>p/o/j/r/C/y` prefixes; `<leader>ct`
+  always runs the nearest test, etc.). `util/langmaps.lua` is the single
+  registration point; the overlapping `<leader>T`/`<leader>m`/`<leader>W` groups are
+  folded in; close-buffer moved to `<leader>x`. ~8 groups collapse to
+  `<leader>c` + `<leader>a`.
+- ☑ **Editor↔agent bridge** — `<leader>a` group + `karya agent send`/`focus`: push
+  the buffer, a visual selection, a diagnostic, or a file reference into the agent
+  pane (pasted unsubmitted). The agent feels native, not a bolted-on CLI.
+- ☑ **Agent-driven ship** — `karya ship [--push --pr --no-verify]` (`<leader>gc`,
+  `Ctrl-a G`): stage → active agent authors a Conventional-Commit message
+  (headless where available, conversational fallback otherwise) → confirm →
+  commit → push / PR. Git plumbing stays deterministic in `internal/ship`.
+- ☑ **Cohesion polish + guardrail** — panes read `karya · editor/agent/build`;
+  `karya keys` shows the reference; an `//go:build integration` test drives headless
+  Neovim to assert the identical `<leader>c` interface across all languages and that
+  close-buffer moved off `<leader>c`, so consistency can't silently regress.
+
+**Done when:** the same keys drive every language; the agent takes editor context
+and authors commits; and the guardrail + full gate are green. **Ready for `v1.0`.**
+
+---
+
+## Phase 9 — (Deferred) Native agent option
 **Goal:** optional built-in LLM agent behind the existing agent interface.
 
 - ☐ Define pluggable agent interface (BYO-CLI vs native)
