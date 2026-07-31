@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/toolreg"
 )
 
@@ -95,9 +96,14 @@ func (base) LatestVersion(toolreg.Tool, Context) string  { return "" }
 // and in what order; the Dispatcher does it, detect-first and best-effort.
 type Dispatcher struct {
 	methods map[toolreg.InstallMethod]Method
+	// layout, when set, maps a tool to its per-category install dirs so tools
+	// land under tools/<category> instead of one shared bin. When nil the
+	// Context's ToolsDir/BinDir are used unchanged (legacy single-prefix mode).
+	layout func(toolreg.Tool) (toolsDir, binDir string)
 }
 
-// NewDispatcher wires the built-in installers.
+// NewDispatcher wires the built-in installers in legacy single-prefix mode: all
+// tools install into the Context's ToolsDir/BinDir.
 func NewDispatcher() *Dispatcher {
 	return &Dispatcher{methods: map[toolreg.InstallMethod]Method{
 		toolreg.MethodMise:   miseMethod{},
@@ -110,6 +116,38 @@ func NewDispatcher() *Dispatcher {
 		toolreg.MethodVSIX:   vsixMethod{},
 		toolreg.MethodDetect: detectMethod{},
 	}}
+}
+
+// NewLayoutDispatcher wires the built-in installers and routes each tool into its
+// category directory (tools/core, tools/docs, tools/<lang>) based on the tool's
+// Location. Tools without a category (runtimes, unset) fall back to the shared
+// tool prefix. mise-installed tools resolve via shims regardless, so their
+// category dir is immaterial.
+func NewLayoutDispatcher(p config.Paths) *Dispatcher {
+	d := NewDispatcher()
+	d.layout = func(t toolreg.Tool) (string, string) {
+		name := categoryName(t.Location)
+		if name == "" {
+			return p.ToolsDir(), p.ToolsBin()
+		}
+		return p.ToolCategoryDir(name), p.ToolCategoryBin(name)
+	}
+	return d
+}
+
+// categoryName maps a tool's install location to its on-disk category directory
+// name, or "" for the shared prefix (runtimes and unset locations).
+func categoryName(loc toolreg.InstallLocation) string {
+	switch loc.Kind {
+	case toolreg.LocCore:
+		return "core"
+	case toolreg.LocDocs:
+		return "docs"
+	case toolreg.LocLang:
+		return loc.Lang
+	default:
+		return ""
+	}
 }
 
 // Install processes each tool and returns per-tool results. It never returns an
@@ -127,6 +165,10 @@ func (d *Dispatcher) one(t toolreg.Tool, ctx Context) Result {
 	m := d.methods[t.Method]
 	if m == nil {
 		return Result{Tool: t.Name, Status: Failed, Err: fmt.Errorf("unknown install method %q", t.Method)}
+	}
+	// Route the tool into its category dir when a layout is configured.
+	if d.layout != nil {
+		ctx.ToolsDir, ctx.BinDir = d.layout(t)
 	}
 	if m.Available(t, ctx) {
 		logf(ctx.Out, "✓ %s already available", t.Name)

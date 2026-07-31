@@ -8,6 +8,7 @@ import (
 	"github.com/drjzlyan/karya/internal/prefs"
 	"github.com/drjzlyan/karya/internal/tmuxx"
 	"github.com/drjzlyan/karya/internal/toolreg"
+	"github.com/drjzlyan/karya/internal/tools"
 )
 
 // app bundles the resolved environment shared by commands: karya paths, the
@@ -50,6 +51,9 @@ func newApp() (*app, error) {
 	if _, err := assets.EnsureNvimConfig(p.NvimConfig()); err != nil {
 		return nil, err
 	}
+	// Bring an existing prefix up to the current tool layout (idempotent,
+	// best-effort: never moves installed binaries, so it cannot break resolution).
+	_ = tools.Migrate(p)
 	env := p.Env(bin)
 	reg := toolreg.New()
 	resolver := toolreg.NewResolver(p, reg)

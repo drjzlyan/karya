@@ -81,7 +81,7 @@ func (p Paths) ActivateManagedEnv() {
 		have[d] = true
 	}
 	var add []string
-	for _, d := range []string{p.ToolsBin(), p.MiseShims()} {
+	for _, d := range p.managedPathDirs() {
 		if !have[d] {
 			add = append(add, d)
 		}
@@ -129,6 +129,50 @@ func (p Paths) ToolsBin() string { return filepath.Join(p.Data, "tools", "bin") 
 // ToolsDir is the root of karya's private tool prefix (ToolsBin is ToolsDir/bin).
 // Standalone tool payloads (e.g. jdtls, lombok.jar) live directly under it.
 func (p Paths) ToolsDir() string { return filepath.Join(p.Data, "tools") }
+
+// toolCategories are the per-category tool prefixes under ToolsDir. Grouping
+// installs by role (core CLI, docs, per language) keeps binaries from scattering
+// across one flat bin dir and makes per-category update/repair tractable. The
+// list is fixed so PATH construction is deterministic; unused dirs on PATH are
+// harmlessly ignored by the OS until a tool populates them.
+var toolCategories = []string{"core", "docs", "python", "typescript", "go", "rust", "java", "cpp"}
+
+// ToolCategoryDir returns the install root for a named tool category (e.g.
+// "core", "docs", "go"). Tools whose install location has no category fall back
+// to the shared ToolsDir/ToolsBin.
+func (p Paths) ToolCategoryDir(name string) string {
+	return filepath.Join(p.Data, "tools", name)
+}
+
+// ToolCategoryBin returns the bin dir for a named tool category.
+func (p Paths) ToolCategoryBin(name string) string {
+	return filepath.Join(p.ToolCategoryDir(name), "bin")
+}
+
+// ToolBinDirs returns every managed tool bin dir in PATH priority order: the
+// legacy shared bin (kept forever so existing installs resolve) followed by each
+// category bin. mise shims are appended separately by the env builders.
+func (p Paths) ToolBinDirs() []string {
+	dirs := make([]string, 0, len(toolCategories)+1)
+	dirs = append(dirs, p.ToolsBin())
+	for _, c := range toolCategories {
+		dirs = append(dirs, p.ToolCategoryBin(c))
+	}
+	return dirs
+}
+
+// DownloadsDir is karya-owned staging for downloaded archives (jdtls, VSIX),
+// keeping transient files inside the karya prefix instead of the system temp.
+func (p Paths) DownloadsDir() string { return filepath.Join(p.Data, "downloads") }
+
+// ToolsLogsDir holds install/update logs for later diagnosis.
+func (p Paths) ToolsLogsDir() string { return filepath.Join(p.Data, "logs") }
+
+// managedPathDirs is the ordered set of dirs karya prepends to PATH so its
+// isolated toolchain resolves: every tool bin dir, then mise shims.
+func (p Paths) managedPathDirs() []string {
+	return append(p.ToolBinDirs(), p.MiseShims())
+}
 
 // LanguagesFile records the selected languages and runtime versions in
 // key=value form (e.g. python=3.14,3.13). It is the source of truth from which
@@ -215,7 +259,7 @@ func (p Paths) Env(karyaBin string) []string {
 	// PATH so the isolated toolchain wins inside karya sessions — without ever
 	// mutating the user's own PATH, Homebrew, or global mise (see PLAN.md §2, §6.4).
 	env = append(env, p.MiseEnv()...)
-	path := p.ToolsBin() + string(os.PathListSeparator) + p.MiseShims()
+	path := strings.Join(p.managedPathDirs(), string(os.PathListSeparator))
 	if cur := os.Getenv("PATH"); cur != "" {
 		path += string(os.PathListSeparator) + cur
 	}

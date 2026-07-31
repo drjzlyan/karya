@@ -68,7 +68,7 @@ func NewResolver(p config.Paths, r *Registry) *Resolver {
 	return &Resolver{
 		paths:       p,
 		reg:         r,
-		managedDirs: []string{p.ToolsBin(), p.MiseShims()},
+		managedDirs: append(p.ToolBinDirs(), p.MiseShims()),
 		lookPath:    exec.LookPath,
 	}
 }

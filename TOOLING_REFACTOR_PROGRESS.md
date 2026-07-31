@@ -29,8 +29,17 @@ Status legend: ☐ not started · ◐ in progress · ☑ done
       (they already resolve correctly via the isolated PATH; threading is additive, do with Phase 7)
 - ☐ TODO: `util/health.lua` still has Homebrew fallbacks — clean up with Phase 7 doctor work
 
-## Phase 4 — Expanded catalog + directory layout
-- ☐ Add ~24 CLI/doc tools with `Location`; category dirs + `Paths` helpers; best-effort migration
+## Phase 4 — Expanded catalog + directory layout ✅ (data + infra; install rewire is Phase 5)
+- ☑ Added core CLI tools (jq, yq, fd, ripgrep, fzf, bat, eza, delta, tree, zoxide, just, watchexec,
+      hyperfine, shellcheck, shfmt, gh; git=detect) + doc tools (markdownlint, yamllint, yamlfmt, jsonlint)
+- ☑ `config.Paths`: `ToolCategoryDir`/`ToolCategoryBin`/`ToolBinDirs`/`DownloadsDir`/`ToolsLogsDir`;
+      `Env`/`ActivateManagedEnv` now prepend all category bins (ToolsBin first, then categories, then shims)
+- ☑ Resolver searches all category bins (`ToolBinDirs`)
+- ☑ Layout-aware `NewLayoutDispatcher(paths)` routes each tool into `tools/<category>` by `Location`;
+      legacy `NewDispatcher` unchanged (shared prefix)
+- ☑ `tools.Migrate` (idempotent, best-effort, no binary moves) wired into `newApp`; marker in state dir
+- ☑ Tests: layout routing, migration idempotency, new-tool catalog presence; lint 0 issues
+- Note: the new tools are provisioned once the install path is registry-driven (Phase 5).
 
 ## Phase 5 — ProfileManager + RuntimeManager + CLI
 - ☐ `Profile`/`ProfileManager`; refactor `EnsureCore`/`EnsureToolchains` into `core` profile

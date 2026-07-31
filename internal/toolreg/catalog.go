@@ -184,4 +184,54 @@ var registry = []Tool{
 		Pkg:          "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/vscjava/vsextensions/vscode-java-test/{version}/vspackage",
 		Dependencies: []string{"java-runtime"}, Health: HealthCheck{Probe: "java-test"},
 	},
+
+	// ── Core CLI utilities ─────────────────────────────────────────────────────
+	// General-purpose tools the IDE (and the user) rely on, provisioned through
+	// the vendored mise so karya never assumes a global install. git is the one
+	// exception: system git is universal and mise-git is heavy, so it is detected
+	// and hinted rather than installed.
+	{
+		ID: "git", Name: "git", Category: CLIUtility, Method: MethodDetect,
+		Executable: "git", Update: UpdateManual, Location: Core(),
+		Hint: "install git for version control (most systems ship it)",
+	},
+	{ID: "gh", Name: "GitHub CLI", Category: CLIUtility, Method: MethodMise, Executable: "gh", Pkg: "gh", Update: UpdateMise, Location: Core()},
+	{ID: "jq", Name: "jq", Category: CLIUtility, Method: MethodMise, Executable: "jq", Pkg: "jq", Update: UpdateMise, Location: Core()},
+	{ID: "yq", Name: "yq", Category: CLIUtility, Method: MethodMise, Executable: "yq", Pkg: "yq", Update: UpdateMise, Location: Core()},
+	{ID: "fd", Name: "fd", Category: CLIUtility, Method: MethodMise, Executable: "fd", Pkg: "fd", Update: UpdateMise, Location: Core()},
+	{ID: "ripgrep", Name: "ripgrep", Category: CLIUtility, Method: MethodMise, Executable: "rg", Pkg: "ripgrep", Update: UpdateMise, Location: Core()},
+	{ID: "fzf", Name: "fzf", Category: CLIUtility, Method: MethodMise, Executable: "fzf", Pkg: "fzf", Update: UpdateMise, Location: Core()},
+	{ID: "bat", Name: "bat", Category: CLIUtility, Method: MethodMise, Executable: "bat", Pkg: "bat", Update: UpdateMise, Location: Core()},
+	{ID: "eza", Name: "eza", Category: CLIUtility, Method: MethodMise, Executable: "eza", Pkg: "eza", Update: UpdateMise, Location: Core()},
+	{ID: "delta", Name: "delta", Category: CLIUtility, Method: MethodMise, Executable: "delta", Pkg: "delta", Update: UpdateMise, Location: Core()},
+	{ID: "tree", Name: "tree", Category: CLIUtility, Method: MethodMise, Executable: "tree", Pkg: "tree", Update: UpdateMise, Location: Core()},
+	{ID: "zoxide", Name: "zoxide", Category: CLIUtility, Method: MethodMise, Executable: "zoxide", Pkg: "zoxide", Update: UpdateMise, Location: Core()},
+	{ID: "just", Name: "just", Category: BuildTool, Method: MethodMise, Executable: "just", Pkg: "just", Update: UpdateMise, Location: Core()},
+	{ID: "watchexec", Name: "watchexec", Category: CLIUtility, Method: MethodMise, Executable: "watchexec", Pkg: "watchexec", Update: UpdateMise, Location: Core()},
+	{ID: "hyperfine", Name: "hyperfine", Category: CLIUtility, Method: MethodMise, Executable: "hyperfine", Pkg: "hyperfine", Update: UpdateMise, Location: Core()},
+	{ID: "shellcheck", Name: "shellcheck", Category: Linter, Method: MethodMise, Executable: "shellcheck", Pkg: "shellcheck", Update: UpdateMise, Location: Core()},
+	{ID: "shfmt", Name: "shfmt", Category: Formatter, Method: MethodMise, Executable: "shfmt", Pkg: "shfmt", Update: UpdateMise, Location: Core()},
+
+	// ── Documentation tools ────────────────────────────────────────────────────
+	// prettier and taplo already appear above (shared with language/always-on
+	// tooling); these round out documentation formatting and linting.
+	{
+		ID: "markdownlint", Name: "markdownlint", Category: Linter, Method: MethodNPM,
+		Executable: "markdownlint-cli2", Pkg: "markdownlint-cli2", Update: UpdateLatest,
+		Location: Docs(), Dependencies: []string{"node-runtime"},
+	},
+	{
+		ID: "yamllint", Name: "yamllint", Category: Linter, Method: MethodUV,
+		Executable: "yamllint", Pkg: "yamllint", Update: UpdateLatest,
+		Location: Docs(), Dependencies: []string{"uv"},
+	},
+	{
+		ID: "yamlfmt", Name: "yamlfmt", Category: Formatter, Method: MethodMise,
+		Executable: "yamlfmt", Pkg: "yamlfmt", Update: UpdateMise, Location: Docs(),
+	},
+	{
+		ID: "jsonlint", Name: "jsonlint", Category: Linter, Method: MethodNPM,
+		Executable: "jsonlint", Pkg: "jsonlint", Update: UpdateLatest,
+		Location: Docs(), Dependencies: []string{"node-runtime"},
+	},
 }
