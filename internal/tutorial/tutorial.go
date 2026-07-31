@@ -64,14 +64,35 @@ const (
 )
 
 // Lesson is one numbered step of the tutorial. Body is the explanation; Run,
-// when non-nil, makes the lesson self-working — it performs real karya behavior
-// against the sandbox and returns its Outcome plus a one-line detail. A lesson
-// with a nil Run is purely explanatory.
+// when non-nil, verifies real karya behavior against the sandbox and returns its
+// Outcome plus a one-line detail. A lesson with a nil Run is purely explanatory.
+//
+// Expect, when non-empty, is the command the learner is asked to type before the
+// lesson proceeds — the tutorial is a walkthrough, so the user drives it. Hint is
+// shown when they mistype. The typed command is matched (via MatchCommand) to
+// gate progress; the actual proof of behavior is Run against the sandbox, so the
+// tutorial demonstrates the tool works on the user's machine rather than merely
+// echoing what they typed.
 type Lesson struct {
-	Num   int
-	Title string
-	Body  string
-	Run   func(sb *Sandbox) (Outcome, string)
+	Num    int
+	Title  string
+	Body   string
+	Expect string
+	Hint   string
+	Run    func(sb *Sandbox) (Outcome, string)
+}
+
+// MatchCommand reports whether a learner's typed command matches the expected
+// one. It is lenient about surrounding and repeated whitespace (so trailing
+// spaces or double spaces are fine) but case-sensitive on the command itself.
+func MatchCommand(expected, typed string) bool {
+	return normalizeCommand(expected) == normalizeCommand(typed)
+}
+
+// normalizeCommand trims and collapses internal whitespace so two commands that
+// differ only in spacing compare equal.
+func normalizeCommand(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 // Lessons returns the ordered tutorial. Numbering is assigned from position so
@@ -82,46 +103,64 @@ func Lessons() []Lesson {
 			Title: "Everything karya touches is isolated",
 			Body: "karya never reads or writes your own Neovim, tmux, or shell config.\n" +
 				"All of its state lives under a karya-namespaced prefix, so you can try\n" +
-				"it with zero risk to your existing setup.",
-			Run: verifyIsolation,
+				"it with zero risk to your existing setup. `karya doctor` reports the\n" +
+				"isolated paths and tool status.",
+			Expect: "karya doctor",
+			Hint:   "type it exactly: karya doctor",
+			Run:    verifyIsolation,
 		},
 		{
 			Title: "Scaffold a project",
 			Body: "`karya new <lang> <name>` generates a ready-to-run project and opens it\n" +
 				"in an IDE session. Languages: " + strings.Join(project.Languages, ", ") + ".",
-			Run: verifyScaffold,
+			Expect: "karya new go example.com/hello",
+			Hint:   "type it exactly: karya new go example.com/hello",
+			Run:    verifyScaffold,
 		},
 		{
 			Title: "Projects start as git repositories",
 			Body: "Every scaffolded project is initialized as a git repo, so you can commit\n" +
-				"immediately (press Ctrl-a g in a session to open lazygit).",
-			Run: verifyGitInit,
+				"immediately (press Ctrl-a g in a session to open lazygit). Scaffold one now\n" +
+				"and karya will confirm the .git directory was created.",
+			Expect: "karya new python gitdemo",
+			Hint:   "type it exactly: karya new python gitdemo",
+			Run:    verifyGitInit,
 		},
 		{
 			Title: "The docs travel inside the binary",
 			Body: "`karya docs <topic>` and `karya help <command>` work fully offline — the\n" +
-				"documentation is embedded in the binary, so no browser or repo is needed.",
-			Run: verifyEmbeddedDocs,
+				"documentation is embedded in the binary, so no browser or repo is needed.\n" +
+				"Ask for the tutorial topic to see it come straight from the binary.",
+			Expect: "karya docs tutorial",
+			Hint:   "type it exactly: karya docs tutorial",
+			Run:    verifyEmbeddedDocs,
 		},
 		{
 			Title: "Your IDE session",
 			Body: "Run `karya` in any project to launch a tmux session with three panes —\n" +
 				"editor (Neovim), coding agent, and build/test — plus a git window.\n" +
-				"The tmux prefix is Ctrl-a; press Ctrl-a ? in a session for the key map.",
-			Run: verifyTmux,
+				"The tmux prefix is Ctrl-a; press Ctrl-a ? in a session for the key map,\n" +
+				"or browse the whole reference now with `karya keys`.",
+			Expect: "karya keys",
+			Hint:   "type it exactly: karya keys",
+			Run:    verifyTmux,
 		},
 		{
 			Title: "Coding agents",
 			Body: "karya detects installed AI coding agents and wires one into the session.\n" +
 				"Switch with Ctrl-a A (or cycle with Ctrl-a N); your choice is remembered\n" +
 				"per project. Use `karya dev -a none` for a plain shell.",
-			Run: verifyAgents,
+			Expect: "karya agent status",
+			Hint:   "type it exactly: karya agent status",
+			Run:    verifyAgents,
 		},
 		{
-			Title: "Where to go next",
-			Body: "That's the core loop. Read the full walkthrough with `karya docs tutorial`,\n" +
-				"the complete key map with `karya docs keymaps`, and pick languages with\n" +
-				"`karya lang`. When you're ready: `karya install`, then `karya`.",
+			Title: "Where to go next — try the IDE tutorial",
+			Body: "That's the core loop, driven by you. Next, learn the editor the same way:\n" +
+				"`karya tutorial ide` runs a keystroke-by-keystroke walkthrough inside the\n" +
+				"real IDE (nvim, tmux, lazygit, the agent bridge) for a language you pick.\n" +
+				"Also handy: `karya docs tutorial`, `karya docs keymaps`, `karya lang`.\n" +
+				"When you're ready: `karya install`, then `karya`.",
 		},
 	}
 	for i := range ls {
