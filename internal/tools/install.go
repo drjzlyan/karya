@@ -3,23 +3,23 @@ package tools
 import (
 	"fmt"
 	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
+
+	"github.com/drjzlyan/karya/internal/toolreg"
 )
 
-// Installer installs tools into karya's isolated prefix. All installs are
-// best-effort and detect-first: a tool already resolvable on PATH (or already
-// present under ToolsDir) is skipped. Nothing is written outside ToolsDir, and
-// the user's Homebrew/global env is never mutated.
+// Installer installs tools into karya's isolated prefix. It is a thin facade
+// over Dispatcher, retained for callers that still describe tools as ToolSpec
+// (the CLI, doctor). All installs are best-effort and detect-first: a tool
+// already resolvable on PATH (or present under ToolsDir) is skipped, nothing is
+// written outside ToolsDir, and the user's global environment is never mutated.
 type Installer struct {
 	// ToolsDir is karya's tool prefix root (config.Paths.ToolsDir).
 	ToolsDir string
 	// BinDir is where tool binaries land and are looked up (ToolsDir/bin).
 	BinDir string
 	// Env is the environment for child installers (os.Environ plus karya's
-	// isolated overrides). Installers add their own tool-specific vars on top.
+	// isolated overrides).
 	Env []string
 	// Out and ErrOut receive progress and diagnostics.
 	Out    io.Writer
@@ -34,7 +34,7 @@ const (
 	Installed Status = iota
 	// Skipped means the tool was already available.
 	Skipped
-	// Missing means a KindDetect tool is absent (a hint was printed).
+	// Missing means a detect-only tool is absent (a hint was printed).
 	Missing
 	// Failed means installation was attempted and errored.
 	Failed
@@ -47,175 +47,69 @@ type Result struct {
 	Err    error
 }
 
-// Install processes each spec and returns per-tool results. It never returns an
-// error itself; individual failures are captured in Result.Err so one broken
-// tool does not abort the rest (matching the shell installer's behavior).
+// context builds the Dispatcher Context from the Installer's fields. The structs
+// share a field layout, so this is a direct conversion.
+func (in Installer) context() Context { return Context(in) }
+
+// Install processes each spec and returns per-tool results by delegating to the
+// Dispatcher. It never returns an error itself; individual failures are captured
+// in Result.Err so one broken tool does not abort the rest.
 func (in Installer) Install(specs []ToolSpec) []Result {
-	results := make([]Result, 0, len(specs))
-	for _, s := range specs {
-		results = append(results, in.one(s))
+	tools := make([]toolreg.Tool, len(specs))
+	for i, s := range specs {
+		tools[i] = specToTool(s)
 	}
-	return results
+	return NewDispatcher().Install(tools, in.context())
 }
 
-func (in Installer) one(s ToolSpec) Result {
-	if in.available(s) {
-		in.logf("✓ %s already available", s.Name)
-		return Result{Tool: s.Name, Status: Skipped}
+// Available reports whether a tool is installed and usable in karya's prefix. It
+// is the read-only probe `karya doctor` uses to check per-language tooling.
+func (in Installer) Available(s ToolSpec) bool { return in.context().available(specToTool(s)) }
+
+// available and one are retained for the package's own tests, delegating to the
+// Context/Dispatcher so the detect-first behavior lives in one place.
+func (in Installer) available(s ToolSpec) bool { return in.context().available(specToTool(s)) }
+func (in Installer) one(s ToolSpec) Result     { return NewDispatcher().one(specToTool(s), in.context()) }
+
+// specToTool bridges the legacy ToolSpec catalog onto the toolreg.Tool the
+// Dispatcher installs. It is a translation shim used while callers still build
+// ToolSpecs; it is removed once the catalog is fully driven by toolreg.
+func specToTool(s ToolSpec) toolreg.Tool {
+	return toolreg.Tool{
+		ID:         s.Name,
+		Name:       s.Name,
+		Method:     kindToMethod(s.Kind),
+		Executable: s.Bin,
+		Artifact:   s.Artifact,
+		Pkg:        s.Pkg,
+		Version:    s.Version,
+		Hint:       s.Hint,
 	}
-	in.logf("installing %s…", s.Name)
-	var err error
-	switch s.Kind {
+}
+
+// kindToMethod maps a legacy install Kind to its toolreg.InstallMethod.
+func kindToMethod(k Kind) toolreg.InstallMethod {
+	switch k {
 	case KindUV:
-		err = in.installUV(s)
+		return toolreg.MethodUV
 	case KindNPM:
-		err = in.installNPM(s)
+		return toolreg.MethodNPM
 	case KindGo:
-		err = in.installGo(s)
+		return toolreg.MethodGo
 	case KindRustup:
-		err = in.installRustup(s)
+		return toolreg.MethodRustup
 	case KindMise:
-		err = in.installMise(s)
+		return toolreg.MethodMise
 	case KindDetect:
-		in.warnf("%s not found — %s", s.Name, s.Hint)
-		return Result{Tool: s.Name, Status: Missing}
+		return toolreg.MethodDetect
 	case KindJDTLS:
-		err = in.installJDTLS(s)
+		return toolreg.MethodJDTLS
 	case KindLombok:
-		err = in.installLombok(s)
+		return toolreg.MethodLombok
 	case KindVSIX:
-		err = in.installVSIX(s)
+		return toolreg.MethodVSIX
 	default:
-		err = fmt.Errorf("unknown install kind %q", s.Kind)
-	}
-	if err != nil {
-		in.warnf("could not install %s: %v", s.Name, err)
-		return Result{Tool: s.Name, Status: Failed, Err: err}
-	}
-	in.logf("✓ installed %s", s.Name)
-	return Result{Tool: s.Name, Status: Installed}
-}
-
-// Available reports whether a tool is installed and usable in karya's prefix.
-// It is the read-only probe `karya doctor` uses to check per-language tooling.
-func (in Installer) Available(s ToolSpec) bool { return in.available(s) }
-
-// available reports whether a tool is already usable: its Bin resolves in
-// karya's BinDir or on the ambient PATH, or its Artifact exists under ToolsDir.
-func (in Installer) available(s ToolSpec) bool {
-	if s.Artifact != "" {
-		if _, err := os.Stat(filepath.Join(in.ToolsDir, s.Artifact)); err == nil {
-			return true
-		}
-	}
-	if s.Bin == "" {
-		return false
-	}
-	if _, err := os.Stat(filepath.Join(in.BinDir, s.Bin)); err == nil {
-		return true
-	}
-	_, err := exec.LookPath(s.Bin)
-	return err == nil
-}
-
-// ── Installers ──────────────────────────────────────────────────────────────
-
-// installUV installs a Python tool with uv, redirecting its bin output to
-// karya's BinDir (uv defaults to ~/.local/bin, which may not be karya's).
-func (in Installer) installUV(s ToolSpec) error {
-	if _, err := exec.LookPath("uv"); err != nil {
-		return fmt.Errorf("uv not found on PATH (required for Python tools)")
-	}
-	pkg := s.Pkg
-	if s.Version != "" && s.Version != "latest" {
-		pkg += "==" + s.Version
-	}
-	extra := []string{"UV_TOOL_BIN_DIR=" + in.BinDir}
-	return in.run(extra, "uv", "tool", "install", "--force", pkg)
-}
-
-// installNPM installs a Node package into an isolated npm prefix (ToolsDir), so
-// binaries land in ToolsDir/bin and nothing touches a global npm root.
-func (in Installer) installNPM(s ToolSpec) error {
-	if _, err := exec.LookPath("npm"); err != nil {
-		return fmt.Errorf("npm not found on PATH")
-	}
-	pkg := s.Pkg
-	if s.Version != "" && s.Version != "latest" {
-		pkg += "@" + s.Version
-	}
-	return in.run(nil, "npm", "install", "-g", "--prefix", in.ToolsDir, pkg)
-}
-
-// installMise provisions a tool from mise's registry into karya's isolated
-// prefix. The tool is also declared in karya's generated mise config (by the
-// CLI) so its shim resolves; here we just ensure the binary is downloaded and
-// reshim so it lands on karya's PATH. It deliberately uses `mise install` rather
-// than `mise use`, which would rewrite the generated config and be clobbered on
-// the next regeneration.
-func (in Installer) installMise(s ToolSpec) error {
-	mise, err := exec.LookPath("mise")
-	if err != nil {
-		return fmt.Errorf("mise not found — run `karya install` to provision it")
-	}
-	ver := s.Version
-	if ver == "" {
-		ver = "latest"
-	}
-	if err := in.run(nil, mise, "install", s.Pkg+"@"+ver); err != nil {
-		return err
-	}
-	// Regenerate shims so the freshly installed tool resolves on karya's PATH.
-	_ = in.run(nil, mise, "reshim")
-	return nil
-}
-
-// installGo installs a Go tool with GOBIN pinned to karya's BinDir.
-func (in Installer) installGo(s ToolSpec) error {
-	if _, err := exec.LookPath("go"); err != nil {
-		return fmt.Errorf("go not found on PATH")
-	}
-	return in.run([]string{"GOBIN=" + in.BinDir}, "go", "install", s.Pkg)
-}
-
-// installRustup adds a rustup component. This is the one tool class karya cannot
-// fully isolate: components attach to the active rustup toolchain. It is
-// detect-first (skipped when already present) and best-effort.
-func (in Installer) installRustup(s ToolSpec) error {
-	if _, err := exec.LookPath("rustup"); err != nil {
-		return fmt.Errorf("rustup not found on PATH (install rustup for Rust tooling)")
-	}
-	return in.run(nil, "rustup", "component", "add", s.Pkg)
-}
-
-// run executes a command with karya's isolated env plus any extra vars, wiring
-// stdout/stderr to the installer's writers.
-func (in Installer) run(extraEnv []string, name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	cmd.Env = append(append([]string{}, in.env()...), extraEnv...)
-	cmd.Stdout = in.Out
-	cmd.Stderr = in.ErrOut
-	return cmd.Run()
-}
-
-// env returns the installer environment, defaulting to the process environment
-// when Env is unset.
-func (in Installer) env() []string {
-	if in.Env != nil {
-		return in.Env
-	}
-	return os.Environ()
-}
-
-func (in Installer) logf(format string, a ...any) {
-	if in.Out != nil {
-		fmt.Fprintf(in.Out, "[tools] "+format+"\n", a...)
-	}
-}
-
-func (in Installer) warnf(format string, a ...any) {
-	if in.ErrOut != nil {
-		fmt.Fprintf(in.ErrOut, "[tools] "+format+"\n", a...)
+		return toolreg.InstallMethod(k)
 	}
 }
 

@@ -7,17 +7,21 @@ import (
 	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/prefs"
 	"github.com/drjzlyan/karya/internal/tmuxx"
+	"github.com/drjzlyan/karya/internal/toolreg"
 )
 
 // app bundles the resolved environment shared by commands: karya paths, the
-// isolated child-process env, a tmux client bound to karya's server, and the
+// isolated child-process env, a tmux client bound to karya's server, the tool
+// registry and resolver (the single seam for locating managed tools), and the
 // per-project preference store.
 type app struct {
-	paths config.Paths
-	bin   string // absolute path to the running karya binary
-	env   []string
-	tmux  *tmuxx.Tmux
-	prefs *prefs.Store
+	paths    config.Paths
+	bin      string // absolute path to the running karya binary
+	env      []string
+	tmux     *tmuxx.Tmux
+	prefs    *prefs.Store
+	reg      *toolreg.Registry
+	resolver *toolreg.Resolver
 }
 
 // newApp resolves paths, ensures karya-owned dirs exist, extracts the tmux
@@ -47,11 +51,19 @@ func newApp() (*app, error) {
 		return nil, err
 	}
 	env := p.Env(bin)
+	reg := toolreg.New()
+	resolver := toolreg.NewResolver(p, reg)
+	// Publish the resolved-tool manifest so the editor locates managed tools by
+	// absolute path from karya's isolated prefix (best-effort: the editor falls
+	// back to PATH if it is missing).
+	_ = toolreg.WriteManifest(p.ToolsManifest(), resolver.Manifest())
 	return &app{
-		paths: p,
-		bin:   bin,
-		env:   env,
-		tmux:  tmuxx.New(config.TmuxSocket, p.TmuxConf(), env),
-		prefs: prefs.New(p.PrefsFile()),
+		paths:    p,
+		bin:      bin,
+		env:      env,
+		tmux:     tmuxx.New(config.TmuxSocket, p.TmuxConf(), env),
+		prefs:    prefs.New(p.PrefsFile()),
+		reg:      reg,
+		resolver: resolver,
 	}, nil
 }

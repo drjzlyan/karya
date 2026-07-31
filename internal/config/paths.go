@@ -140,6 +140,18 @@ func (p Paths) LanguagesFile() string { return filepath.Join(p.Data, "languages.
 // ~/.config/mise/config.toml.
 func (p Paths) MiseConfig() string { return filepath.Join(p.Config, "mise", "config.toml") }
 
+// NvimData is Neovim's data dir under karya's prefix. With NVIM_APPNAME=karya/nvim
+// and Data = XDG_DATA_HOME/karya, Neovim's data lands at Data/nvim. Unlike
+// NvimConfig (which karya overwrites wholesale on config extraction), this dir
+// persists, so karya writes the tool manifest here for the editor to read.
+func (p Paths) NvimData() string { return filepath.Join(p.Data, "nvim") }
+
+// ToolsManifest is the JSON map of resolved tool executables karya writes for the
+// embedded Neovim config, so the editor resolves managed tools by absolute path
+// instead of guessing at global locations. It lives in Neovim's data dir so
+// stdpath("data").."/karya-tools.json" finds it.
+func (p Paths) ToolsManifest() string { return filepath.Join(p.NvimData(), "karya-tools.json") }
+
 // MiseData is karya's isolated mise data dir (installed runtimes + shims).
 func (p Paths) MiseData() string { return filepath.Join(p.Data, "mise") }
 
