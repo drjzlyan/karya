@@ -45,6 +45,13 @@ package.preload["blink.cmp"] = function()
   }
 end
 
+-- Neutralize the LSP setup calls the language FileType handlers make. This test
+-- is about keymaps, not LSP, and vim.lsp.config/enable only exist on newer Neovim
+-- — stubbing them keeps the guard deterministic across nvim versions (and CI
+-- runners where a real LSP server happens to be installed).
+vim.lsp.config = function() end
+vim.lsp.enable = function() end
+
 -- Global keymaps: core.keymaps binds the top-level leader keys we assert on.
 require("core.keymaps")
 
