@@ -18,6 +18,39 @@ Conventions:
 - `n` / `i` / `v` after a key means Normal / Insert / Visual mode.
 - `:Foo` means type the command then press `Enter`.
 - The tmux prefix is `Ctrl-a`. Press `<Esc>` to return to Normal mode in Neovim.
+- **Now try it** boxes mean *you* type the command or press the keys — that's how
+  this walkthrough teaches. Don't just read them.
+
+---
+
+## Learn by doing: two interactive tutorials
+
+This page is the reference walkthrough. karya also ships two **hands-on**
+tutorials that ask *you* to type each step and verify it for real — start with
+these, then use this page to go deeper.
+
+- **The command tutorial** — a type-it-yourself tour of the CLI. Each lesson asks
+  you to type a `karya` command; a throwaway sandbox then runs the real behavior
+  and confirms it worked on your machine.
+
+  > **Now try it — type:** `karya tutorial`
+  >
+  > (Add `list` to see the lessons, or a number to jump to one.)
+
+- **The IDE tutorial** — a keystroke-by-keystroke walkthrough *inside* the real
+  IDE. You pick a language, then practice the whole developer loop — nvim motions,
+  files/search, LSP, the language-agnostic Code group, debugging, the agent
+  bridge, tmux panes/windows, lazygit, and ship. karya detects each keystroke,
+  runs the real operation, and advances automatically.
+
+  > **Now try it — type:** `karya tutorial ide`
+  >
+  > Already inside a karya session? Just run `:KaryaTutorial` in the editor (or
+  > press `<leader>?`). Stuck on a step? Jump into the tutorial panel with
+  > `<C-w>w`, then press `s` to skip, `n` for next, or `q` to quit.
+
+The rest of this page mirrors the IDE tutorial so you can read along or catch up
+on anything you skipped.
 
 ---
 
@@ -175,6 +208,11 @@ karya version
 karya doctor          # checks tmux, nvim, git, ripgrep, agents, language tools…
 ```
 
+> **Now try it — type:** `karya doctor`
+>
+> It reports the isolated paths karya uses and which tools are ready. This is the
+> same check the command tutorial's first lesson runs.
+
 ### 1.2 Select programming languages and versions
 
 ```bash
@@ -209,6 +247,10 @@ Move between panes with `Ctrl-a h/j/k/l`. The editor runs karya's Neovim
 (`NVIM_APPNAME=karya/nvim`, fully isolated). Anything that opens `$EDITOR` (git,
 lazygit, agents) routes back into the editor pane via `karya edit`.
 
+> **Now try it — press:** `Ctrl-a l` to hop to the agent pane, then `Ctrl-a h` to
+> come back to the editor. Then `Ctrl-a z` to zoom the editor pane full-screen,
+> and `Ctrl-a z` again to restore the layout.
+
 ### 1.4 Core editor movements you'll use everywhere
 
 Open a scratch file and practice the file/search/LSP keys:
@@ -237,6 +279,10 @@ it works whether you're in Python, Go, Rust, Java, TypeScript, or C/C++ —
 dispatches to whichever language owns the current buffer.
 
 Press `<leader>` and pause — `which-key` shows every group.
+
+> **Now try it — press:** `<leader>ff` to open the file finder (then `<Esc>` to
+> dismiss it), `<leader>c` and pause to see the language-agnostic Code menu, and
+> `K` with your cursor on a symbol to hover its docs.
 
 ### 1.5 Coding agents (the AI-first core)
 
@@ -283,7 +329,13 @@ unsubmitted, so you review before hitting Enter:
 | `<leader>ad` | Send the diagnostic on this line |
 | `<leader>af` | Send a reference to the current file |
 
-You're ready. Quit with `<leader>Z` and pick a language below.
+> **Now try it — press:** `<leader>ab` to send the whole buffer into the agent
+> pane (it's pasted unsubmitted, so you review before hitting Enter), then
+> `<leader>aa` to jump your cursor into the agent.
+
+You're ready. Quit with `<leader>Z` and pick a language below. (Prefer to be
+guided? `karya tutorial ide` walks every one of these keys for a language you
+choose, detecting each keystroke as you go.)
 
 ---
 
@@ -299,6 +351,13 @@ uv venv                       # .venv (auto-detected)
 uv add --dev debugpy          # for debugging (2.4)
 karya                         # open the IDE here
 ```
+
+> **Now try it — type:** `karya new python calc`
+>
+> Every language below follows the same shape — `karya new <lang> <name>`, then
+> `karya` to open the IDE. The `<leader>c` Code group (`<leader>cc` build,
+> `<leader>cT` test, `<leader>ct` nearest test) is *identical* in all of them, so
+> the IDE tutorial only walks the one language you pick.
 
 Write `src/calc/main.py`:
 
@@ -547,12 +606,19 @@ edit in the editor pane, `?` all keys, `q` quit back to the dev window.
 A full round-trip: edit in nvim → `<leader>gd` review → `<leader>gc` agent-ship
 (or `Ctrl-a g` → stage → `c` commit → `P` push → `q` back).
 
+> **Now try it — press:** `<leader>gd` to review your changes in diffview, then
+> `Ctrl-a g` to open lazygit and `Ctrl-a p` to return. When you're ready to
+> finish the loop, `<leader>gc` (or `Ctrl-a G`) lets the agent write the commit
+> message and ships it.
+
 ---
 
 ## Quick reference cheat sheet
 
 | Want to… | Do this |
 |---|---|
+| Learn the CLI hands-on | `karya tutorial` (you type it; a sandbox verifies) |
+| Learn the IDE hands-on | `karya tutorial ide` (or `:KaryaTutorial` / `<leader>?`) |
 | Start / attach the IDE | `karya` (or `karya dev -a claude`) |
 | See all key groups | press `<leader>` and pause |
 | Find a file / grep project | `<leader>ff` / `<leader>s/` |

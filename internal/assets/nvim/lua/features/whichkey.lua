@@ -27,6 +27,7 @@ return {
         { "<leader>cw", group = "Workspace (Java)" },
         -- Agent bridge: send editor context to the coding-agent pane.
         { "<leader>a", group = "Agent" },
+        { "<leader>?", "<cmd>KaryaTutorial<cr>", desc = "Start the karya tutorial" },
         { "<leader>S", desc = "Save" },
         { "<leader>Z", desc = "Quit" },
         { "<leader>x", desc = "Close buffer" },

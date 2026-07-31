@@ -99,11 +99,13 @@ var helpByCommand = map[string]commandHelp{
 		},
 	},
 	"tutorial": {
-		syntax:  "karya tutorial [list|<lesson>]",
-		summary: "Run the self-working tutorial; lessons verify against a sandbox.",
+		syntax:  "karya tutorial [list|ide|<lesson>]",
+		summary: "Hands-on walkthrough: you type each command, a sandbox verifies it.",
 		details: []string{
-			"No argument runs every lesson; a number runs just that one.",
+			"No argument walks every lesson; a number runs just that one.",
 			"`karya tutorial list` prints the lesson titles.",
+			"`karya tutorial ide` runs the keystroke-driven tutorial inside the IDE",
+			"  (nvim, tmux, lazygit, the agent bridge) for a language you pick.",
 		},
 	},
 	"docs": {

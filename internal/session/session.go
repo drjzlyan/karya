@@ -32,6 +32,7 @@ type Options struct {
 	Agent    string   // resolved agent name, or agent.None
 	Detected []string // detected agents (stored for in-session switching)
 	Kill     bool     // kill an existing session and recreate it
+	NvimInit string   // optional ex-command run at editor startup (nvim -c), e.g. "KaryaTutorial"
 }
 
 // Dev launches (or attaches to) the IDE session. On success it replaces the
@@ -82,7 +83,14 @@ func Build(t *tmuxx.Tmux, o Options) error {
 	// spawned before the session environment was applied; it points Neovim at the
 	// extracted karya config (~/.config/karya/nvim) and isolates its data/state.
 	_ = t.Run("select-pane", "-t", p1, "-T", "editor")
-	_ = t.Run("send-keys", "-t", p1, "NVIM_APPNAME="+config.NvimAppName+" nvim", "Enter")
+	nvimCmd := "NVIM_APPNAME=" + config.NvimAppName + " nvim"
+	if o.NvimInit != "" {
+		// Run an ex-command once nvim starts (e.g. open the in-editor tutorial).
+		// The command names are karya-controlled and contain no spaces, so no
+		// shell quoting is needed here.
+		nvimCmd += " -c " + o.NvimInit
+	}
+	_ = t.Run("send-keys", "-t", p1, nvimCmd, "Enter")
 
 	// Right column: agent (top) over build/test (bottom).
 	_ = t.Run("split-window", "-h", "-l", "35%", "-t", p1, "-c", o.Workdir)

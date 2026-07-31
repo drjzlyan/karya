@@ -270,6 +270,22 @@ function M.setup()
     dev_clean_cache,
     { desc = "Clear caches: treesitter, jdtls, swap, sessions, lazy (default: all)", nargs = "?" }
   )
+
+  -- In-editor, keystroke-driven tutorial. Required lazily so it costs nothing at
+  -- startup; the engine drives the whole developer loop (nvim, tmux, lazygit, the
+  -- agent bridge) against a throwaway sample project.
+  vim.api.nvim_create_user_command("KaryaTutorial", function()
+    require("tutorial.engine").start()
+  end, { desc = "Start the interactive karya IDE tutorial" })
+  vim.api.nvim_create_user_command("KaryaTutorialQuit", function()
+    require("tutorial.engine").quit()
+  end, { desc = "Stop the karya IDE tutorial" })
+  vim.api.nvim_create_user_command("KaryaTutorialSkip", function()
+    require("tutorial.engine").skip()
+  end, { desc = "Skip the current karya tutorial step" })
+  vim.api.nvim_create_user_command("KaryaTutorialNext", function()
+    require("tutorial.engine").advance()
+  end, { desc = "Advance the karya tutorial to the next step" })
 end
 
 return M

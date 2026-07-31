@@ -19,6 +19,33 @@ func TestLessonsWellFormed(t *testing.T) {
 		if strings.TrimSpace(l.Title) == "" || strings.TrimSpace(l.Body) == "" {
 			t.Errorf("lesson %d missing title or body", l.Num)
 		}
+		// Every actionable (Run) lesson gives the learner a command to type, and a
+		// typed lesson must be self-consistent (its own Expect matches itself).
+		if l.Run != nil && strings.TrimSpace(l.Expect) == "" {
+			t.Errorf("lesson %d has a Run but no Expect command to type", l.Num)
+		}
+		if l.Expect != "" && !MatchCommand(l.Expect, l.Expect) {
+			t.Errorf("lesson %d Expect %q does not match itself", l.Num, l.Expect)
+		}
+	}
+}
+
+func TestMatchCommand(t *testing.T) {
+	cases := []struct {
+		expected, typed string
+		want            bool
+	}{
+		{"karya new go example.com/hello", "karya new go example.com/hello", true},
+		{"karya new go example.com/hello", "  karya   new go   example.com/hello  ", true},
+		{"karya new go example.com/hello", "karya new go example.com/hello\n", true},
+		{"karya docs tutorial", "karya docs tutorials", false},
+		{"karya docs tutorial", "Karya docs tutorial", false}, // case-sensitive
+		{"karya agent status", "karya agent", false},
+	}
+	for _, c := range cases {
+		if got := MatchCommand(c.expected, c.typed); got != c.want {
+			t.Errorf("MatchCommand(%q, %q) = %v, want %v", c.expected, c.typed, got, c.want)
+		}
 	}
 }
 
