@@ -2,28 +2,28 @@
 class Karya < Formula
   desc "AI-first, terminal-based IDE shipped as a single Go binary"
   homepage "https://github.com/drjzlyan/karya"
-  version "0.1.1"
+  version "0.2.0"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/drjzlyan/karya/releases/download/v0.1.1/karya_0.1.1_darwin_arm64.tar.gz"
-      sha256 "8fa439800fec5b5443712c1502673720a9d98e9475ae1d0dda412c3cc25deb48"
+      url "https://github.com/drjzlyan/karya/releases/download/v0.2.0/karya_0.2.0_darwin_arm64.tar.gz"
+      sha256 "7657412ff66b95b93a5add1b5878e141ed0b0653646e352aaea223aaac0409df"
     end
     on_intel do
-      url "https://github.com/drjzlyan/karya/releases/download/v0.1.1/karya_0.1.1_darwin_amd64.tar.gz"
-      sha256 "23938dbc6767804a57db0bfcfe66c0cf548091c7911cce896650a6ac2f994661"
+      url "https://github.com/drjzlyan/karya/releases/download/v0.2.0/karya_0.2.0_darwin_amd64.tar.gz"
+      sha256 "8aaac5cb00e286e4c32ccd0ae8d7b5524cfadd3e4ee141412edd67f819655637"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/drjzlyan/karya/releases/download/v0.1.1/karya_0.1.1_linux_arm64.tar.gz"
-      sha256 "088249ec9c32dd87dc16b16e75bdcad6e2bc4c22c7ce49be621fe844580c0f1e"
+      url "https://github.com/drjzlyan/karya/releases/download/v0.2.0/karya_0.2.0_linux_arm64.tar.gz"
+      sha256 "62afdb2074c94d3510a03a329e3d2d330134163422de9279185f12d83461c603"
     end
     on_intel do
-      url "https://github.com/drjzlyan/karya/releases/download/v0.1.1/karya_0.1.1_linux_amd64.tar.gz"
-      sha256 "c9067dc3763e1917db4fe555c86cdeab9078eccbfd79287fa15442b9f92f0b3c"
+      url "https://github.com/drjzlyan/karya/releases/download/v0.2.0/karya_0.2.0_linux_amd64.tar.gz"
+      sha256 "57f76c92c53d18a1ef9355a9be162735ad5889525ad98e5fdbaf73e97baf8faf"
     end
   end
 
