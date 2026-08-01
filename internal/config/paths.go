@@ -81,7 +81,7 @@ func (p Paths) ActivateManagedEnv() {
 		have[d] = true
 	}
 	var add []string
-	for _, d := range []string{p.ToolsBin(), p.MiseShims()} {
+	for _, d := range p.managedPathDirs() {
 		if !have[d] {
 			add = append(add, d)
 		}
@@ -130,6 +130,50 @@ func (p Paths) ToolsBin() string { return filepath.Join(p.Data, "tools", "bin") 
 // Standalone tool payloads (e.g. jdtls, lombok.jar) live directly under it.
 func (p Paths) ToolsDir() string { return filepath.Join(p.Data, "tools") }
 
+// toolCategories are the per-category tool prefixes under ToolsDir. Grouping
+// installs by role (core CLI, docs, per language) keeps binaries from scattering
+// across one flat bin dir and makes per-category update/repair tractable. The
+// list is fixed so PATH construction is deterministic; unused dirs on PATH are
+// harmlessly ignored by the OS until a tool populates them.
+var toolCategories = []string{"core", "docs", "python", "typescript", "go", "rust", "java", "cpp"}
+
+// ToolCategoryDir returns the install root for a named tool category (e.g.
+// "core", "docs", "go"). Tools whose install location has no category fall back
+// to the shared ToolsDir/ToolsBin.
+func (p Paths) ToolCategoryDir(name string) string {
+	return filepath.Join(p.Data, "tools", name)
+}
+
+// ToolCategoryBin returns the bin dir for a named tool category.
+func (p Paths) ToolCategoryBin(name string) string {
+	return filepath.Join(p.ToolCategoryDir(name), "bin")
+}
+
+// ToolBinDirs returns every managed tool bin dir in PATH priority order: the
+// legacy shared bin (kept forever so existing installs resolve) followed by each
+// category bin. mise shims are appended separately by the env builders.
+func (p Paths) ToolBinDirs() []string {
+	dirs := make([]string, 0, len(toolCategories)+1)
+	dirs = append(dirs, p.ToolsBin())
+	for _, c := range toolCategories {
+		dirs = append(dirs, p.ToolCategoryBin(c))
+	}
+	return dirs
+}
+
+// DownloadsDir is karya-owned staging for downloaded archives (jdtls, VSIX),
+// keeping transient files inside the karya prefix instead of the system temp.
+func (p Paths) DownloadsDir() string { return filepath.Join(p.Data, "downloads") }
+
+// ToolsLogsDir holds install/update logs for later diagnosis.
+func (p Paths) ToolsLogsDir() string { return filepath.Join(p.Data, "logs") }
+
+// managedPathDirs is the ordered set of dirs karya prepends to PATH so its
+// isolated toolchain resolves: every tool bin dir, then mise shims.
+func (p Paths) managedPathDirs() []string {
+	return append(p.ToolBinDirs(), p.MiseShims())
+}
+
 // LanguagesFile records the selected languages and runtime versions in
 // key=value form (e.g. python=3.14,3.13). It is the source of truth from which
 // karya regenerates its isolated mise config.
@@ -139,6 +183,18 @@ func (p Paths) LanguagesFile() string { return filepath.Join(p.Data, "languages.
 // MISE_GLOBAL_CONFIG_FILE so karya's runtimes never touch the user's own
 // ~/.config/mise/config.toml.
 func (p Paths) MiseConfig() string { return filepath.Join(p.Config, "mise", "config.toml") }
+
+// NvimData is Neovim's data dir under karya's prefix. With NVIM_APPNAME=karya/nvim
+// and Data = XDG_DATA_HOME/karya, Neovim's data lands at Data/nvim. Unlike
+// NvimConfig (which karya overwrites wholesale on config extraction), this dir
+// persists, so karya writes the tool manifest here for the editor to read.
+func (p Paths) NvimData() string { return filepath.Join(p.Data, "nvim") }
+
+// ToolsManifest is the JSON map of resolved tool executables karya writes for the
+// embedded Neovim config, so the editor resolves managed tools by absolute path
+// instead of guessing at global locations. It lives in Neovim's data dir so
+// stdpath("data").."/karya-tools.json" finds it.
+func (p Paths) ToolsManifest() string { return filepath.Join(p.NvimData(), "karya-tools.json") }
 
 // MiseData is karya's isolated mise data dir (installed runtimes + shims).
 func (p Paths) MiseData() string { return filepath.Join(p.Data, "mise") }
@@ -203,10 +259,24 @@ func (p Paths) Env(karyaBin string) []string {
 	// PATH so the isolated toolchain wins inside karya sessions — without ever
 	// mutating the user's own PATH, Homebrew, or global mise (see PLAN.md §2, §6.4).
 	env = append(env, p.MiseEnv()...)
-	path := p.ToolsBin() + string(os.PathListSeparator) + p.MiseShims()
+	path := strings.Join(p.managedPathDirs(), string(os.PathListSeparator))
 	if cur := os.Getenv("PATH"); cur != "" {
 		path += string(os.PathListSeparator) + cur
 	}
 	env = append(env, "PATH="+path)
+	return env
+}
+
+// EnvForProject is Env plus per-project isolation: it trusts the project's own
+// mise/.tool-versions config (via MISE_TRUSTED_CONFIG_PATHS) so that, when karya
+// runs tools with the project as the working directory, mise layers the project's
+// runtime versions over karya's global managed ones — without touching the user's
+// global mise trust store. projectRoot is the detected project directory; an empty
+// projectRoot yields the same result as Env.
+func (p Paths) EnvForProject(karyaBin, projectRoot string) []string {
+	env := p.Env(karyaBin)
+	if projectRoot != "" {
+		env = append(env, "MISE_TRUSTED_CONFIG_PATHS="+projectRoot)
+	}
 	return env
 }

@@ -151,9 +151,14 @@ func TestActivateManagedEnv(t *testing.T) {
 
 	sep := string(os.PathListSeparator)
 	got := os.Getenv("PATH")
-	wantPrefix := p.ToolsBin() + sep + p.MiseShims() + sep
-	if !strings.HasPrefix(got, wantPrefix) {
-		t.Fatalf("PATH = %q, want prefix %q", got, wantPrefix)
+	// The legacy shared bin leads, category bins follow, then mise shims.
+	if !strings.HasPrefix(got, p.ToolsBin()+sep) {
+		t.Fatalf("PATH = %q, want it to start with the managed tool bin %q", got, p.ToolsBin())
+	}
+	for _, want := range []string{p.ToolCategoryBin("core"), p.MiseShims()} {
+		if !strings.Contains(got, want) {
+			t.Errorf("PATH missing managed dir %q; got %q", want, got)
+		}
 	}
 	if !strings.Contains(got, "/usr/bin") {
 		t.Errorf("PATH dropped existing entries: %q", got)

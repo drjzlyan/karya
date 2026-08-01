@@ -59,6 +59,17 @@ func cmdInstall(args []string) int {
 		return code
 	}
 
+	// Install the managed baseline: the core CLI utilities and documentation
+	// tooling, so karya never assumes these exist globally. Best-effort — a tool
+	// that fails to install is a warning, not a failure of the whole setup.
+	for _, id := range []string{"core", "docs"} {
+		if p, ok := a.reg.Profile(id); ok {
+			results := a.installToolIDs(p.Tools)
+			fmt.Printf("%s: %s\n", p.Name, tools.Summarize(results))
+		}
+	}
+	a.refreshToolManifest()
+
 	// Bootstrap the editor's plugins up front so the first launch is instant. A
 	// missing nvim is not fatal — plugins bootstrap lazily on first editor launch.
 	if err := editor.SyncPlugins(a.env); err != nil {

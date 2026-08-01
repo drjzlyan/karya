@@ -25,13 +25,15 @@ type compCmd struct {
 // the per-command help summaries so completion stays in step with `karya help`.
 func completionModel() []compCmd {
 	order := []string{
-		"dev", "agent", "edit", "run", "new", "lang",
+		"dev", "agent", "edit", "run", "new", "lang", "profile", "tool",
 		"install", "update", "uninstall", "doctor", "shellenv",
 		"completion", "docs", "tutorial", "help", "version",
 	}
 	sub := map[string][]string{
 		"agent":      {"status", "switch", "next", "prev", "reset", "prefs", "clear"},
 		"lang":       {"list", "add", "remove", "all"},
+		"profile":    {"list", "install"},
+		"tool":       {"list", "update"},
 		"new":        project.Languages,
 		"docs":       assets.DocTopics(),
 		"help":       append([]string{"topics"}, helpCommandNames()...),

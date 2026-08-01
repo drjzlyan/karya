@@ -1,12 +1,14 @@
 local M = {}
 
+local karya = require("util.karya")
+
 -- All LTS / common Java major versions to probe for.
 local KNOWN_VERSIONS = { 8, 11, 17, 21, 25 }
 
----Read selected Java versions from languages.local.
+---Read selected Java versions from karya's isolated languages.local.
 ---Returns a list of version integers (major only).
 local function selected_java_versions()
-  local path = vim.fn.expand("~/.local/share/nvim/languages.local")
+  local path = karya.data_dir() .. "/languages.local"
   local ok, f = pcall(io.open, path, "r")
   if not ok or not f then
     return {}
@@ -27,13 +29,15 @@ local function selected_java_versions()
   return versions
 end
 
+-- find_jdks discovers installed JDKs strictly within karya's isolated mise
+-- prefix. karya never installs into or reads from Homebrew, the system
+-- JavaVirtualMachines, or the user's global mise (PLAN.md §2), so only karya's
+-- own installs are considered here.
 local function find_jdks()
   local jdks = {}
-  local home = vim.fn.expand("~")
-  local brew_prefix = vim.fn.exists("$HOMEBREW_PREFIX") == 1 and vim.env.HOMEBREW_PREFIX
-    or (vim.fn.isdirectory("/opt/homebrew") == 1 and "/opt/homebrew" or "/usr/local")
+  local mise_java = karya.data_dir() .. "/mise/installs/java"
 
-  -- Collect all versions to check: user-selected first, then well-known LTS
+  -- Collect all versions to check: user-selected first, then well-known LTS.
   local to_check = {}
   local seen = {}
   for _, v in ipairs(selected_java_versions()) do
@@ -50,17 +54,11 @@ local function find_jdks()
   end
 
   for _, version in ipairs(to_check) do
+    -- karya's isolated mise installs: exact major, and temurin-/openjdk- variants.
     local paths = {
-      -- mise: exact major, temurin-N, openjdk-N, and glob for N.x.y variants
-      home .. "/.local/share/mise/installs/java/" .. version,
-      home .. "/.local/share/mise/installs/java/temurin-" .. version,
-      home .. "/.local/share/mise/installs/java/openjdk-" .. version,
-      -- Homebrew
-      brew_prefix .. "/opt/openjdk@" .. version .. "/libexec/openjdk.jdk/Contents/Home",
-      -- Temurin / AdoptOpenJDK system installs
-      "/Library/Java/JavaVirtualMachines/temurin-" .. version .. ".jdk/Contents/Home",
-      "/Library/Java/JavaVirtualMachines/adoptopenjdk-" .. version .. ".jdk/Contents/Home",
-      "/usr/local/opt/openjdk@" .. version .. "/libexec/openjdk.jdk/Contents/Home",
+      mise_java .. "/" .. version,
+      mise_java .. "/temurin-" .. version,
+      mise_java .. "/openjdk-" .. version,
     }
 
     for _, p in ipairs(paths) do
@@ -70,12 +68,11 @@ local function find_jdks()
       end
     end
 
-    -- Glob for mise installs that include patch versions (e.g. 21.0.5)
+    -- Glob for installs that include patch versions (e.g. 21.0.5).
     if not jdks[version] then
-      local pattern = home .. "/.local/share/mise/installs/java/" .. version .. ".*"
-      local matches = vim.fn.glob(pattern, false, true)
+      local matches = vim.fn.glob(mise_java .. "/" .. version .. ".*", false, true)
       if type(matches) == "table" then
-        -- Sort descending so newest patch is first
+        -- Sort descending so newest patch is first.
         table.sort(matches, function(a, b)
           return a > b
         end)
@@ -93,20 +90,21 @@ local function find_jdks()
 end
 
 function M.resolve_jdk()
+  -- JAVA_HOME, when set by karya's generated mise config, is authoritative.
   if vim.env.JAVA_HOME and vim.fn.isdirectory(vim.env.JAVA_HOME) == 1 then
     return vim.env.JAVA_HOME
   end
 
   local jdks = find_jdks()
 
-  -- Prefer user-selected Java version
+  -- Prefer user-selected Java version.
   for _, v in ipairs(selected_java_versions()) do
     if jdks[v] then
       return jdks[v]
     end
   end
 
-  -- Fall back: newest known version first
+  -- Fall back: newest known version first.
   for _, v in ipairs({ 25, 21, 17, 11, 8 }) do
     if jdks[v] then
       return jdks[v]
@@ -133,39 +131,30 @@ function M.pick_jdk_for_project(root)
   return M.resolve_jdk()
 end
 
+-- find_lombok_jar returns the Lombok jar from karya's isolated tool prefix,
+-- preferring the resolved path in karya's tool manifest and falling back to the
+-- known location under karya's tools dir. No Homebrew/system paths are consulted.
 function M.find_lombok_jar()
-  local home = vim.fn.expand("~")
-  local brew_prefix = vim.fn.exists("$HOMEBREW_PREFIX") == 1 and vim.env.HOMEBREW_PREFIX
-    or (vim.fn.isdirectory("/opt/homebrew") == 1 and "/opt/homebrew" or "/usr/local")
-
-  local candidates = {
-    home .. "/.local/share/ide-tools/lombok.jar",
-    brew_prefix .. "/opt/lombok/libexec/lombok.jar",
-    brew_prefix .. "/opt/lombok/libexec/lombok-1.18.34.jar",
-    "/usr/local/opt/lombok/libexec/lombok.jar",
-  }
-
-  for _, c in ipairs(candidates) do
-    if vim.fn.filereadable(c) == 1 then
-      return c
-    end
+  local from_manifest = karya.tool("lombok")
+  if from_manifest and vim.fn.filereadable(from_manifest) == 1 then
+    return from_manifest
   end
-
-  local matches = vim.fn.glob(brew_prefix .. "/Cellar/lombok/*/libexec/lombok*.jar", false, true)
-  if type(matches) == "table" and #matches > 0 then
-    return matches[1]
+  local jar = karya.data_dir() .. "/tools/lombok.jar"
+  if vim.fn.filereadable(jar) == 1 then
+    return jar
   end
-
   return nil
 end
 
 function M.workspace_dir(root)
   local name = root and vim.fn.fnamemodify(root, ":t") or "unknown"
-  return vim.fn.expand("~/.cache/jdtls") .. "/" .. name
+  return karya.cache_dir() .. "/jdtls/" .. name
 end
 
 function M.jdtls_cmd(root)
-  local cmd = { "jdtls" }
+  -- Prefer the manifest-resolved jdtls launcher; fall back to PATH (karya's
+  -- managed bin is on PATH inside a session).
+  local cmd = { karya.tool("jdtls") or "jdtls" }
   local jdk = M.pick_jdk_for_project(root)
   if jdk then
     vim.list_extend(cmd, { "--java-executable", jdk .. "/bin/java" })

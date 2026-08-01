@@ -11,17 +11,21 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/drjzlyan/karya/internal/toolreg"
 )
 
 // httpClient bounds download time so a hung mirror does not stall `karya lang`.
 var httpClient = &http.Client{Timeout: 5 * time.Minute}
 
-// installJDTLS downloads and unpacks the Eclipse JDT language server into
+// jdtlsMethod downloads and unpacks the Eclipse JDT language server into
 // ToolsDir/jdtls-<version>, points ToolsDir/jdtls at it, and writes a launcher
 // wrapper into BinDir so it resolves on karya's PATH.
-func (in Installer) installJDTLS(s ToolSpec) error {
-	target := filepath.Join(in.ToolsDir, "jdtls-"+s.Version)
-	base := "https://download.eclipse.org/jdtls/milestones/" + s.Version
+type jdtlsMethod struct{ base }
+
+func (jdtlsMethod) Install(t toolreg.Tool, ctx Context) error {
+	target := filepath.Join(ctx.ToolsDir, "jdtls-"+t.Version)
+	base := "https://download.eclipse.org/jdtls/milestones/" + t.Version
 
 	if _, err := os.Stat(filepath.Join(target, "plugins")); err != nil {
 		name, err := fetchText(base + "/latest.txt")
@@ -30,7 +34,7 @@ func (in Installer) installJDTLS(s ToolSpec) error {
 		}
 		name = strings.TrimSpace(name)
 		if name == "" {
-			return fmt.Errorf("empty jdtls tarball name for %s", s.Version)
+			return fmt.Errorf("empty jdtls tarball name for %s", t.Version)
 		}
 		tmp, err := os.CreateTemp("", "jdtls-*.tar.gz")
 		if err != nil {
@@ -48,25 +52,27 @@ func (in Installer) installJDTLS(s ToolSpec) error {
 		}
 	}
 
-	if err := symlinkForce(target, filepath.Join(in.ToolsDir, "jdtls")); err != nil {
+	if err := symlinkForce(target, filepath.Join(ctx.ToolsDir, "jdtls")); err != nil {
 		return err
 	}
 	launcher := filepath.Join(target, "bin", "jdtls")
 	if _, err := os.Stat(launcher); err != nil {
 		launcher = filepath.Join(target, "jdtls")
 	}
-	return writeWrapper(filepath.Join(in.BinDir, "jdtls"), launcher)
+	return writeWrapper(filepath.Join(ctx.BinDir, "jdtls"), launcher)
 }
 
-// installLombok downloads the Lombok jar and points ToolsDir/lombok.jar at it.
-func (in Installer) installLombok(s ToolSpec) error {
-	versioned := filepath.Join(in.ToolsDir, "lombok-"+s.Version+".jar")
+// lombokMethod downloads the Lombok jar and points ToolsDir/lombok.jar at it.
+type lombokMethod struct{ base }
+
+func (lombokMethod) Install(t toolreg.Tool, ctx Context) error {
+	versioned := filepath.Join(ctx.ToolsDir, "lombok-"+t.Version+".jar")
 	if _, err := os.Stat(versioned); err != nil {
 		f, err := os.Create(versioned)
 		if err != nil {
 			return err
 		}
-		url := fmt.Sprintf("https://projectlombok.org/downloads/lombok-%s.jar", s.Version)
+		url := fmt.Sprintf("https://projectlombok.org/downloads/lombok-%s.jar", t.Version)
 		if err := download(url, f); err != nil {
 			f.Close()
 			_ = os.Remove(versioned)
@@ -74,16 +80,18 @@ func (in Installer) installLombok(s ToolSpec) error {
 		}
 		f.Close()
 	}
-	return symlinkForce(versioned, filepath.Join(in.ToolsDir, "lombok.jar"))
+	return symlinkForce(versioned, filepath.Join(ctx.ToolsDir, "lombok.jar"))
 }
 
-// installVSIX downloads a VS Code marketplace extension (a zip, possibly gzip'd)
+// vsixMethod downloads a VS Code marketplace extension (a zip, possibly gzip'd)
 // and unpacks it into ToolsDir/<name>-<version>, symlinked as ToolsDir/<name>.
-func (in Installer) installVSIX(s ToolSpec) error {
-	target := filepath.Join(in.ToolsDir, s.Artifact+"-"+s.Version)
+type vsixMethod struct{ base }
+
+func (vsixMethod) Install(t toolreg.Tool, ctx Context) error {
+	target := filepath.Join(ctx.ToolsDir, t.Artifact+"-"+t.Version)
 	if _, err := os.Stat(target); err != nil {
-		url := strings.ReplaceAll(s.Pkg, "{version}", s.Version)
-		tmp, err := os.CreateTemp("", s.Artifact+"-*.vsix")
+		url := strings.ReplaceAll(t.Pkg, "{version}", t.Version)
+		tmp, err := os.CreateTemp("", t.Artifact+"-*.vsix")
 		if err != nil {
 			return err
 		}
@@ -102,7 +110,7 @@ func (in Installer) installVSIX(s ToolSpec) error {
 			return err
 		}
 	}
-	return symlinkForce(target, filepath.Join(in.ToolsDir, s.Artifact))
+	return symlinkForce(target, filepath.Join(ctx.ToolsDir, t.Artifact))
 }
 
 // ── low-level helpers ───────────────────────────────────────────────────────

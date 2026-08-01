@@ -5,7 +5,6 @@ import (
 
 	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/lang"
-	"github.com/drjzlyan/karya/internal/tools"
 )
 
 // healthyProbe returns a Probe where every dependency is present, so Run yields
@@ -26,7 +25,7 @@ func healthyProbe() Probe {
 		Version:       func(string) string { return "9.9" },
 		Exists:        func(string) bool { return true },
 		Detected:      func() []string { return []string{"claude"} },
-		ToolAvailable: func(tools.ToolSpec) bool { return true },
+		ToolInstalled: func(string) bool { return true },
 	}
 }
 
@@ -106,7 +105,7 @@ func TestNoAgentsWarns(t *testing.T) {
 
 func TestMissingLanguageToolingWarns(t *testing.T) {
 	p := healthyProbe()
-	p.ToolAvailable = func(tools.ToolSpec) bool { return false }
+	p.ToolInstalled = func(string) bool { return false }
 	r := Run(p)
 	if !r.Healthy() {
 		t.Error("missing editor tooling should be a Warn, not a Problem")

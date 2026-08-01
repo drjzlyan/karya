@@ -17,6 +17,7 @@ import (
 	"github.com/drjzlyan/karya/internal/editor"
 	"github.com/drjzlyan/karya/internal/project"
 	"github.com/drjzlyan/karya/internal/session"
+	"github.com/drjzlyan/karya/internal/toolreg"
 	"github.com/drjzlyan/karya/internal/tools"
 	"github.com/drjzlyan/karya/internal/version"
 )
@@ -59,6 +60,10 @@ func Run(args []string) int {
 		return cmdShip(rest)
 	case "lang":
 		return cmdLang(rest)
+	case "profile":
+		return cmdProfile(rest)
+	case "tool", "tools":
+		return cmdTool(rest)
 	case "install":
 		return cmdInstall(rest)
 	case "update":
@@ -131,6 +136,12 @@ func cmdDev(args []string) int {
 	}
 	if err := ensureRuntime(a); err != nil {
 		return fail(err)
+	}
+	// Per-project isolation: when the workdir pins its own runtime versions,
+	// launch the session with an environment that trusts and layers the project's
+	// mise/.tool-versions over karya's global managed versions.
+	if pe, ok := toolreg.DetectProject(workdir); ok {
+		a.tmux.Env = a.paths.EnvForProject(a.bin, pe.Root)
 	}
 	if err := session.Dev(a.tmux, session.Options{
 		Name:     name,
@@ -496,6 +507,8 @@ Usage:
   karya new <lang> <name>   Scaffold a project (python|java|typescript|go|cpp|rust)
   karya ship [--push --pr]  Stage, agent-write the commit message, commit (--no-verify)
   karya lang <cmd>          list | add <lang> [versions] | remove <lang> | all
+  karya profile <cmd>       list | install <id>  (core|docs|python|go|rust|java|typescript|cpp)
+  karya tool <cmd>          list | update <id>|all  (managed tool health & updates)
 
   karya install             Set up karya (isolated, non-destructive)
   karya update [--check]    Self-update binary, configs, tools, plugins

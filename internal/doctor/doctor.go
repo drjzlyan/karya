@@ -18,7 +18,7 @@ import (
 	"github.com/drjzlyan/karya/internal/agent"
 	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/lang"
-	"github.com/drjzlyan/karya/internal/tools"
+	"github.com/drjzlyan/karya/internal/toolreg"
 )
 
 // Level is the severity of a single check.
@@ -79,8 +79,11 @@ type Probe struct {
 	Exists func(path string) bool
 	// Detected returns the coding agents available on the machine.
 	Detected func() []string
-	// ToolAvailable reports whether an editor tool is installed in karya's prefix.
-	ToolAvailable func(tools.ToolSpec) bool
+	// Registry is the tool registry doctor reports against.
+	Registry *toolreg.Registry
+	// ToolInstalled reports whether a tool (by registry ID) resolves in karya's
+	// prefix or on PATH.
+	ToolInstalled func(id string) bool
 }
 
 func (p Probe) withDefaults() Probe {
@@ -99,9 +102,12 @@ func (p Probe) withDefaults() Probe {
 	if p.Detected == nil {
 		p.Detected = agent.Detect
 	}
-	if p.ToolAvailable == nil {
-		in := tools.Installer{ToolsDir: p.Paths.ToolsDir(), BinDir: p.Paths.ToolsBin()}
-		p.ToolAvailable = in.Available
+	if p.Registry == nil {
+		p.Registry = toolreg.New()
+	}
+	if p.ToolInstalled == nil {
+		rv := toolreg.NewResolver(p.Paths, p.Registry)
+		p.ToolInstalled = func(id string) bool { _, ok := rv.Resolve(id); return ok }
 	}
 	return p
 }
@@ -214,16 +220,24 @@ func checkLanguages(r *Report, p Probe) {
 		r.add("languages", "selection", OK, "selected: "+strings.Join(labels, "; "))
 	}
 
-	for _, spec := range tools.Plan(langs) {
-		if p.ToolAvailable(spec) {
-			r.add("languages", spec.Name, OK, "installed")
+	ids := toolreg.AlwaysOnIDs()
+	for _, name := range langs {
+		ids = append(ids, p.Registry.LanguageIDs(name)...)
+	}
+	for _, id := range ids {
+		t, ok := p.Registry.Get(id)
+		if !ok {
+			continue
+		}
+		if p.ToolInstalled(id) {
+			r.add("languages", t.Name, OK, "installed")
 			continue
 		}
 		detail := "missing — run `karya install`"
-		if spec.Hint != "" {
-			detail = "missing — " + spec.Hint
+		if t.Hint != "" {
+			detail = "missing — " + t.Hint
 		}
-		r.add("languages", spec.Name, Warn, detail)
+		r.add("languages", t.Name, Warn, detail)
 	}
 }
 

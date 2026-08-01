@@ -1,5 +1,7 @@
 local M = {}
 
+local karya = require("util.karya")
+
 ---@class DevHealthResult
 ---@field name string Display name of the checked item.
 ---@field status "ok"|"missing"|"warning"|"error" Current status.
@@ -41,25 +43,17 @@ local function has_exec(name)
   return vim.fn.executable(name) == 1
 end
 
----Find an installed JDK for the requested version.
----Checks mise, Homebrew, and Temurin system installs.
+---Find an installed JDK for the requested version, strictly within karya's
+---isolated mise prefix (never Homebrew or system JVMs — see PLAN.md §2).
 ---@param version integer
 ---@return string?
 function M.find_jdk(version)
-  local home = vim.fn.expand("~")
-  local homebrew = vim.env.HOMEBREW_PREFIX or "/opt/homebrew"
+  local mise_java = karya.data_dir() .. "/mise/installs/java"
 
   local paths = {
-    -- mise: exact major, temurin-N, openjdk-N
-    home .. "/.local/share/mise/installs/java/" .. version,
-    home .. "/.local/share/mise/installs/java/temurin-" .. version,
-    home .. "/.local/share/mise/installs/java/openjdk-" .. version,
-    -- Homebrew
-    homebrew .. "/opt/openjdk@" .. version .. "/libexec/openjdk.jdk/Contents/Home",
-    -- Temurin / AdoptOpenJDK system installs
-    "/Library/Java/JavaVirtualMachines/temurin-" .. version .. ".jdk/Contents/Home",
-    "/Library/Java/JavaVirtualMachines/adoptopenjdk-" .. version .. ".jdk/Contents/Home",
-    "/usr/local/opt/openjdk@" .. version .. "/libexec/openjdk.jdk/Contents/Home",
+    mise_java .. "/" .. version,
+    mise_java .. "/temurin-" .. version,
+    mise_java .. "/openjdk-" .. version,
   }
 
   for _, path in ipairs(paths) do
@@ -69,7 +63,7 @@ function M.find_jdk(version)
   end
 
   -- Glob for mise patch-version installs (e.g. 21.0.5)
-  local pattern = home .. "/.local/share/mise/installs/java/" .. version .. ".*"
+  local pattern = mise_java .. "/" .. version .. ".*"
   local matches = vim.fn.glob(pattern, false, true)
   if type(matches) == "table" then
     table.sort(matches, function(a, b)
@@ -127,7 +121,7 @@ local function check_brew_tool(name, package, version_cmd)
     return {
       name = name,
       status = "missing",
-      message = "brew install " .. package,
+      message = "run `karya install` to provision it",
     }
   end
   return {
@@ -154,31 +148,31 @@ end
 ---Check the Git installation.
 ---@return DevHealthResult
 local function check_git()
-  return check_tool("git", { "git", "--version" }, "brew install git")
+  return check_tool("git", { "git", "--version" }, "install git (most systems ship it)")
 end
 
 ---Check ripgrep.
 ---@return DevHealthResult
 local function check_ripgrep()
-  return check_tool("rg", { "rg", "--version" }, "brew install ripgrep")
+  return check_tool("rg", { "rg", "--version" }, "run `karya profile install core`")
 end
 
 ---Check fd.
 ---@return DevHealthResult
 local function check_fd()
-  return check_tool("fd", { "fd", "--version" }, "brew install fd")
+  return check_tool("fd", { "fd", "--version" }, "run `karya profile install core`")
 end
 
 ---Check fzf.
 ---@return DevHealthResult
 local function check_fzf()
-  return check_tool("fzf", { "fzf", "--version" }, "brew install fzf")
+  return check_tool("fzf", { "fzf", "--version" }, "run `karya profile install core`")
 end
 
 ---Check lazygit.
 ---@return DevHealthResult
 local function check_lazygit()
-  return check_tool("lazygit", { "lazygit", "--version" }, "brew install lazygit")
+  return check_tool("lazygit", { "lazygit", "--version" }, "install lazygit for the in-session git UI")
 end
 
 ---Check Ghostty.
@@ -190,13 +184,13 @@ end
 ---Check tmux.
 ---@return DevHealthResult
 local function check_tmux()
-  return check_tool("tmux", { "tmux", "-V" }, "brew install tmux")
+  return check_tool("tmux", { "tmux", "-V" }, "run `karya install`")
 end
 
 ---Check uv.
 ---@return DevHealthResult
 local function check_uv()
-  return check_tool("uv", { "uv", "--version" }, "brew install uv")
+  return check_tool("uv", { "uv", "--version" }, "run `karya install`")
 end
 
 ---Check a specific JDK version.
@@ -208,7 +202,7 @@ local function check_jdk(version)
     return {
       name = "JDK " .. version,
       status = "missing",
-      message = "brew install --cask temurin@" .. version,
+      message = "run `karya lang add java` to install it",
     }
   end
   local java = path .. "/bin/java"
@@ -297,35 +291,17 @@ local function check_google_java_format()
   return check_brew_tool("google-java-format", "google-java-format", { "google-java-format", "--version" })
 end
 
----Check Lombok jar.
+---Check Lombok jar via karya's isolated resolver (manifest + tool prefix).
 ---@return DevHealthResult
 local function check_lombok()
-  local homebrew = vim.env.HOMEBREW_PREFIX or "/opt/homebrew"
-  local candidates = {
-    homebrew .. "/opt/lombok/libexec/lombok.jar",
-    homebrew .. "/Cellar/lombok/*/libexec/lombok*.jar",
-    "/usr/local/opt/lombok/libexec/lombok.jar",
-  }
-  for _, pattern in ipairs(candidates) do
-    local matches = vim.fn.glob(pattern, false, true)
-    if type(matches) == "table" and #matches > 0 then
-      return {
-        name = "Lombok",
-        status = "ok",
-        message = matches[1],
-      }
-    elseif type(matches) == "string" and matches ~= "" then
-      return {
-        name = "Lombok",
-        status = "ok",
-        message = matches,
-      }
-    end
+  local jar = require("util.java").find_lombok_jar()
+  if jar then
+    return { name = "Lombok", status = "ok", message = jar }
   end
   return {
     name = "Lombok",
     status = "missing",
-    message = "brew install lombok",
+    message = "run `karya lang add java` to install it",
   }
 end
 
@@ -333,7 +309,7 @@ end
 ---@return table<string, boolean>
 local function selected_languages()
   local langs = {}
-  local path = vim.fn.expand("~/.local/share/nvim/languages.local")
+  local path = karya.data_dir() .. "/languages.local"
   local f = io.open(path, "r")
   if not f then
     return langs
@@ -385,52 +361,52 @@ function M.check_all()
       check_lombok(),
     })
     if vim.fn.executable("mvn") == 1 then
-      table.insert(results, check_tool("mvn", { "mvn", "--version" }, "brew install maven"))
+      table.insert(results, check_tool("mvn", { "mvn", "--version" }, "install Maven"))
     end
     if vim.fn.executable("gradle") == 1 then
-      table.insert(results, check_tool("gradle", { "gradle", "--version" }, "brew install gradle"))
+      table.insert(results, check_tool("gradle", { "gradle", "--version" }, "install Gradle"))
     end
     if vim.fn.executable("mvn") ~= 1 and vim.fn.executable("gradle") ~= 1 then
       table.insert(results, {
         name = "mvn / gradle",
         status = "missing",
-        message = "brew install maven  (or: brew install gradle)",
+        message = "install Maven or Gradle for your Java build",
       })
     end
   end
 
   if langs.typescript then
     vim.list_extend(results, {
-      check_tool("node", { "node", "--version" }, "install via mise: mise install node"),
+      check_tool("node", { "node", "--version" }, "run `karya lang add typescript`"),
       check_tool(
         "typescript-language-server",
         { "typescript-language-server", "--version" },
-        "npm install -g typescript-language-server typescript"
+        "run `karya lang add typescript`"
       ),
-      check_tool("prettier", { "prettier", "--version" }, "npm install -g prettier"),
+      check_tool("prettier", { "prettier", "--version" }, "run `karya profile install docs`"),
     })
   end
 
   if langs.go then
     vim.list_extend(results, {
-      check_tool("go", { "go", "version" }, "install via mise: mise install go"),
-      check_tool("gopls", { "gopls", "version" }, "go install golang.org/x/tools/gopls@latest"),
-      check_tool("goimports", nil, "go install golang.org/x/tools/cmd/goimports@latest"),
-      check_tool("dlv", { "dlv", "version" }, "go install github.com/go-delve/delve/cmd/dlv@latest"),
+      check_tool("go", { "go", "version" }, "run `karya lang add go`"),
+      check_tool("gopls", { "gopls", "version" }, "run `karya lang add go`"),
+      check_tool("goimports", nil, "run `karya lang add go`"),
+      check_tool("dlv", { "dlv", "version" }, "run `karya lang add go`"),
     })
   end
 
   if langs.cpp then
     vim.list_extend(results, {
-      check_tool("clangd", { "clangd", "--version" }, "brew install clangd"),
+      check_tool("clangd", { "clangd", "--version" }, "install LLVM/clang (system package)"),
     })
   end
 
   if langs.rust then
     vim.list_extend(results, {
-      check_tool("cargo", { "cargo", "--version" }, "install via rustup.rs"),
-      check_tool("rust-analyzer", { "rust-analyzer", "--version" }, "rustup component add rust-analyzer"),
-      check_tool("rustfmt", { "rustfmt", "--version" }, "rustup component add rustfmt"),
+      check_tool("cargo", { "cargo", "--version" }, "run `karya lang add rust`"),
+      check_tool("rust-analyzer", { "rust-analyzer", "--version" }, "run `karya lang add rust`"),
+      check_tool("rustfmt", { "rustfmt", "--version" }, "run `karya lang add rust`"),
     })
   end
 
