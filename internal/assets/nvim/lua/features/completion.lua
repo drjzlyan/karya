@@ -1,9 +1,10 @@
 return {
   {
     "saghen/blink.cmp",
-    build = function()
-      require("blink.cmp").build():wait()
-    end,
+    -- No `build` step: building blink's native fuzzy matcher from source needs a
+    -- Rust toolchain (cargo), which karya must never assume exists on the user's
+    -- machine (PLAN.md §2). We use the pure-Lua fuzzy matcher instead (see the
+    -- `fuzzy` opt below), so completion works fully isolated and offline.
     event = { "InsertEnter", "CmdlineEnter" },
     dependencies = {
       "saghen/blink.lib",
@@ -27,6 +28,12 @@ return {
         },
         signature = {
           enabled = true,
+        },
+        -- Use the Lua fuzzy matcher so blink never needs its Rust-built native
+        -- library (and never shells out to cargo/rustup). Slightly slower than the
+        -- native matcher but robust in karya's isolated, toolchain-agnostic env.
+        fuzzy = {
+          implementation = "lua",
         },
         sources = {
           default = { "lsp", "buffer", "path", "snippets" },
