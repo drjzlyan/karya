@@ -2,9 +2,11 @@
 -- loads the corresponding language modules.  Common languages (JSON, YAML,
 -- Bash, Lua, TOML, Markdown) are always available via lua/features/lsp.lua.
 --
--- The selection file lives in Neovim's data directory so it is machine-local
--- and never committed to the repository:
---   ~/.local/share/nvim/languages.local
+-- The selection file is written by `karya lang` into karya's isolated data root
+-- (NOT Neovim's data dir): with NVIM_APPNAME=karya/nvim, that root is the parent
+-- of stdpath("data"). Reading the wrong path here silently loads no language
+-- modules (no per-language LSP, formatting, or the <leader>c Code group).
+--   ~/.local/share/karya/languages.local
 --
 -- Format: key=value, one per line, comments start with #.  Example:
 --   python=3.12.7
@@ -16,8 +18,8 @@
 
 local M = {}
 
---- Path to the language selection file.
-M.config_path = vim.fn.stdpath("data") .. "/languages.local"
+--- Path to the language selection file, in karya's isolated data root.
+M.config_path = require("util.karya").data_dir() .. "/languages.local"
 
 --- All languages this configuration knows how to set up.
 --- Common languages (json, yaml, bash, lua, toml, markdown) are always on
