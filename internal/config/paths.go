@@ -122,6 +122,10 @@ func (p Paths) TmuxConf() string { return filepath.Join(p.Config, "tmux.conf") }
 // PrefsFile stores per-project preferences (e.g. chosen agent), key=value.
 func (p Paths) PrefsFile() string { return filepath.Join(p.Data, "prefs") }
 
+// ToolsStateFile records per-tool metadata such as the last time karya checked a
+// tool for updates, key=value under the state dir.
+func (p Paths) ToolsStateFile() string { return filepath.Join(p.State, "tools.state") }
+
 // ToolsBin is karya's private tool prefix; managed LSPs/formatters live here so
 // karya never mutates Homebrew or the user's global environment.
 func (p Paths) ToolsBin() string { return filepath.Join(p.Data, "tools", "bin") }

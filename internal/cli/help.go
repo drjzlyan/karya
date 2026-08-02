@@ -30,7 +30,8 @@ var helpByCommand = map[string]commandHelp{
 		details: []string{
 			"Bare `karya` is shorthand for `karya dev` on the current directory.",
 			"Flags: -a <agent> pick the coding agent (`none` for a plain shell),",
-			"       -k kill and recreate the session, -q quit it cleanly.",
+			"       -k kill and recreate the session, -q quit it cleanly,",
+			"       -P skip auto-installing the project's pinned runtimes.",
 		},
 	},
 	"agent": {
@@ -76,10 +77,11 @@ var helpByCommand = map[string]commandHelp{
 		},
 	},
 	"tool": {
-		syntax:  "karya tool <list|update <id>|all>",
+		syntax:  "karya tool <list [--check-updates]|update <id>|all>",
 		summary: "Show managed tool health and update tools independently.",
 		details: []string{
 			"list                   health of every managed tool, grouped by category",
+			"list --check-updates   also query mise for available updates (network)",
 			"update <id>|all        reinstall a tool (or all) to its latest version",
 		},
 	},
@@ -98,8 +100,9 @@ var helpByCommand = map[string]commandHelp{
 		summary: "Remove karya entirely; nothing else on the system is touched.",
 	},
 	"doctor": {
-		syntax:  "karya doctor",
+		syntax:  "karya doctor [--check-updates]",
 		summary: "Check tools, versions, and isolation for problems.",
+		details: []string{"--check-updates   also report managed tools with a newer version (network)"},
 	},
 	"shellenv": {
 		syntax:  "karya shellenv",

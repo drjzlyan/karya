@@ -92,6 +92,8 @@ func cmdDev(args []string) int {
 	fs.BoolVar(kill, "kill", false, "kill an existing session and recreate it")
 	quit := fs.Bool("q", false, "quit (kill) the session cleanly")
 	fs.BoolVar(quit, "quit", false, "quit (kill) the session cleanly")
+	noProvision := fs.Bool("P", false, "do not auto-install the project's pinned runtimes")
+	fs.BoolVar(noProvision, "no-provision", false, "do not auto-install the project's pinned runtimes")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -139,9 +141,14 @@ func cmdDev(args []string) int {
 	}
 	// Per-project isolation: when the workdir pins its own runtime versions,
 	// launch the session with an environment that trusts and layers the project's
-	// mise/.tool-versions over karya's global managed versions.
+	// mise/.tool-versions over karya's global managed versions, and (unless
+	// --no-provision) install those pinned runtimes so they are ready in-session.
 	if pe, ok := toolreg.DetectProject(workdir); ok {
 		a.tmux.Env = a.paths.EnvForProject(a.bin, pe.Root)
+		if !*noProvision {
+			fmt.Println("Provisioning project runtimes (mise)…")
+			tools.ProvisionProject(a.paths, pe.Root, a.tmux.Env, os.Stdout, os.Stderr)
+		}
 	}
 	if err := session.Dev(a.tmux, session.Options{
 		Name:     name,
@@ -157,13 +164,10 @@ func cmdDev(args []string) int {
 
 // ensureRuntime makes sure karya's essential launch dependencies (tmux and
 // Neovim) are present, installing any that are missing into karya's isolated
-// prefix via the vendored mise. It is a no-op on the common path where both
+// prefix via the registry dispatcher. It is a no-op on the common path where both
 // already resolve, so it is cheap to call before every launch.
 func ensureRuntime(a *app) error {
-	if tools.CoreReady() {
-		return nil
-	}
-	return tools.EnsureCore(a.paths, os.Stdout, os.Stderr)
+	return a.ensureCore()
 }
 
 // cmdEdit opens a file in the editor pane (also used as $EDITOR).

@@ -100,6 +100,23 @@ isolation leaks are fixed. Remaining deferred items (all noted above): formal `R
 extraction, folding `bootstrap.go` into a core profile, `VersionManager` latest/rollback +
 `tools.state`, auto-provisioning project-pinned runtimes on open, and the integration test.
 
+## Deferred follow-ups ✅ (branch `feat/tooling-deferred-followups`)
+The six deferred items are now implemented:
+- ☑ **RuntimeManager** extracted (`internal/lang/runtime.go`); `applySelection` uses it.
+- ☑ **bootstrap.go retired** — launch (`ensureRuntime`) and install (`cmdInstall`) use the registry
+      dispatcher via `app.ensureCore()` (+ `Registry.EssentialIDs`); toolchains now arrive as tool
+      dependencies. `internal/tools/bootstrap.go` deleted.
+- ☑ **Version/health surface** — `toolreg.VersionManager` (mise `outdated`-centric),
+      `karya tool list --check-updates`, `karya doctor --check-updates`, `tools.state`
+      (`Paths.ToolsStateFile`, via `prefs.Store`).
+- ☑ **Per-project auto-provision** — `tools.ProvisionProject` run by `cmdDev` on open (best-effort),
+      with a `-P`/`--no-provision` escape.
+- ☑ **Integration test** — `internal/tools/e2e_integration_test.go` (`//go:build integration`)
+      drives registry→dispatcher→resolver→health→version→doctor against a fake mise; CI-friendly.
+- ☑ **Resolver threading** — decided: threaded into diagnostics only (doctor/health/version);
+      tmux/nvim/session launches stay on the isolated PATH by design (documented).
+- Still deferred (low value): rollback for pinned artifacts (jdtls/lombok).
+
 ## Notes / decisions
 - Registry = Go struct literals (zero-dep rule); no TOML parser.
 - `data/mise` never relocated (moving mise installs breaks shims).

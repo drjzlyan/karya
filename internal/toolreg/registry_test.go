@@ -104,3 +104,17 @@ func TestPlanEmpty(t *testing.T) {
 		t.Errorf("Plan(nil) = %v, %v; want empty, nil", ids(plan), err)
 	}
 }
+
+func TestEssentialIDs(t *testing.T) {
+	r := New()
+	got := r.EssentialIDs()
+	want := map[string]bool{"tmux": true, "neovim": true}
+	if len(got) != len(want) {
+		t.Fatalf("EssentialIDs() = %v, want tmux+neovim", got)
+	}
+	for _, id := range got {
+		if !want[id] {
+			t.Errorf("unexpected essential id %q", id)
+		}
+	}
+}

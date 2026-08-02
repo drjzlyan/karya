@@ -31,12 +31,13 @@ func cmdInstall(args []string) int {
 		return fail(err)
 	}
 
-	// Bootstrap karya's own runtime into its isolated prefix: the vendored mise,
-	// the tmux + Neovim core, and the language toolchain managers (node, go, rust,
-	// uv). On a fresh machine this is what makes the single binary self-contained;
-	// on a machine that already has these it is a fast no-op. A failure here is not
-	// fatal — the config is still extracted and any tooling that can install will.
-	if err := tools.EnsureToolchains(a.paths, os.Stdout, os.Stderr); err != nil {
+	// Bootstrap karya's essential core (the vendored mise, plus tmux + Neovim) into
+	// its isolated prefix so the single binary is self-contained. On a machine that
+	// already has these it is a fast no-op. A failure is not fatal here — the config
+	// is still extracted and any tooling that can install will. The language
+	// toolchains (node, go, rust, uv) are no longer pre-installed unconditionally:
+	// they are pulled in as dependencies of the tools that need them below.
+	if err := a.ensureCore(); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
 

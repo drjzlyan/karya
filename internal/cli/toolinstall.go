@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/drjzlyan/karya/internal/toolreg"
 	"github.com/drjzlyan/karya/internal/tools"
@@ -27,4 +28,43 @@ func (a *app) installToolIDs(ids []string) []tools.Result {
 // so newly installed tools resolve by absolute path on the next editor launch.
 func (a *app) refreshToolManifest() {
 	_ = toolreg.WriteManifest(a.paths.ToolsManifest(), a.resolver.Manifest())
+}
+
+// allResolve reports whether every given tool ID resolves in karya's prefix or
+// on PATH. It is the fast-path check the launch flow uses to skip bootstrapping.
+func (a *app) allResolve(ids []string) bool {
+	for _, id := range ids {
+		if _, ok := a.resolver.Resolve(id); !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// ensureCore makes karya's launch-essential tools (tmux, Neovim) available,
+// installing any that are missing into the isolated prefix via the registry
+// dispatcher. It is a fast no-op when they already resolve, so it is cheap to
+// call before every launch. It returns a clear error if an essential tool still
+// cannot be resolved afterwards — karya's core cannot run without it.
+func (a *app) ensureCore() error {
+	ids := a.reg.EssentialIDs()
+	if a.allResolve(ids) {
+		return nil
+	}
+	// Provision the vendored mise first so the mise-backed core tools can install.
+	if _, err := tools.EnsureMise(a.paths, os.Stdout, os.Stderr); err != nil {
+		return err
+	}
+	a.installToolIDs(ids)
+	var missing []string
+	for _, id := range ids {
+		if _, ok := a.resolver.Resolve(id); !ok {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("could not install %s into karya's prefix — run `karya doctor` for details",
+			strings.Join(missing, ", "))
+	}
+	return nil
 }
