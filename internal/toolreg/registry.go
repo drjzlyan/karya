@@ -53,6 +53,19 @@ func (r *Registry) ByCategory(c Category) []Tool {
 	return out
 }
 
+// EssentialIDs returns the IDs of tools karya's core cannot run without (tmux,
+// Neovim), in catalog order. The launch path installs these before starting a
+// session and treats a failure to provide one as a hard error.
+func (r *Registry) EssentialIDs() []string {
+	var out []string
+	for _, t := range r.all {
+		if t.Essential {
+			out = append(out, t.ID)
+		}
+	}
+	return out
+}
+
 // Plan resolves a set of tool IDs into the full, ordered list to install:
 // every requested tool plus its transitive dependencies, with dependencies
 // placed before the tools that need them and each tool appearing once. The order

@@ -60,9 +60,3 @@ func TestFindGHAsset(t *testing.T) {
 		t.Error("findGHAsset(missing) should be false")
 	}
 }
-
-func TestOnPathMissing(t *testing.T) {
-	if onPath("karya-definitely-not-a-real-binary-zzz") {
-		t.Error("onPath reported a nonexistent binary as available")
-	}
-}

@@ -18,7 +18,6 @@ import (
 	"github.com/drjzlyan/karya/internal/project"
 	"github.com/drjzlyan/karya/internal/session"
 	"github.com/drjzlyan/karya/internal/toolreg"
-	"github.com/drjzlyan/karya/internal/tools"
 	"github.com/drjzlyan/karya/internal/version"
 )
 
@@ -157,13 +156,10 @@ func cmdDev(args []string) int {
 
 // ensureRuntime makes sure karya's essential launch dependencies (tmux and
 // Neovim) are present, installing any that are missing into karya's isolated
-// prefix via the vendored mise. It is a no-op on the common path where both
+// prefix via the registry dispatcher. It is a no-op on the common path where both
 // already resolve, so it is cheap to call before every launch.
 func ensureRuntime(a *app) error {
-	if tools.CoreReady() {
-		return nil
-	}
-	return tools.EnsureCore(a.paths, os.Stdout, os.Stderr)
+	return a.ensureCore()
 }
 
 // cmdEdit opens a file in the editor pane (also used as $EDITOR).
