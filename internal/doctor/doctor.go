@@ -10,6 +10,7 @@
 package doctor
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -84,6 +85,12 @@ type Probe struct {
 	// ToolInstalled reports whether a tool (by registry ID) resolves in karya's
 	// prefix or on PATH.
 	ToolInstalled func(id string) bool
+
+	// CheckUpdates enables the (network) managed-tool update check.
+	CheckUpdates bool
+	// Updates returns the managed tools that have an update available. Called only
+	// when CheckUpdates is set; defaulted to a mise-backed VersionManager.
+	Updates func() []toolreg.VersionInfo
 }
 
 func (p Probe) withDefaults() Probe {
@@ -108,6 +115,17 @@ func (p Probe) withDefaults() Probe {
 	if p.ToolInstalled == nil {
 		rv := toolreg.NewResolver(p.Paths, p.Registry)
 		p.ToolInstalled = func(id string) bool { _, ok := rv.Resolve(id); return ok }
+	}
+	if p.Updates == nil {
+		reg := p.Registry
+		p.Updates = func() []toolreg.VersionInfo {
+			vm := toolreg.NewVersionManager(reg, append(os.Environ(), p.Paths.MiseEnv()...))
+			ids := make([]string, 0)
+			for _, t := range reg.All() {
+				ids = append(ids, t.ID)
+			}
+			return vm.Updates(ids)
+		}
 	}
 	return p
 }
@@ -140,8 +158,26 @@ func Run(p Probe) Report {
 	checkCoreTools(&r, p)
 	checkAgents(&r, p)
 	checkLanguages(&r, p)
+	if p.CheckUpdates {
+		checkUpdates(&r, p)
+	}
 
 	return r
+}
+
+// checkUpdates reports managed tools with a newer version available. It runs only
+// with `karya doctor --check-updates` since it queries mise over the network.
+func checkUpdates(r *Report, p Probe) {
+	ups := p.Updates()
+	if len(ups) == 0 {
+		r.add("updates", "managed tools", OK, "all up to date")
+		return
+	}
+	for _, vi := range ups {
+		r.add("updates", vi.ID, Warn, "update available: "+vi.Installed+" → "+vi.Latest)
+	}
+	r.add("updates", "summary", Warn,
+		fmt.Sprintf("%d update(s) available — run `karya tool update all`", len(ups)))
 }
 
 // checkIsolation confirms every karya directory is namespaced under the karya

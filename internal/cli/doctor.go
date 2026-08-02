@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -13,9 +14,14 @@ import (
 
 // cmdDoctor runs karya's health checks and prints a grouped report. It exits
 // non-zero when any check is at Problem level, so scripts and `karya tutorial`
-// can gate on a healthy environment.
+// can gate on a healthy environment. With --check-updates it also queries mise
+// for available tool updates (network).
 func cmdDoctor(args []string) int {
-	_ = args
+	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+	checkUpdates := fs.Bool("check-updates", false, "check managed tools for available updates (network)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
 	p := config.Resolve()
 	// See and run the tools karya installed into its isolated prefix (tmux,
 	// Neovim, mise, …) so the report reflects karya's managed runtime, including
@@ -32,6 +38,7 @@ func cmdDoctor(args []string) int {
 		Paths:        p,
 		Selection:    sel,
 		KaryaVersion: version.String(),
+		CheckUpdates: *checkUpdates,
 	})
 	renderReport(os.Stdout, report)
 

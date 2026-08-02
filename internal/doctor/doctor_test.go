@@ -1,10 +1,12 @@
 package doctor
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/lang"
+	"github.com/drjzlyan/karya/internal/toolreg"
 )
 
 // healthyProbe returns a Probe where every dependency is present, so Run yields
@@ -49,6 +51,42 @@ func TestHealthyReport(t *testing.T) {
 	if c, ok := findCheck(r, "isolation"); !ok || c.Level != OK {
 		t.Errorf("isolation check = %+v, ok=%v; want OK", c, ok)
 	}
+}
+
+func TestCheckUpdatesSurfacesAvailableUpdates(t *testing.T) {
+	p := healthyProbe()
+	p.CheckUpdates = true
+	p.Updates = func() []toolreg.VersionInfo {
+		return []toolreg.VersionInfo{{ID: "ripgrep", Installed: "14.0.0", Latest: "14.1.1", UpdateAvailable: true}}
+	}
+	r := Run(p)
+	c, ok := findCheck(r, "ripgrep")
+	if !ok || c.Level != Warn || !strings.Contains(c.Detail, "14.0.0 → 14.1.1") {
+		t.Errorf("ripgrep update check = %+v, ok=%v; want Warn with version delta", c, ok)
+	}
+	if c, ok := findCheck(r, "summary"); !ok || c.Group != "updates" {
+		t.Errorf("expected an updates summary check; got %+v ok=%v", c, ok)
+	}
+}
+
+func TestCheckUpdatesCleanWhenUpToDate(t *testing.T) {
+	p := healthyProbe()
+	p.CheckUpdates = true
+	p.Updates = func() []toolreg.VersionInfo { return nil }
+	r := Run(p)
+	if c, ok := findCheck(r, "managed tools"); !ok || c.Level != OK {
+		t.Errorf("expected OK 'all up to date'; got %+v ok=%v", c, ok)
+	}
+}
+
+func TestUpdatesSkippedByDefault(t *testing.T) {
+	// Without CheckUpdates, the Updates hook must never run.
+	p := healthyProbe()
+	p.Updates = func() []toolreg.VersionInfo {
+		t.Error("Updates should not be called when CheckUpdates is false")
+		return nil
+	}
+	Run(p)
 }
 
 func TestMissingEssentialToolIsProblem(t *testing.T) {
