@@ -85,10 +85,13 @@ func Build(t *tmuxx.Tmux, o Options) error {
 	_ = t.Run("select-pane", "-t", p1, "-T", "editor")
 	nvimCmd := "NVIM_APPNAME=" + config.NvimAppName + " nvim"
 	if o.NvimInit != "" {
-		// Run an ex-command once nvim starts (e.g. open the in-editor tutorial).
-		// The command names are karya-controlled and contain no spaces, so no
-		// shell quoting is needed here.
-		nvimCmd += " -c " + o.NvimInit
+		// Run the init ex-command (e.g. open the in-editor tutorial), but defer it
+		// until lazy fires VeryLazy — i.e. after the config has fully initialized
+		// (so the command is registered) and plugins have loaded. Firing it eagerly
+		// with a plain `-c` races a first launch that is still bootstrapping plugins
+		// and can hit "E492: Not an editor command". Single-quoted for the shell
+		// since the deferred form has spaces; o.NvimInit is karya-controlled.
+		nvimCmd += " -c 'autocmd User VeryLazy ++once " + o.NvimInit + "'"
 	}
 	_ = t.Run("send-keys", "-t", p1, nvimCmd, "Enter")
 
