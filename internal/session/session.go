@@ -17,6 +17,7 @@ package session
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,7 +68,17 @@ func Build(t *tmuxx.Tmux, o Options) error {
 	p1, p2, p3 := dev+".1", dev+".2", dev+".3"
 
 	// ── Window 1: dev ──────────────────────────────────────────────
-	if err := t.Run("new-session", "-d", "-s", o.Name, "-n", "dev", "-c", o.Workdir); err != nil {
+	// Create the session at the real terminal size (-x/-y) so the layout — and
+	// Neovim / the agent TUI launched into it — render at full size immediately.
+	// Otherwise tmux lays the session out at its default 80x24 and relies on a
+	// post-attach resize that Neovim doesn't always pick up, leaving the panes
+	// filling only the top of the terminal. When stdout isn't a terminal (tests,
+	// pipes) we fall back to tmux's default.
+	newSession := []string{"new-session", "-d", "-s", o.Name, "-n", "dev", "-c", o.Workdir}
+	if cols, rows, ok := terminalSize(); ok {
+		newSession = append(newSession, "-x", strconv.Itoa(cols), "-y", strconv.Itoa(rows))
+	}
+	if err := t.Run(newSession...); err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}
 
