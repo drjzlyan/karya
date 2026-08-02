@@ -18,6 +18,7 @@ import (
 	"github.com/drjzlyan/karya/internal/project"
 	"github.com/drjzlyan/karya/internal/session"
 	"github.com/drjzlyan/karya/internal/toolreg"
+	"github.com/drjzlyan/karya/internal/tools"
 	"github.com/drjzlyan/karya/internal/version"
 )
 
@@ -91,6 +92,8 @@ func cmdDev(args []string) int {
 	fs.BoolVar(kill, "kill", false, "kill an existing session and recreate it")
 	quit := fs.Bool("q", false, "quit (kill) the session cleanly")
 	fs.BoolVar(quit, "quit", false, "quit (kill) the session cleanly")
+	noProvision := fs.Bool("P", false, "do not auto-install the project's pinned runtimes")
+	fs.BoolVar(noProvision, "no-provision", false, "do not auto-install the project's pinned runtimes")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -138,9 +141,14 @@ func cmdDev(args []string) int {
 	}
 	// Per-project isolation: when the workdir pins its own runtime versions,
 	// launch the session with an environment that trusts and layers the project's
-	// mise/.tool-versions over karya's global managed versions.
+	// mise/.tool-versions over karya's global managed versions, and (unless
+	// --no-provision) install those pinned runtimes so they are ready in-session.
 	if pe, ok := toolreg.DetectProject(workdir); ok {
 		a.tmux.Env = a.paths.EnvForProject(a.bin, pe.Root)
+		if !*noProvision {
+			fmt.Println("Provisioning project runtimes (mise)…")
+			tools.ProvisionProject(a.paths, pe.Root, a.tmux.Env, os.Stdout, os.Stderr)
+		}
 	}
 	if err := session.Dev(a.tmux, session.Options{
 		Name:     name,

@@ -30,7 +30,8 @@ var helpByCommand = map[string]commandHelp{
 		details: []string{
 			"Bare `karya` is shorthand for `karya dev` on the current directory.",
 			"Flags: -a <agent> pick the coding agent (`none` for a plain shell),",
-			"       -k kill and recreate the session, -q quit it cleanly.",
+			"       -k kill and recreate the session, -q quit it cleanly,",
+			"       -P skip auto-installing the project's pinned runtimes.",
 		},
 	},
 	"agent": {
