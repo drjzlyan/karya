@@ -251,13 +251,6 @@ func applySelection(a *app, sel *lang.Selection) int {
 	if err := lang.SaveSelection(a.paths.LanguagesFile(), sel); err != nil {
 		return fail(err)
 	}
-	vars := lang.MiseVars{
-		GoPath:    filepath.Join(a.paths.Data, "go"),
-		CargoHome: filepath.Join(a.paths.Data, "cargo"),
-	}
-	if err := lang.WriteMiseConfig(a.paths.MiseConfig(), sel, vars, alwaysOnMiseTools(a.reg)); err != nil {
-		return fail(err)
-	}
 	fmt.Printf("Saved selection to %s\n", a.paths.LanguagesFile())
 
 	// Provision the isolated mise on demand so `karya lang` works on a machine
@@ -266,8 +259,16 @@ func applySelection(a *app, sel *lang.Selection) int {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	}
 
-	env := append(os.Environ(), a.env...)
-	if ran, err := lang.InstallRuntimes(env, os.Stdout, os.Stderr); err != nil {
+	// Regenerate the isolated mise config and install the selected runtimes.
+	rm := lang.RuntimeManager{
+		MiseConfigPath: a.paths.MiseConfig(),
+		GoPath:         filepath.Join(a.paths.Data, "go"),
+		CargoHome:      filepath.Join(a.paths.Data, "cargo"),
+		Env:            append(os.Environ(), a.env...),
+		Out:            os.Stdout,
+		ErrOut:         os.Stderr,
+	}
+	if ran, err := rm.Ensure(sel, alwaysOnMiseTools(a.reg)); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	} else if !ran {
 		fmt.Println("Could not provision mise — runtimes not installed. Re-run `karya lang all` when back online.")
