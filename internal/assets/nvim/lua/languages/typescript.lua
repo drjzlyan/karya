@@ -72,9 +72,9 @@ vim.api.nvim_create_autocmd("FileType", {
   callback = function(args)
     setup_lsp()
     local bufnr = args.buf
-    vim.keymap.set("n", "<leader>lf", function()
-      format_typescript(bufnr)
-    end, { buffer = bufnr, silent = true, desc = "Format (prettier)" })
+    -- Prettier formatting is exposed via the Code group (<leader>cf) below;
+    -- <leader>lf stays the generic "Format with LSP" map from features/lsp.lua,
+    -- avoiding a duplicate that LspAttach would otherwise shadow.
     require("util.langmaps").register(bufnr, {
       lang = "TypeScript",
       format = format_typescript,

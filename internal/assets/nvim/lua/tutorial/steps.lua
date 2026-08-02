@@ -279,7 +279,7 @@ function M.build(ctx)
     },
     {
       title = "The Code group: run the tests",
-      body = { "<leader>cT tests the whole project; <leader>ct runs the nearest test." },
+      body = { "<leader>cT runs the current file's tests; <leader>ct runs the nearest test." },
       action = "Press  " .. L .. "cT",
       keys = L .. "cT",
     },
