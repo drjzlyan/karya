@@ -105,7 +105,10 @@ local java_provider = {
     return java_project.detect(bufnr)
   end,
   build = function(bufnr)
-    return java_project.run("build", bufnr)
+    -- "compile" is the build action in java-project (mvn compile / gradle build);
+    -- there is no "build" command key, so run("build") would warn "Unsupported
+    -- project command".
+    return java_project.run("compile", bufnr)
   end,
   test = function(bufnr)
     return java_project.run("test", bufnr)
