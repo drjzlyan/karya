@@ -125,6 +125,18 @@ func cmdDev(args []string) int {
 		return fail(fmt.Errorf("directory %q does not exist", workdir))
 	}
 
+	// Resume an existing (possibly detached) session for this folder as-is: it
+	// already has its panes and coding agent, so re-resolving the agent or
+	// re-provisioning would be pointless (and re-prompt). Skipped when -k/-a ask to
+	// recreate or override.
+	if !*kill && *agentFlag == "" && a.tmux.HasSession(name) {
+		fmt.Printf("Resuming session %q.\n", name)
+		if err := a.tmux.Attach(name + ":dev"); err != nil {
+			return fail(err)
+		}
+		return 0
+	}
+
 	// Agent resolution: flag → saved per-project preference → single detected →
 	// interactive picker. The chosen agent is saved so it persists next launch.
 	detected := agent.Detect()

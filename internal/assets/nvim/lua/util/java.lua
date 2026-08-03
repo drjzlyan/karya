@@ -113,6 +113,21 @@ function M.resolve_jdk()
   return nil
 end
 
+-- jdtls itself runs on a JVM and requires Java 21+ (independent of the project's
+-- target Java version). Pick the highest installed JDK that is >= 21 for the
+-- language server's own JVM, so a project pinned to Java 8/11/17 doesn't make
+-- jdtls exit (E: "jdtls exited with 2").
+local function server_jdk()
+  local jdks = find_jdks()
+  local best_major, best_path = nil, nil
+  for major, path in pairs(jdks) do
+    if major >= 21 and (best_major == nil or major > best_major) then
+      best_major, best_path = major, path
+    end
+  end
+  return best_path
+end
+
 function M.pick_jdk_for_project(root)
   if not root then
     return M.resolve_jdk()
@@ -155,7 +170,10 @@ function M.jdtls_cmd(root)
   -- Prefer the manifest-resolved jdtls launcher; fall back to PATH (karya's
   -- managed bin is on PATH inside a session).
   local cmd = { karya.tool("jdtls") or "jdtls" }
-  local jdk = M.pick_jdk_for_project(root)
+  -- Run jdtls on a Java 21+ JVM (it requires it); fall back to the project JDK
+  -- only if no 21+ is installed. The project's own Java version is configured
+  -- separately via jdtls runtimes, not by the server's --java-executable.
+  local jdk = server_jdk() or M.pick_jdk_for_project(root)
   if jdk then
     vim.list_extend(cmd, { "--java-executable", jdk .. "/bin/java" })
   end
