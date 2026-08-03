@@ -32,7 +32,7 @@ local function setup_lsp()
 
   local capabilities = lsp_lib.with_blink(vim.lsp.protocol.make_client_capabilities())
 
-  vim.lsp.config("gopls", {
+  lsp_lib.setup_server("gopls", {
     capabilities = capabilities,
     filetypes = { "go", "gomod", "gowork", "gotmpl" },
     root_markers = { "go.mod", "go.work" },
@@ -50,7 +50,6 @@ local function setup_lsp()
       },
     },
   })
-  vim.lsp.enable("gopls")
 end
 
 -- Format with goimports if available, otherwise gofmt (both via LSP).

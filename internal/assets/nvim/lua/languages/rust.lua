@@ -37,7 +37,7 @@ local function setup_lsp()
     serverStatusNotification = true,
   }
 
-  vim.lsp.config("rust_analyzer", {
+  lsp_lib.setup_server("rust_analyzer", {
     capabilities = capabilities,
     filetypes = { "rust" },
     root_markers = { "Cargo.toml" },
@@ -69,7 +69,6 @@ local function setup_lsp()
       },
     },
   })
-  vim.lsp.enable("rust_analyzer")
 end
 
 -- Format with rustfmt (via LSP)
