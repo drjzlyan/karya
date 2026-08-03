@@ -43,7 +43,8 @@ these, then use this page to go deeper.
   bridge, tmux panes/windows, lazygit, and ship. karya detects each keystroke,
   runs the real operation, and advances automatically.
 
-  > **Now try it — type:** `karya tutorial ide`
+  > **Now try it — type:** `karya tutorial ide` (or `karya tutorial ide python`
+  > to choose the language; without one it uses your primary selected language, else Go).
   >
   > Already inside a karya session? Just run `:KaryaTutorial` in the editor (or
   > press `<leader>?`). Stuck on a step? Jump into the tutorial panel with
@@ -618,7 +619,7 @@ A full round-trip: edit in nvim → `<leader>gd` review → `<leader>gc` agent-s
 | Want to… | Do this |
 |---|---|
 | Learn the CLI hands-on | `karya tutorial` (you type it; a sandbox verifies) |
-| Learn the IDE hands-on | `karya tutorial ide` (or `:KaryaTutorial` / `<leader>?`) |
+| Learn the IDE hands-on | `karya tutorial ide [lang]` (or `:KaryaTutorial` / `<leader>?`) |
 | Start / attach the IDE | `karya` (or `karya dev -a claude`) |
 | See all key groups | press `<leader>` and pause |
 | Find a file / grep project | `<leader>ff` / `<leader>s/` |

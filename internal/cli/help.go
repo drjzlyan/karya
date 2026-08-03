@@ -118,13 +118,15 @@ var helpByCommand = map[string]commandHelp{
 		},
 	},
 	"tutorial": {
-		syntax:  "karya tutorial [list|ide|<lesson>]",
+		syntax:  "karya tutorial [list|ide [lang]|<lesson>]",
 		summary: "Hands-on walkthrough: you type each command, a sandbox verifies it.",
 		details: []string{
 			"No argument walks every lesson; a number runs just that one.",
 			"`karya tutorial list` prints the lesson titles.",
 			"`karya tutorial ide` runs the keystroke-driven tutorial inside the IDE",
-			"  (nvim, tmux, lazygit, the agent bridge) for a language you pick.",
+			"  (nvim, tmux, lazygit, the agent bridge).",
+			"`karya tutorial ide <lang>` sets the language (go|python|typescript|",
+			"  java|cpp|rust); otherwise it uses your primary selected language, else Go.",
 		},
 	},
 	"docs": {

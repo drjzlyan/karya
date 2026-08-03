@@ -38,7 +38,7 @@ func completionModel() []compCmd {
 		"docs":       assets.DocTopics(),
 		"help":       append([]string{"topics"}, helpCommandNames()...),
 		"completion": completionShells,
-		"tutorial":   {"list"},
+		"tutorial":   {"list", "ide"},
 	}
 	model := make([]compCmd, 0, len(order))
 	for _, name := range order {

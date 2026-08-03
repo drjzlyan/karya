@@ -7,18 +7,21 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/drjzlyan/karya/internal/agent"
+	"github.com/drjzlyan/karya/internal/lang"
 	"github.com/drjzlyan/karya/internal/project"
 	"github.com/drjzlyan/karya/internal/session"
 	"github.com/drjzlyan/karya/internal/tutorial"
 )
 
-// cmdTutorial implements `karya tutorial [list|ide|<lesson>]` — a hands-on
+// cmdTutorial implements `karya tutorial [list|ide [lang]|<lesson>]` — a hands-on
 // walkthrough. Each lesson asks you to type a karya command yourself, then runs
 // the real behavior against a throwaway sandbox and verifies it. With no argument
 // it walks every lesson in order; a number runs just that one; `list` prints the
-// titles; `ide` launches the keystroke-driven in-editor tutorial.
+// titles; `ide [lang]` launches the keystroke-driven in-editor tutorial (in the
+// given language, else your primary selected language, else Go).
 func cmdTutorial(args []string) int {
 	if len(args) > 0 {
 		switch args[0] {
@@ -112,7 +115,7 @@ func promptForCommand(r *bufio.Reader, out io.Writer, l tutorial.Lesson) {
 // `:KaryaTutorial` in the editor pane so nvim, tmux, lazygit and the agent bridge
 // can all be practiced against real (disposable) code. When tmux is unavailable
 // it prints how to start the tutorial from inside a session instead.
-func cmdTutorialIDE(_ []string) int {
+func cmdTutorialIDE(args []string) int {
 	a, err := newApp()
 	if err != nil {
 		return fail(err)
@@ -154,6 +157,17 @@ func cmdTutorialIDE(_ []string) int {
 		if langs := sel.Langs(); len(langs) > 0 {
 			tutLang = langs[0]
 		}
+	}
+	// An explicit language on the command line wins: `karya tutorial ide <lang>`
+	// (aliases like py/ts/golang are accepted).
+	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
+		l, ok := lang.Find(args[0])
+		if !ok {
+			fmt.Fprintf(os.Stderr, "karya tutorial ide: unknown language %q (supported: %s)\n",
+				args[0], strings.Join(lang.Names(), ", "))
+			return 2
+		}
+		tutLang = l.Name
 	}
 
 	name := "karya-tutorial"
