@@ -268,7 +268,7 @@ func applySelection(a *app, sel *lang.Selection) int {
 		Out:            os.Stdout,
 		ErrOut:         os.Stderr,
 	}
-	if ran, err := rm.Ensure(sel, alwaysOnMiseTools(a.reg)); err != nil {
+	if ran, err := rm.Ensure(sel, miseToolsFor(a.reg, sel)); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
 	} else if !ran {
 		fmt.Println("Could not provision mise — runtimes not installed. Re-run `karya lang all` when back online.")
@@ -293,14 +293,31 @@ func loadSelection(a *app) (*lang.Selection, error) {
 	return lang.LoadSelection(a.paths.LanguagesFile())
 }
 
-// alwaysOnMiseTools maps karya's mise-backed always-on servers into the form the
-// mise config generator declares, so their shims resolve regardless of the
-// language selection.
-func alwaysOnMiseTools(reg *toolreg.Registry) []lang.MiseTool {
+// miseToolsFor returns every mise-provisioned tool to declare in karya's
+// generated config: the managed baseline (core CLI, documentation, always-on
+// servers, plus the tmux/Neovim/uv infra) always, and each selected language's
+// mise tools. Declaring them — not merely installing them — is what gives their
+// shims a resolvable version: a `mise install` without a config entry produces a
+// shim that errors with "No version is set". Runtimes are excluded here; they are
+// declared from the language selection's [tools].
+func miseToolsFor(reg *toolreg.Registry, sel *lang.Selection) []lang.MiseTool {
 	var out []lang.MiseTool
-	for _, id := range toolreg.AlwaysOnIDs() {
-		if t, ok := reg.Get(id); ok && t.Method == toolreg.MethodMise {
-			out = append(out, lang.MiseTool{Key: t.Pkg, Version: t.Version})
+	seen := map[string]bool{}
+	add := func(t toolreg.Tool) {
+		if t.Method != toolreg.MethodMise || t.Category == toolreg.Runtime || t.Pkg == "" || seen[t.Pkg] {
+			return
+		}
+		seen[t.Pkg] = true
+		out = append(out, lang.MiseTool{Key: t.Pkg, Version: t.Version})
+	}
+	for _, t := range reg.All() {
+		switch t.Location.Kind {
+		case toolreg.LocCore, toolreg.LocDocs:
+			add(t)
+		case toolreg.LocLang:
+			if sel != nil && sel.Has(t.Location.Lang) {
+				add(t)
+			}
 		}
 	}
 	return out

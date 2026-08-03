@@ -1,22 +1,27 @@
 local M = {}
 
+local karya = require("util.karya")
+
+-- Find the java-debug / java-test adapter jars in karya's isolated tool prefix
+-- (installed there from the VS Code extensions). No Homebrew/system paths — karya
+-- never assumes a global install (PLAN.md §2).
 local function find_bundles()
   local bundles = {}
-  local home = vim.fn.expand("~")
-  local candidates = {
-    home .. "/.local/share/ide-tools/java-debug/extensions/debug/*.jar",
-    home .. "/.local/share/ide-tools/java-debug/server/*.jar",
-    home .. "/.local/share/ide-tools/java-test/extensions/*.jar",
-    home .. "/.local/share/ide-tools/java-test/server/*.jar",
-    "/opt/homebrew/opt/java-debug-adapter/libexec/extensions/debug/*.jar",
-    "/opt/homebrew/opt/java-test/libexec/extensions/*.jar",
-    "/usr/local/opt/java-debug-adapter/libexec/extensions/debug/*.jar",
-    "/usr/local/opt/java-test/libexec/extensions/*.jar",
-  }
+  local tools = karya.data_dir() .. "/tools"
+  local roots = { karya.tool("java-debug"), karya.tool("java-test"), tools .. "/java-debug", tools .. "/java-test" }
+  local subpatterns = { "/extension/server/*.jar", "/extension/*.jar", "/server/*.jar", "/extensions/debug/*.jar" }
 
-  for _, pattern in ipairs(candidates) do
-    for _, jar in ipairs(vim.fn.glob(pattern, false, true)) do
-      table.insert(bundles, jar)
+  local seen = {}
+  for _, root in ipairs(roots) do
+    if root then
+      for _, sub in ipairs(subpatterns) do
+        for _, jar in ipairs(vim.fn.glob(root .. sub, false, true)) do
+          if not seen[jar] then
+            seen[jar] = true
+            table.insert(bundles, jar)
+          end
+        end
+      end
     end
   end
 

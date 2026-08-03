@@ -141,24 +141,44 @@ var registry = []Tool{
 	},
 
 	// ── C/C++ (was perLanguage["cpp"]) ─────────────────────────────────────────
+	// clangd ships with LLVM, which karya cannot install into its isolated prefix,
+	// so it stays detect-only; the build tools and formatter come from mise.
 	{
 		ID: "clangd", Name: "clangd", Category: LanguageServer, Method: MethodDetect,
 		Executable: "clangd", Update: UpdateManual, Location: Lang("cpp"),
-		Hint: "install LLVM/clang (brew install llvm, or your distro's clang package)",
+		Dependencies: []string{"codelldb"},
+		Hint:         "install LLVM/clang (brew install llvm, or your distro's clang package)",
+	},
+	{ID: "cmake", Name: "CMake", Category: BuildTool, Method: MethodMise, Executable: "cmake", Pkg: "cmake", Update: UpdateMise, Location: Lang("cpp")},
+	{ID: "ninja", Name: "Ninja", Category: BuildTool, Method: MethodMise, Executable: "ninja", Pkg: "ninja", Update: UpdateMise, Location: Lang("cpp")},
+	{ID: "clang-format", Name: "clang-format", Category: Formatter, Method: MethodMise, Executable: "clang-format", Pkg: "clang-format", Update: UpdateMise, Location: Lang("cpp")},
+	{
+		// Shared C/C++ + Rust debug adapter; pulled in as a dependency of clangd and
+		// rust-analyzer, installed into the shared prefix.
+		ID: "codelldb", Name: "codelldb (LLDB debug adapter)", Category: Debugger, Method: MethodVSIX,
+		Artifact: "codelldb", Version: "1.11.5", Update: UpdatePinned, Location: Core(),
+		Pkg:    "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/vadimcn/vsextensions/vscode-lldb/{version}/vspackage",
+		Health: HealthCheck{Probe: "codelldb"},
 	},
 
 	// ── Rust (was perLanguage["rust"]) ─────────────────────────────────────────
+	// rust-analyzer installs standalone via mise (no rustup needed). rustfmt and
+	// clippy ship with the mise-provisioned Rust toolchain, so they are detected
+	// after the runtime and only fall back to `rustup component add` if absent.
 	{
-		ID: "rust-analyzer", Name: "rust-analyzer", Category: LanguageServer, Method: MethodRustup,
-		Executable: "rust-analyzer", Pkg: "rust-analyzer", Update: UpdateManual, Location: Lang("rust"),
+		ID: "rust-analyzer", Name: "rust-analyzer", Category: LanguageServer, Method: MethodMise,
+		Executable: "rust-analyzer", Pkg: "rust-analyzer", Update: UpdateMise, Location: Lang("rust"),
+		Dependencies: []string{"codelldb"},
 	},
 	{
 		ID: "rustfmt", Name: "rustfmt", Category: Formatter, Method: MethodRustup,
 		Executable: "rustfmt", Pkg: "rustfmt", Update: UpdateManual, Location: Lang("rust"),
+		Dependencies: []string{"rust-runtime"},
 	},
 	{
 		ID: "clippy", Name: "clippy", Category: Linter, Method: MethodRustup,
 		Executable: "cargo-clippy", Pkg: "clippy", Update: UpdateManual, Location: Lang("rust"),
+		Dependencies: []string{"rust-runtime"},
 	},
 
 	// ── Java (was perLanguage["java"]) ─────────────────────────────────────────
@@ -184,6 +204,9 @@ var registry = []Tool{
 		Pkg:          "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/vscjava/vsextensions/vscode-java-test/{version}/vspackage",
 		Dependencies: []string{"java-runtime"}, Health: HealthCheck{Probe: "java-test"},
 	},
+	{ID: "google-java-format", Name: "google-java-format", Category: Formatter, Method: MethodMise, Executable: "google-java-format", Pkg: "google-java-format", Update: UpdateMise, Location: Lang("java")},
+	{ID: "maven", Name: "Maven", Category: BuildTool, Method: MethodMise, Executable: "mvn", Pkg: "maven", Update: UpdateMise, Location: Lang("java")},
+	{ID: "gradle", Name: "Gradle", Category: BuildTool, Method: MethodMise, Executable: "gradle", Pkg: "gradle", Update: UpdateMise, Location: Lang("java")},
 
 	// ── Core CLI utilities ─────────────────────────────────────────────────────
 	// General-purpose tools the IDE (and the user) rely on, provisioned through

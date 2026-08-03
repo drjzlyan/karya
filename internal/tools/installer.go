@@ -126,6 +126,14 @@ func NewDispatcher() *Dispatcher {
 func NewLayoutDispatcher(p config.Paths) *Dispatcher {
 	d := NewDispatcher()
 	d.layout = func(t toolreg.Tool) (string, string) {
+		// Download-based artifacts (jdtls, lombok, VSIX adapters) live in the
+		// shared tool prefix — that is where the resolver's artifact lookup and the
+		// editor (util.java, DAP config) expect them; a category subdir would hide
+		// them. Their jdtls-style wrappers still land on the shared bin (on PATH).
+		switch t.Method {
+		case toolreg.MethodJDTLS, toolreg.MethodLombok, toolreg.MethodVSIX:
+			return p.ToolsDir(), p.ToolsBin()
+		}
 		name := categoryName(t.Location)
 		if name == "" {
 			return p.ToolsDir(), p.ToolsBin()

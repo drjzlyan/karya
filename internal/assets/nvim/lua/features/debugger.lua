@@ -109,52 +109,36 @@ return {
         dapui.close()
       end
 
-      local function setup_adapters()
-        local ft = vim.bo.filetype
-        local ok, adapter
-        if ft == "python" then
-          ok, adapter = pcall(require, "languages.lib.python-debug")
-        elseif ft == "java" then
-          ok, adapter = pcall(require, "languages.lib.java-debug")
-        elseif ft == "go" then
-          ok, adapter = pcall(require, "languages.lib.go-debug")
+      -- Per-language DAP adapters. codelldb (C/C++/Rust) is a shared adapter
+      -- installed into karya's isolated prefix.
+      local adapter_modules = {
+        python = "languages.lib.python-debug",
+        java = "languages.lib.java-debug",
+        go = "languages.lib.go-debug",
+        cpp = "languages.lib.codelldb",
+        c = "languages.lib.codelldb",
+        rust = "languages.lib.codelldb",
+      }
+
+      local function setup_adapter_for(ft)
+        local mod = adapter_modules[ft]
+        if not mod then
+          return
         end
+        local ok, adapter = pcall(require, mod)
         if ok and adapter and adapter.setup then
           adapter.setup()
         end
       end
 
-      setup_adapters()
+      setup_adapter_for(vim.bo.filetype)
 
       local augroup = vim.api.nvim_create_augroup("DapLanguageAdapters", { clear = true })
       vim.api.nvim_create_autocmd("FileType", {
         group = augroup,
-        pattern = "python",
-        callback = function()
-          local ok, adapter = pcall(require, "languages.lib.python-debug")
-          if ok and adapter and adapter.setup then
-            adapter.setup()
-          end
-        end,
-      })
-      vim.api.nvim_create_autocmd("FileType", {
-        group = augroup,
-        pattern = "java",
-        callback = function()
-          local ok, adapter = pcall(require, "languages.lib.java-debug")
-          if ok and adapter and adapter.setup then
-            adapter.setup()
-          end
-        end,
-      })
-      vim.api.nvim_create_autocmd("FileType", {
-        group = augroup,
-        pattern = "go",
-        callback = function()
-          local ok, adapter = pcall(require, "languages.lib.go-debug")
-          if ok and adapter and adapter.setup then
-            adapter.setup()
-          end
+        pattern = vim.tbl_keys(adapter_modules),
+        callback = function(args)
+          setup_adapter_for(args.match)
         end,
       })
     end,
