@@ -141,6 +141,17 @@ func cmdTutorialIDE(_ []string) int {
 		return fail(err)
 	}
 
+	// Pick the tutorial language up front (the user's primary selected language,
+	// else Go) and pass it to :KaryaTutorial, so the in-editor tutorial starts
+	// directly instead of falling back to Neovim's default vim.ui.select picker,
+	// which renders as a messy command-line prompt during startup.
+	tutLang := "go"
+	if sel, err := loadSelection(a); err == nil && !sel.Empty() {
+		if langs := sel.Langs(); len(langs) > 0 {
+			tutLang = langs[0]
+		}
+	}
+
 	name := "karya-tutorial"
 	detected := agent.Detect()
 	if err := session.Dev(a.tmux, session.Options{
@@ -149,7 +160,7 @@ func cmdTutorialIDE(_ []string) int {
 		Agent:    agent.Resolve("", detected),
 		Detected: detected,
 		Kill:     true,
-		NvimInit: "KaryaTutorial",
+		NvimInit: "KaryaTutorial " + tutLang,
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "karya tutorial ide: could not launch a session.")
 		fmt.Fprintln(os.Stderr, "Start karya in any project, then run :KaryaTutorial inside the editor.")

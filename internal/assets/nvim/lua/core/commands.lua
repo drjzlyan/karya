@@ -274,9 +274,11 @@ function M.setup()
   -- In-editor, keystroke-driven tutorial. Required lazily so it costs nothing at
   -- startup; the engine drives the whole developer loop (nvim, tmux, lazygit, the
   -- agent bridge) against a throwaway sample project.
-  vim.api.nvim_create_user_command("KaryaTutorial", function()
-    require("tutorial.engine").start()
-  end, { desc = "Start the interactive karya IDE tutorial" })
+  vim.api.nvim_create_user_command("KaryaTutorial", function(o)
+    -- An optional language arg (e.g. from `karya tutorial ide`) starts the
+    -- tutorial directly; with no arg the engine prompts for one.
+    require("tutorial.engine").start(o.args ~= "" and o.args or nil)
+  end, { desc = "Start the interactive karya IDE tutorial", nargs = "?" })
   vim.api.nvim_create_user_command("KaryaTutorialQuit", function()
     require("tutorial.engine").quit()
   end, { desc = "Stop the karya IDE tutorial" })
