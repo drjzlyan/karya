@@ -522,7 +522,7 @@ Usage:
   karya shellenv            Print opt-in shell integration (eval this)
   karya completion <shell>  Print a bash/zsh/fish completion script
   karya version             Print version / build info
-  karya tutorial [n|ide]    Hands-on walkthrough: you type it, a sandbox verifies (ide = in-editor)
+  karya tutorial [n|ide [lang]]  Hands-on walkthrough (ide = in-editor; lang picks the sample)
   karya docs [topic]        Read the embedded docs offline (no topic lists them)
   karya keys                Show the full CLI / tmux / Neovim key reference
   karya help [command]      Show this help, or detailed help for one command
