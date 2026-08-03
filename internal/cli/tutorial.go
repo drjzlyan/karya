@@ -142,9 +142,13 @@ func cmdTutorialIDE(_ []string) int {
 	}
 
 	// Pick the tutorial language up front (the user's primary selected language,
-	// else Go) and pass it to :KaryaTutorial, so the in-editor tutorial starts
-	// directly instead of falling back to Neovim's default vim.ui.select picker,
-	// which renders as a messy command-line prompt during startup.
+	// else Go) so the in-editor tutorial starts directly instead of falling back
+	// to Neovim's default vim.ui.select picker, which renders as a messy
+	// command-line prompt during startup. Invoke the engine's Lua function
+	// directly rather than the :KaryaTutorial command: passing the language as a
+	// command argument (`:KaryaTutorial python`) hard-errors with E488 against an
+	// older extracted config whose command takes no args, whereas a stale Lua
+	// function simply ignores the extra argument and falls back to the picker.
 	tutLang := "go"
 	if sel, err := loadSelection(a); err == nil && !sel.Empty() {
 		if langs := sel.Langs(); len(langs) > 0 {
@@ -160,7 +164,7 @@ func cmdTutorialIDE(_ []string) int {
 		Agent:    agent.Resolve("", detected),
 		Detected: detected,
 		Kill:     true,
-		NvimInit: "KaryaTutorial " + tutLang,
+		NvimInit: fmt.Sprintf(`lua require("tutorial.engine").start(%q)`, tutLang),
 	}); err != nil {
 		fmt.Fprintln(os.Stderr, "karya tutorial ide: could not launch a session.")
 		fmt.Fprintln(os.Stderr, "Start karya in any project, then run :KaryaTutorial inside the editor.")
