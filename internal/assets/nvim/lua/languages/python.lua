@@ -1,7 +1,9 @@
 local M = {}
 
 -- Keep Python-specific configuration isolated in this file.
--- Generic LSP wiring (diagnostics, keymaps, handlers) lives in lua/features/lsp.lua.
+-- Diagnostics config and the common language servers live in lua/features/lsp.lua;
+-- the generic LSP keymaps (gd, <leader>l*, …) are bound on LspAttach in
+-- lua/core/autocmds.lua.
 
 -- ============================================================================
 -- Project / virtual environment helpers
@@ -401,11 +403,7 @@ end
 -- ============================================================================
 
 local function setup_lsp()
-  -- Ensure nvim-lspconfig server definitions are registered before
-  -- vim.lsp.config is used; requiring the plugin directly does not trigger the
-  -- deprecated setup framework.
-  local lspconfig = require("lspconfig")
-  _ = lspconfig
+  local lsp_lib = require("util.lsp")
 
   local has_basedpyright = vim.fn.executable("basedpyright") == 1
   local has_ruff = vim.fn.executable("ruff") == 1
@@ -414,13 +412,13 @@ local function setup_lsp()
     return
   end
 
-  local capabilities = require("util.lsp").with_blink(vim.lsp.protocol.make_client_capabilities())
+  local capabilities = lsp_lib.with_blink(vim.lsp.protocol.make_client_capabilities())
 
   -- basedpyright: type checking, navigation, hover, workspace symbols, etc.
   -- The virtual-env python path is set per-client after attach so each project
   -- uses its own environment.
   if has_basedpyright then
-    vim.lsp.config("basedpyright", {
+    lsp_lib.setup_server("basedpyright", {
       capabilities = capabilities,
       filetypes = { "python" },
       settings = {
@@ -443,13 +441,12 @@ local function setup_lsp()
         end
       end,
     })
-    vim.lsp.enable("basedpyright")
   end
 
   -- Ruff: linting, formatting, organize imports, code actions.
   -- Ruff is preferred over basedpyright whenever there is overlap.
   if has_ruff then
-    vim.lsp.config("ruff", {
+    lsp_lib.setup_server("ruff", {
       capabilities = capabilities,
       filetypes = { "python" },
       init_options = {
@@ -461,7 +458,6 @@ local function setup_lsp()
         },
       },
     })
-    vim.lsp.enable("ruff")
   end
 end
 

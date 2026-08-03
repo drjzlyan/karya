@@ -25,7 +25,7 @@ local function setup_lsp()
 
   local capabilities = lsp_lib.with_blink(vim.lsp.protocol.make_client_capabilities())
 
-  vim.lsp.config("ts_ls", {
+  lsp_lib.setup_server("ts_ls", {
     capabilities = capabilities,
     filetypes = { "typescript", "typescriptreact", "javascript", "javascriptreact" },
     root_markers = { "tsconfig.json", "package.json", ".git" },
@@ -37,7 +37,6 @@ local function setup_lsp()
       },
     },
   })
-  vim.lsp.enable("ts_ls")
 end
 
 -- Format with prettier if available, otherwise fall back to LSP formatting.
@@ -73,8 +72,8 @@ vim.api.nvim_create_autocmd("FileType", {
     setup_lsp()
     local bufnr = args.buf
     -- Prettier formatting is exposed via the Code group (<leader>cf) below;
-    -- <leader>lf stays the generic "Format with LSP" map from features/lsp.lua,
-    -- avoiding a duplicate that LspAttach would otherwise shadow.
+    -- <leader>lf stays the generic "Format with LSP" LspAttach map, avoiding a
+    -- duplicate that a buffer-local override would otherwise shadow.
     require("util.langmaps").register(bufnr, {
       lang = "TypeScript",
       format = format_typescript,

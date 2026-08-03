@@ -37,7 +37,7 @@ local function setup_lsp()
   local capabilities = lsp_lib.with_blink(vim.lsp.protocol.make_client_capabilities())
   capabilities.offsetEncoding = { "utf-16", "utf-8" }
 
-  vim.lsp.config("clangd", {
+  lsp_lib.setup_server("clangd", {
     capabilities = capabilities,
     filetypes = { "c", "cpp", "objc", "objcpp", "cuda" },
     root_markers = { "compile_commands.json", "CMakeLists.txt", ".clangd", ".git" },
@@ -56,7 +56,6 @@ local function setup_lsp()
       clangdFileStatus = true,
     },
   })
-  vim.lsp.enable("clangd")
 end
 
 -- Format with clang-format if available

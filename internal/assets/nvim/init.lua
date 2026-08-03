@@ -1,5 +1,6 @@
 require("core.options")
 require("core.keymaps")
+require("core.leader_fallback").setup()
 require("core.autocmds")
 require("core.commands").setup()
 require("util.tasks").setup()
