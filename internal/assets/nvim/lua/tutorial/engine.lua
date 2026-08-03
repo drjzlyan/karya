@@ -292,17 +292,35 @@ local function begin(lang)
   activate(1)
 end
 
-function M.start()
+-- start begins the tutorial. When lang is a supported language (e.g. passed by
+-- `karya tutorial ide`) it starts directly; otherwise it prompts. Both paths are
+-- scheduled onto the main loop so they run after startup's redraw settles — the
+-- default vim.ui.select is a command-line prompt that renders badly if driven
+-- mid-startup.
+function M.start(lang)
   if state then
     vim.notify("karya tutorial is already running (:KaryaTutorialQuit to stop).", vim.log.levels.WARN)
     return
   end
   local langs = steps_mod.languages()
-  vim.ui.select(langs, { prompt = "Pick a language for the karya tutorial:" }, function(choice)
-    if not choice then
-      return
+
+  if lang and lang ~= "" then
+    for _, l in ipairs(langs) do
+      if l == lang then
+        vim.schedule(function()
+          begin(lang)
+        end)
+        return
+      end
     end
-    begin(choice)
+  end
+
+  vim.schedule(function()
+    vim.ui.select(langs, { prompt = "Pick a language for the karya tutorial:" }, function(choice)
+      if choice then
+        begin(choice)
+      end
+    end)
   end)
 end
 
