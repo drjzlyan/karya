@@ -53,6 +53,22 @@ func TestLayoutDispatcherRoutesByCategory(t *testing.T) {
 	}
 }
 
+func TestLayoutDispatcherArtifactsUseSharedPrefix(t *testing.T) {
+	// Download-based artifacts (jdtls/lombok/vsix) must land in the shared tool
+	// prefix regardless of their Location, since that is where the resolver and
+	// editor look for them.
+	p := config.Paths{Data: t.TempDir()}
+	for _, method := range []toolreg.InstallMethod{toolreg.MethodVSIX, toolreg.MethodJDTLS, toolreg.MethodLombok} {
+		var toolsDir, binDir string
+		d := NewLayoutDispatcher(p)
+		d.methods[method] = recordDirsMethod{gotToolsDir: &toolsDir, gotBinDir: &binDir}
+		d.Install([]toolreg.Tool{{ID: "x", Name: "x", Method: method, Location: toolreg.Lang("java")}}, Context{})
+		if toolsDir != p.ToolsDir() || binDir != p.ToolsBin() {
+			t.Errorf("%s artifact should install to the shared prefix; got %q / %q", method, toolsDir, binDir)
+		}
+	}
+}
+
 func TestLegacyDispatcherIgnoresLayout(t *testing.T) {
 	var toolsDir string
 	d := NewDispatcher()
