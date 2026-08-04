@@ -144,7 +144,8 @@ var coreTools = []coreTool{
 	{"Neovim", "nvim", true, "run `karya install` to set up karya's isolated runtime"},
 	{"git", "git", false, "install git for version control"},
 	{"mise", "mise", false, "run `karya install` to provision karya's isolated mise"},
-	{"lazygit", "lazygit", false, "install lazygit for the in-session git UI (Ctrl-a g)"},
+	{"lazygit", "lazygit", false, "run `karya install` (managed) — powers the in-session git UI (Ctrl-a g)"},
+	{"starship", "starship", false, "run `karya install` (managed) — renders the pane prompt"},
 }
 
 // Run gathers every check into a Report.

@@ -29,9 +29,15 @@ cmd="$1"; shift || true
 case "$cmd" in
   install)
     spec="$1"; pkg="${spec%@*}"
-    case "$pkg" in
-      neovim) exe=nvim ;;
-      *)      exe="$pkg" ;;
+    # Derive the executable name the way real mise does — from the tool's binary,
+    # not the package string. Strip any backend/owner path (aqua:tmux/tmux-builds
+    # → tmux-builds) and backend prefix (ripgrep stays ripgrep), then special-case
+    # the few whose binary differs from the package basename.
+    exe="${pkg##*/}"; exe="${exe##*:}"
+    case "$exe" in
+      neovim)      exe=nvim ;;
+      tmux-builds) exe=tmux ;;
+      ripgrep)     exe=rg ;;
     esac
     mkdir -p "$MISE_DATA_DIR/shims"
     printf '#!/usr/bin/env bash\necho "%s 1.7"\n' "$exe" > "$MISE_DATA_DIR/shims/$exe"

@@ -45,6 +45,11 @@ func newApp() (*app, error) {
 	if err := assets.ExtractTmuxConf(p.TmuxConf(), bin); err != nil {
 		return nil, err
 	}
+	// Extract karya's shell startup files so the pane shell (`karya shell`) can
+	// layer the starship prompt over the user's own rc without touching it.
+	if err := assets.ExtractShellInit(p.ShellInitDir()); err != nil {
+		return nil, err
+	}
 	// Extract the embedded Neovim config when it is missing or the binary shipped
 	// a newer version. Cheap (a content hash + manifest compare) on the common
 	// path where nothing changed; plugins bootstrap lazily on first editor launch.

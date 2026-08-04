@@ -63,7 +63,10 @@ func GenerateMiseConfig(s *Selection, vars MiseVars, always []MiseTool) string {
 		if ver == "" {
 			ver = "latest"
 		}
-		fmt.Fprintf(&b, "%s = %q\n", t.Key, ver)
+		// Quote the key: backend-qualified tool keys (e.g. "aqua:neovim/neovim")
+		// contain ':' and '/', which are invalid in a bare TOML key. Quoting is also
+		// valid for plain keys, so quote unconditionally.
+		fmt.Fprintf(&b, "%q = %q\n", t.Key, ver)
 	}
 
 	hasJava, hasGo, hasRust := false, false, false

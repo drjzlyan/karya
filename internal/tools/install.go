@@ -61,3 +61,21 @@ func Summarize(results []Result) string {
 	}
 	return strings.Join(parts, ", ")
 }
+
+// Failures returns one "  tool: error" line per failed result, so the CLI can
+// show WHICH tools failed and why instead of only a count. Empty when nothing
+// failed. Callers print these under the Summarize line so a broken install is
+// visible rather than swallowed.
+func Failures(results []Result) []string {
+	var out []string
+	for _, r := range results {
+		if r.Status == Failed {
+			msg := "installation failed"
+			if r.Err != nil {
+				msg = r.Err.Error()
+			}
+			out = append(out, fmt.Sprintf("  %s: %s", r.Tool, msg))
+		}
+	}
+	return out
+}

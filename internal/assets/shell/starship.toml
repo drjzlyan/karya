@@ -1,0 +1,28 @@
+# karya's starship prompt config (pinned via STARSHIP_CONFIG inside karya panes).
+# Deliberately minimal and fast: directory, git branch/status, and a short set of
+# language versions, on a single line. Edit `karya update` re-extracts this file.
+
+add_newline = false
+command_timeout = 1000
+
+format = "$directory$git_branch$git_status$character"
+right_format = "$cmd_duration$python$nodejs$golang$rust$java"
+
+[directory]
+truncation_length = 3
+truncate_to_repo = true
+
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+
+[git_branch]
+symbol = " "
+format = "[$symbol$branch]($style) "
+
+[git_status]
+style = "yellow"
+
+[cmd_duration]
+min_time = 2000
+format = "[$duration]($style) "

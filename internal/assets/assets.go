@@ -5,7 +5,7 @@
 package assets
 
 import (
-	_ "embed"
+	"embed"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +13,19 @@ import (
 
 //go:embed tmux.conf
 var tmuxConf string
+
+//go:embed shell/zshrc shell/bashrc shell/starship.toml
+var shellFS embed.FS
+
+// shellInitFiles maps an embedded shell asset to its extracted filename. zshrc
+// lands as ".zshrc" so a ZDOTDIR pointing at the dir loads it; bashrc keeps its
+// name (referenced explicitly via --rcfile); starship.toml is the pinned prompt
+// config.
+var shellInitFiles = map[string]string{
+	"shell/zshrc":         ".zshrc",
+	"shell/bashrc":        "bashrc",
+	"shell/starship.toml": "starship.toml",
+}
 
 // ExtractTmuxConf writes the embedded tmux config to confPath, substituting the
 // placeholders so keybindings invoke the real karya binary and reload points at
@@ -26,4 +39,25 @@ func ExtractTmuxConf(confPath, karyaBin string) error {
 		"__KARYA_CONF__", confPath,
 	).Replace(tmuxConf)
 	return os.WriteFile(confPath, []byte(content), 0o644)
+}
+
+// ExtractShellInit writes karya's shell startup files (zsh .zshrc, bash rcfile,
+// starship.toml) into dir. The pane shell (`karya shell`) points ZDOTDIR/--rcfile
+// here so it can source the user's real rc and then layer karya's starship prompt
+// — all inside karya-owned files, so the user's own rc is never touched. It always
+// rewrites the files so `karya update` refreshes them; idempotent and cheap.
+func ExtractShellInit(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	for src, name := range shellInitFiles {
+		data, err := shellFS.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
+			return err
+		}
+	}
+	return nil
 }

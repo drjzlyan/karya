@@ -19,6 +19,20 @@ import (
 	"github.com/drjzlyan/karya/internal/tmuxx"
 )
 
+// karyaStub writes a stand-in for the karya binary that tmux's default-command
+// (`karya shell`) can exec: given "shell" it execs a real shell so panes stay
+// alive, as production does; any other subcommand is a no-op success (matching the
+// old /bin/true placeholder used for the run-shell key bindings).
+func karyaStub(t *testing.T) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "karya")
+	script := "#!/bin/sh\n[ \"$1\" = shell ] && exec \"${SHELL:-/bin/sh}\"\nexit 0\n"
+	if err := os.WriteFile(p, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
 // newTestTmux returns a Tmux bound to a unique, disposable server socket AND
 // karya's own extracted tmux config (`-f`). Using karya's config is what makes
 // the test both faithful to production (1-based window/pane indexes, which
@@ -31,7 +45,7 @@ func newTestTmux(t *testing.T) *tmuxx.Tmux {
 		t.Skip("tmux not installed")
 	}
 	conf := filepath.Join(t.TempDir(), "tmux.conf")
-	if err := assets.ExtractTmuxConf(conf, "/bin/true"); err != nil {
+	if err := assets.ExtractTmuxConf(conf, karyaStub(t)); err != nil {
 		t.Fatalf("extract tmux.conf: %v", err)
 	}
 	socket := fmt.Sprintf("karya-itest-%d", time.Now().UnixNano())

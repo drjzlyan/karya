@@ -8,8 +8,9 @@ func TestCoreAndDocToolsPresent(t *testing.T) {
 	r := New()
 	// Core CLI utilities, provisioned via mise (git is the detect exception).
 	for _, id := range []string{
-		"jq", "yq", "fd", "ripgrep", "fzf", "bat", "eza", "delta", "tree",
-		"zoxide", "just", "watchexec", "hyperfine", "shellcheck", "shfmt", "gh",
+		"jq", "yq", "fd", "ripgrep", "fzf", "lazygit", "starship", "bat", "eza",
+		"delta", "tree", "zoxide", "just", "watchexec", "hyperfine", "shellcheck",
+		"shfmt", "gh",
 	} {
 		tool, ok := r.Get(id)
 		if !ok {

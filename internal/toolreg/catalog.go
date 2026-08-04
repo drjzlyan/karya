@@ -20,9 +20,14 @@ package toolreg
 var registry = []Tool{
 	// ── Core infra (was tools/bootstrap.go coreTools) ──────────────────────────
 	{
+		// Pinned to the aqua tmux-builds backend, which ships a static prebuilt
+		// binary. mise's bare "tmux" can fall through to a source build (needs
+		// libevent/ncurses/autoconf), which fails on a clean machine — the reason
+		// tmux went missing on fresh installs. VersionArgs is "-V": tmux has no
+		// --version flag and errors on it, so the default probe reported no version.
 		ID: "tmux", Name: "tmux", Category: CLIUtility, Method: MethodMise,
-		Executable: "tmux", Pkg: "tmux", Update: UpdateMise, Location: Core(),
-		Essential: true,
+		Executable: "tmux", Pkg: "aqua:tmux/tmux-builds", Update: UpdateMise, Location: Core(),
+		Health: HealthCheck{VersionArgs: []string{"-V"}}, Essential: true,
 	},
 	{
 		// Pinned to a stable release rather than mise's floating "latest": Neovim
@@ -31,8 +36,12 @@ var registry = []Tool{
 		// highlighter with "attempt to call method 'range' (a nil value)". 0.11.7 is
 		// the latest 0.11 stable and runs that config cleanly. Bump deliberately,
 		// in lockstep with the nvim-treesitter pin in the embedded config.
+		// Pkg pins the aqua backend explicitly: mise's bare "neovim" defaults to a
+		// vfox plugin backend (not a prebuilt binary), which is why Neovim failed to
+		// install on fresh machines. aqua:neovim/neovim ships the official release
+		// archives (nvim-<os>-<arch>.tar.gz) and carries 0.11.7.
 		ID: "neovim", Name: "Neovim", Category: CLIUtility, Method: MethodMise,
-		Executable: "nvim", Pkg: "neovim", Version: "0.11.7", Update: UpdatePinned, Location: Core(),
+		Executable: "nvim", Pkg: "aqua:neovim/neovim", Version: "0.11.7", Update: UpdatePinned, Location: Core(),
 		Essential: true,
 	},
 	{
@@ -229,7 +238,13 @@ var registry = []Tool{
 	{ID: "yq", Name: "yq", Category: CLIUtility, Method: MethodMise, Executable: "yq", Pkg: "yq", Update: UpdateMise, Location: Core()},
 	{ID: "fd", Name: "fd", Category: CLIUtility, Method: MethodMise, Executable: "fd", Pkg: "fd", Update: UpdateMise, Location: Core()},
 	{ID: "ripgrep", Name: "ripgrep", Category: CLIUtility, Method: MethodMise, Executable: "rg", Pkg: "ripgrep", Update: UpdateMise, Location: Core()},
-	{ID: "fzf", Name: "fzf", Category: CLIUtility, Method: MethodMise, Executable: "fzf", Pkg: "fzf", Update: UpdateMise, Location: Core()},
+	// fzf/lazygit/starship pin explicit aqua backends so they always resolve to a
+	// prebuilt binary. lazygit powers the in-session git window (tmux Ctrl-a g);
+	// starship renders the pane prompt (wired via `karya shell`). Both are detected
+	// first, so a user's existing copy is used and not duplicated.
+	{ID: "fzf", Name: "fzf", Category: CLIUtility, Method: MethodMise, Executable: "fzf", Pkg: "aqua:junegunn/fzf", Update: UpdateMise, Location: Core()},
+	{ID: "lazygit", Name: "lazygit", Category: CLIUtility, Method: MethodMise, Executable: "lazygit", Pkg: "aqua:jesseduffield/lazygit", Update: UpdateMise, Location: Core()},
+	{ID: "starship", Name: "starship", Category: CLIUtility, Method: MethodMise, Executable: "starship", Pkg: "aqua:starship/starship", Update: UpdateMise, Location: Core()},
 	{ID: "bat", Name: "bat", Category: CLIUtility, Method: MethodMise, Executable: "bat", Pkg: "bat", Update: UpdateMise, Location: Core()},
 	{ID: "eza", Name: "eza", Category: CLIUtility, Method: MethodMise, Executable: "eza", Pkg: "eza", Update: UpdateMise, Location: Core()},
 	{ID: "delta", Name: "delta", Category: CLIUtility, Method: MethodMise, Executable: "delta", Pkg: "delta", Update: UpdateMise, Location: Core()},

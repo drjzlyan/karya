@@ -19,7 +19,9 @@ func TestMiseToolsForDeclaresBaselineAndSelectedLangs(t *testing.T) {
 
 	// Baseline mise tools (core CLI, docs, always-on servers, infra) are always
 	// declared so their shims resolve.
-	for _, want := range []string{"jq", "ripgrep", "taplo", "marksman", "yamlfmt", "tmux", "neovim", "uv"} {
+	// tmux/neovim pin explicit aqua backends (see catalog.go), so their declared
+	// keys are backend-qualified; the rest keep mise's short registry name.
+	for _, want := range []string{"jq", "ripgrep", "taplo", "marksman", "yamlfmt", "aqua:tmux/tmux-builds", "aqua:neovim/neovim", "uv"} {
 		if !keys[want] {
 			t.Errorf("baseline mise tool %q not declared", want)
 		}

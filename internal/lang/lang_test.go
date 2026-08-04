@@ -199,8 +199,8 @@ func TestGenerateMiseConfig(t *testing.T) {
 	out := GenerateMiseConfig(s, MiseVars{GoPath: "/k/go", CargoHome: "/k/cargo"}, always)
 
 	for _, want := range []string{
-		`taplo = "latest"`,   // always-on tool, empty version → latest
-		`marksman = "1.2.3"`, // always-on tool with an explicit version
+		`"taplo" = "latest"`,   // always-on tool, empty version → latest (key quoted)
+		`"marksman" = "1.2.3"`, // always-on tool with an explicit version
 		`python = ["3.14", "3.13"]`,
 		`node = ["24"]`, // typescript maps to node
 		`go = ["1.26"]`,
@@ -235,7 +235,7 @@ func TestWriteMiseConfig(t *testing.T) {
 	if !strings.Contains(string(b), `go = ["1.26"]`) {
 		t.Errorf("written config missing go tools; got:\n%s", b)
 	}
-	if !strings.Contains(string(b), `taplo = "latest"`) {
+	if !strings.Contains(string(b), `"taplo" = "latest"`) {
 		t.Errorf("written config missing always-on tool; got:\n%s", b)
 	}
 }

@@ -1,0 +1,15 @@
+# karya zsh startup — used ONLY inside karya's tmux panes (via ZDOTDIR).
+#
+# karya never edits your ~/.zshrc. Instead the pane shell points ZDOTDIR at this
+# file, which sources your real config UNCHANGED and then layers karya's starship
+# prompt on top. Outside karya, your shell is untouched.
+
+# Load the user's real zsh environment + interactive config, in the normal order.
+[[ -f "${HOME}/.zshenv" ]] && source "${HOME}/.zshenv"
+[[ -f "${HOME}/.zshrc" ]] && source "${HOME}/.zshrc"
+
+# karya prompt, initialised last so it wins. STARSHIP_CONFIG is set by `karya
+# shell` to karya's own config. A missing starship is a silent no-op.
+if command -v starship >/dev/null 2>&1; then
+  eval "$(starship init zsh)"
+fi

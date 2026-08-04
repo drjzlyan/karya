@@ -10,6 +10,32 @@ every working session.
 
 ---
 
+## Recent work
+
+### Reliable fresh-install tooling from the vendored mise — 2026-08-04
+Fixed a greenfield break where **tmux, Neovim, and fzf were all missing** after
+`karya install` (and lazygit was never provisioned at all, so the `Ctrl-a g` git
+window silently no-op'd).
+- **Root cause + fix:** mise's bare tool names resolved to build-from-source /
+  plugin backends (notably `neovim` → a vfox plugin, not a prebuilt binary). Pinned
+  the essentials and prompt/git tools to explicit **prebuilt aqua backends** in
+  `internal/toolreg/catalog.go`: `aqua:neovim/neovim@0.11.7`,
+  `aqua:tmux/tmux-builds`, `aqua:junegunn/fzf`, `aqua:jesseduffield/lazygit`,
+  `aqua:starship/starship`. Verified each downloads a runnable binary (no `cc`/`make`)
+  and resolves through karya's generated mise config. `GenerateMiseConfig` now quotes
+  TOML keys so backend-qualified keys are valid.
+- **lazygit + starship are now managed** (added to the catalog + `core` profile), so
+  `karya install` provisions them; detect-first keeps a user's existing copy.
+- **starship wired isolated:** new hidden `karya shell` launcher is tmux's
+  `default-command`; it execs the user's own `$SHELL` with their rc **untouched**,
+  layering starship via karya-owned init files (`ZDOTDIR` for zsh, `--rcfile` for
+  bash) with a plain-shell fallback. Assets embedded + extracted by
+  `assets.ExtractShellInit`.
+- **Launch self-heal + visible failures:** `ensureRuntime` now best-effort repairs a
+  partial install on launch (`app.ensureBaseline`), and `karya install` prints which
+  tools failed and why (`tools.Failures`) instead of only a count. `doctor` reports
+  lazygit/starship as managed.
+
 ## Current status
 
 **Active phase:** Phase 8 — Cohesion & UX **complete**; next is tagging `v0.2.0`.
@@ -44,8 +70,8 @@ green. Go 1.26.
   toolchain bootstrap; `karya lang` provisions mise on demand. New
   `config.Paths.ActivateManagedEnv()` (PATH + `MISE_*`) lets karya's own process
   resolve **and run** the shim-backed tools it installed. Verified end-to-end on
-  a scrubbed-`PATH` fresh HOME: mise → tmux 3.7b + neovim 0.12.4 installed,
-  `doctor` reports them found.
+  a scrubbed-`PATH` fresh HOME: mise → tmux 3.7b + neovim (now pinned 0.11.7 via
+  the aqua backend) installed, `doctor` reports them found.
 - **No stack traces / clean errors.** Removed the template `panic()` in
   `internal/project` (now propagates via a `fileSet` accumulator);
   `ship.ExecRunner.Output` + the ship agent-exec now fold subprocess stderr into

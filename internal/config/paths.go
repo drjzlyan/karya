@@ -119,6 +119,17 @@ func (p Paths) NvimConfig() string { return filepath.Join(p.Config, "nvim") }
 // TmuxConf is the extracted karya tmux configuration used with `tmux -f`.
 func (p Paths) TmuxConf() string { return filepath.Join(p.Config, "tmux.conf") }
 
+// ShellInitDir holds karya's own shell startup files (a zsh .zshrc and a bash
+// rcfile). The pane shell (`karya shell`) points ZDOTDIR / --rcfile here so it can
+// source the user's real rc and then layer karya's starship prompt on top —
+// without karya ever writing to the user's own ~/.zshrc or ~/.bashrc.
+func (p Paths) ShellInitDir() string { return filepath.Join(p.Config, "shell") }
+
+// StarshipConfig is karya's own starship config, pinned via STARSHIP_CONFIG in the
+// pane shell so the prompt is deterministic and independent of any user starship
+// config.
+func (p Paths) StarshipConfig() string { return filepath.Join(p.ShellInitDir(), "starship.toml") }
+
 // PrefsFile stores per-project preferences (e.g. chosen agent), key=value.
 func (p Paths) PrefsFile() string { return filepath.Join(p.Data, "prefs") }
 

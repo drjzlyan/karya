@@ -74,6 +74,11 @@ func Run(args []string) int {
 		return cmdDoctor(rest)
 	case "shellenv":
 		return cmdShellenv(rest)
+	case "shell":
+		// Internal: the interactive shell wrapper karya's tmux panes run as their
+		// default-command (wires the starship prompt over the user's own rc). Not
+		// listed in help — users never invoke it directly.
+		return cmdShell(rest)
 	case "completion":
 		return cmdCompletion(rest)
 	default:
@@ -174,12 +179,17 @@ func cmdDev(args []string) int {
 	return 0
 }
 
-// ensureRuntime makes sure karya's essential launch dependencies (tmux and
-// Neovim) are present, installing any that are missing into karya's isolated
-// prefix via the registry dispatcher. It is a no-op on the common path where both
-// already resolve, so it is cheap to call before every launch.
+// ensureRuntime makes sure karya's launch dependencies are present before a
+// session starts. The two essentials (tmux, Neovim) are hard-required — a failure
+// there is fatal. It then best-effort self-heals the managed baseline (core CLI +
+// docs tools) so a partial or outdated install repairs itself on launch. Both
+// steps are no-ops on the common path where everything already resolves.
 func ensureRuntime(a *app) error {
-	return a.ensureCore()
+	if err := a.ensureCore(); err != nil {
+		return err
+	}
+	a.ensureBaseline()
+	return nil
 }
 
 // cmdEdit opens a file in the editor pane (also used as $EDITOR).
