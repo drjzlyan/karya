@@ -38,9 +38,9 @@ var nonLanguageProfiles = []Profile{
 		ID:   "core",
 		Name: "Core CLI",
 		Tools: []string{
-			"git", "gh", "jq", "yq", "fd", "ripgrep", "fzf", "bat", "eza",
-			"delta", "tree", "zoxide", "just", "watchexec", "hyperfine",
-			"shellcheck", "shfmt",
+			"git", "gh", "jq", "yq", "fd", "ripgrep", "fzf", "lazygit", "bat",
+			"eza", "delta", "tree", "zoxide", "just", "watchexec", "hyperfine",
+			"shellcheck", "shfmt", "starship",
 		},
 	},
 	{

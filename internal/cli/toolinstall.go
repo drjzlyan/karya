@@ -41,6 +41,46 @@ func (a *app) allResolve(ids []string) bool {
 	return true
 }
 
+// ensureBaseline best-effort self-heals a partial install on launch: when any of
+// the managed core CLI tools (fzf, ripgrep, lazygit, starship, …) don't resolve,
+// it reinstalls the core + docs profiles into karya's isolated prefix. It is gated
+// behind a fast resolve check so a healthy machine is a cheap no-op, and it never
+// blocks launch — a tool that still fails is a warning, not fatal (only the two
+// essentials, guaranteed by ensureCore, are hard-required). This is what makes a
+// machine whose first `karya install` was interrupted (or predates a new tool like
+// lazygit) repair itself the next time the IDE launches.
+func (a *app) ensureBaseline() {
+	if a.allResolve(a.managedCoreIDs()) {
+		return
+	}
+	for _, id := range []string{"core", "docs"} {
+		if p, ok := a.reg.Profile(id); ok {
+			results := a.installToolIDs(p.Tools)
+			for _, line := range tools.Failures(results) {
+				fmt.Fprintln(os.Stderr, line)
+			}
+		}
+	}
+	a.refreshToolManifest()
+}
+
+// managedCoreIDs returns the core-profile tool IDs karya actually installs,
+// excluding detect-only tools (e.g. git) that may legitimately be absent — the set
+// the launch self-heal checks for resolution.
+func (a *app) managedCoreIDs() []string {
+	p, ok := a.reg.Profile("core")
+	if !ok {
+		return nil
+	}
+	ids := make([]string, 0, len(p.Tools))
+	for _, id := range p.Tools {
+		if t, ok := a.reg.Get(id); ok && t.Method != toolreg.MethodDetect {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 // ensureCore makes karya's launch-essential tools (tmux, Neovim) available,
 // installing any that are missing into the isolated prefix via the registry
 // dispatcher. It is a fast no-op when they already resolve, so it is cheap to

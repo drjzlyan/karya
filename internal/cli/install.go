@@ -67,6 +67,11 @@ func cmdInstall(args []string) int {
 		if p, ok := a.reg.Profile(id); ok {
 			results := a.installToolIDs(p.Tools)
 			fmt.Printf("%s: %s\n", p.Name, tools.Summarize(results))
+			// Surface which tools failed and why, so a broken provision (e.g. a
+			// mise backend that could not download) is visible, not swallowed.
+			for _, line := range tools.Failures(results) {
+				fmt.Fprintln(os.Stderr, line)
+			}
 		}
 	}
 	a.refreshToolManifest()
