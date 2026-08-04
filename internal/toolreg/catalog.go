@@ -25,8 +25,14 @@ var registry = []Tool{
 		Essential: true,
 	},
 	{
+		// Pinned to a stable release rather than mise's floating "latest": Neovim
+		// 0.12.x ships a treesitter runtime incompatible with the classic
+		// nvim-treesitter (v0.9.3) API the embedded config uses, which crashes the
+		// highlighter with "attempt to call method 'range' (a nil value)". 0.11.7 is
+		// the latest 0.11 stable and runs that config cleanly. Bump deliberately,
+		// in lockstep with the nvim-treesitter pin in the embedded config.
 		ID: "neovim", Name: "Neovim", Category: CLIUtility, Method: MethodMise,
-		Executable: "nvim", Pkg: "neovim", Update: UpdateMise, Location: Core(),
+		Executable: "nvim", Pkg: "neovim", Version: "0.11.7", Update: UpdatePinned, Location: Core(),
 		Essential: true,
 	},
 	{

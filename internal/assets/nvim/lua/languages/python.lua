@@ -78,6 +78,18 @@ local function python_cmd(bufnr)
   return { interp }
 end
 
+-- Build a `python -m pytest` prefix that guarantees pytest is importable. Under
+-- `uv run` the project environment is isolated and often has no pytest, so tests
+-- fail with "No module named pytest". `--with pytest` provisions it ephemerally
+-- for the run without forcing the user to add pytest as a project dependency.
+local function pytest_cmd(bufnr)
+  if executable("uv") then
+    return { "uv", "run", "--with", "pytest", "python", "-m", "pytest" }
+  end
+  local interp = python_interpreter(bufnr) or "python3"
+  return { interp, "-m", "pytest" }
+end
+
 -- ============================================================================
 -- Terminal runner
 -- ============================================================================
@@ -209,8 +221,8 @@ local function pytest_file()
     return
   end
   local root = project_root(bufnr)
-  local cmd = python_cmd(bufnr)
-  vim.list_extend(cmd, { "-m", "pytest", file })
+  local cmd = pytest_cmd(bufnr)
+  table.insert(cmd, file)
   send_to_terminal(cmd, root, "test")
 end
 
@@ -229,16 +241,15 @@ local function pytest_function()
     target = vim.fn.fnamemodify(file, ":t")
   end
   local root = project_root(bufnr)
-  local cmd = python_cmd(bufnr)
-  vim.list_extend(cmd, { "-m", "pytest", target })
+  local cmd = pytest_cmd(bufnr)
+  table.insert(cmd, target)
   send_to_terminal(cmd, root, "test")
 end
 
 local function pytest_project()
   local bufnr = vim.api.nvim_get_current_buf()
   local root = project_root(bufnr)
-  local cmd = python_cmd(bufnr)
-  vim.list_extend(cmd, { "-m", "pytest" })
+  local cmd = pytest_cmd(bufnr)
   send_to_terminal(cmd, root, "test")
 end
 
@@ -274,8 +285,8 @@ local function pytest_class()
     target = file
   end
   local root = project_root(bufnr)
-  local cmd = python_cmd(bufnr)
-  vim.list_extend(cmd, { "-m", "pytest", target })
+  local cmd = pytest_cmd(bufnr)
+  table.insert(cmd, target)
   send_to_terminal(cmd, root, "test")
 end
 
@@ -514,15 +525,21 @@ local python_provider = {
     return false
   end,
 
-  build = function()
-    return nil
+  build = function(bufnr)
+    -- Python has no link step, but byte-compiling the tree is the closest
+    -- universal "build" — it surfaces syntax errors without any extra tooling,
+    -- so <leader>cc behaves consistently with the other languages.
+    local root = project_root(bufnr)
+    local cmd = python_cmd(bufnr)
+    -- -q keeps output to errors; -x skips virtualenvs, caches and VCS dirs so we
+    -- compile the project's own sources rather than its installed dependencies.
+    vim.list_extend(cmd, { "-m", "compileall", "-q", "-x", [[(\.venv|venv|__pycache__|\.git)]], root })
+    return { cmd = cmd, cwd = root }
   end,
 
   test = function(bufnr)
     local root = project_root(bufnr)
-    local cmd = python_cmd(bufnr)
-    vim.list_extend(cmd, { "-m", "pytest" })
-    return { cmd = cmd, cwd = root }
+    return { cmd = pytest_cmd(bufnr), cwd = root }
   end,
 
   run_file = function(bufnr)
