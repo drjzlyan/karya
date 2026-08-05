@@ -124,6 +124,7 @@ karya agent next | prev       Cycle agents
 karya agent reset             Reset the pane layout (preserves editor)
 karya agent focus             Jump to the agent pane
 karya agent send [flags]      Paste stdin (+ --file/--line/--label header) into the agent pane
+karya agent native [prompt]   Run karya's built-in Claude-API agent (needs ANTHROPIC_API_KEY)
 karya agent prefs | clear     Inspect / clear per-project preference
 
 karya edit <file> [line]      Open a file in the editor pane (used as $EDITOR)
@@ -279,9 +280,18 @@ binary (Phase 7). The **internal** engineering docs (`PLAN.md`, `ROADMAP.md`,
 - **Pluggable engine (`agent.Runner`, Phase 9).** Every agent is driven through a
   small consumer-defined interface — `Name`, `InteractiveCommand` (the pane-launch
   command), and `Headless(ctx, dir, prompt)` (a one-shot invocation returning
-  stdout, or `ErrNoHeadless`). `cliRunner` wraps each BYO-CLI; a native Claude-API
-  engine plugs in behind the same interface (Phase 13) with no consumer churn.
-  `Manager.launch` and `karya ship` are the interactive and headless consumers.
+  stdout, or `ErrNoHeadless`). `cliRunner` wraps each BYO-CLI; `nativeRunner`
+  (Phase 13) is the second implementation. `agent.NewRunner` is the single
+  factory; `session.Build`, `Manager.launch`, and `ship`/task authoring all go
+  through it, so BYO-CLI vs native is transparent to every consumer.
+- **Native engine (`internal/native`, Phase 13).** karya's own Claude-API tool-use
+  loop (`read_file`/`write_file`/`run_command`) over stdlib `net/http` — no SDK
+  dependency, default model `claude-opus-5`. Its reason to exist is **per-tool-call
+  permission prompts**: each write or command the model requests passes through a
+  human-answered `Permit` gate (reads are never gated; access is confined to the
+  workspace) — the one thing karya cannot enforce for a BYO-CLI, closing the
+  Phase 11 caveat. Offered only when `ANTHROPIC_API_KEY` is set; BYO-CLI is the
+  default. Interactive form: `karya agent native`.
 
 ### 6.3 Editor integration (`internal/editor`)
 
@@ -402,13 +412,14 @@ session, so the `<leader>k` "Karya Tasks" editor group can invoke them id-free.
 
 ## 8. Open questions / deferred decisions
 
-- **Human-in-the-loop, agents-first arc (Phases 9–13).** karya is evolving from
-  "an agent in a pane" into a human-in-the-loop, AI-agents-first IDE built on a new
-  **task-level** isolation (a worktree/branch per task) layered on the existing
-  environment isolation. The pluggable `agent.Runner` interface (Phase 9, done)
-  makes the engine swappable; the **native agent** (own Claude-API tool-use loop)
-  is the last step (Phase 13), an additive implementation behind that interface —
-  BYO-CLI stays the default. See ROADMAP Phases 9–13 and §6.6 (below, as landed).
+- **Human-in-the-loop, agents-first arc (Phases 9–13, complete).** karya evolved
+  from "an agent in a pane" into a human-in-the-loop, AI-agents-first IDE built on
+  a new **task-level** isolation (a worktree/branch per task) layered on the
+  existing environment isolation. The pluggable `agent.Runner` interface (Phase 9)
+  made the engine swappable; the **native agent** (own Claude-API tool-use loop,
+  `internal/native`) landed as the second implementation behind it (Phase 13),
+  unlocking per-tool-call permission prompts — **BYO-CLI stays the default**. See
+  ROADMAP Phases 9–13 and §6.2/§6.6.
 - **Linux tool bootstrap** parity (no Homebrew) — designed for, validated later.
 - **Ghostty / terminal config** stays optional and never overwrites user files;
   may ship as a documented sample rather than an applied config.

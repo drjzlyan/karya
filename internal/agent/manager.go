@@ -137,8 +137,8 @@ func (m *Manager) launch(name string) error {
 	time.Sleep(300 * time.Millisecond)
 
 	// Start the agent through its Runner so the launch path is engine-agnostic
-	// (a native engine plugs in behind the same interface, ROADMAP Phase 13).
-	if cmd, ok := NewCLIRunner(name).InteractiveCommand(); ok && Available(name) {
+	// (the native engine plugs in behind the same interface, ROADMAP Phase 13).
+	if cmd, ok := NewRunner(name).InteractiveCommand(); ok && Available(name) {
 		_ = m.tmux.Run("send-keys", "-t", pane, cmd, "Enter")
 	}
 

@@ -113,7 +113,7 @@ func shipMessage(name, dir, diff string) string {
 		return ""
 	}
 	fmt.Printf("Asking %s to write a commit message…\n", name)
-	out, err := agent.NewCLIRunner(name).Headless(context.Background(), dir, ship.BuildPrompt(diff))
+	out, err := agent.NewRunner(name).Headless(context.Background(), dir, ship.BuildPrompt(diff))
 	if err != nil {
 		// Explain why we are falling back to the conversational pane instead of
 		// silently producing no message.

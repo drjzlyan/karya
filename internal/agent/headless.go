@@ -4,6 +4,9 @@ package agent
 // non-interactive (one-shot) mode, without running it. Consumers use it to
 // decide whether to attempt headless authoring before falling back to the pane.
 func SupportsHeadless(name string) bool {
+	if name == Native {
+		return NativeAvailable()
+	}
 	_, ok := headlessArgv(name, "")
 	return ok
 }

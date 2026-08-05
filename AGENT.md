@@ -130,6 +130,7 @@ internal/assets/        go:embed payload (tmux.conf + vendored nvim config) + ex
 internal/tmuxx/         tmux wrapper (dedicated socket)
 internal/session/       `dev` layout: Build (testable) + Dev (Build+Attach), Quit
 internal/agent/         detect/select/switch/send + Runner interface (pluggable engine)
+internal/native/        built-in Claude-API agent (tool-use loop)  [Phase 13]
 internal/task/          Task model + per-project store         [Phase 10]
 internal/worktree/      git worktree-per-task isolation        [Phase 10]
 internal/editor/        `edit` (editor pane) + `run` (build/test pane) routing

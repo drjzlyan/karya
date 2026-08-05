@@ -12,6 +12,30 @@ every working session.
 
 ## Recent work
 
+### Phase 13 — native agent engine (arc complete) — 2026-08-05
+The Phase 9 pluggability paid off: karya's own Claude-API agent landed as the
+second `Runner`, unlocking per-tool-call permission prompts. **BYO-CLI stays the
+default.**
+- **`internal/native`** — a tool-use loop (`read_file`/`write_file`/`run_command`)
+  over stdlib `net/http` (no SDK dep — keeps single-binary/no-CGO), default model
+  `claude-opus-5` (`KARYA_AGENT_MODEL` overrides). Thinking disabled so wire blocks
+  round-trip cleanly, with the documented Opus-5 mitigations in the system prompt.
+  Hermetic `httptest` tests: tool round-trip, permission denial (→ is_error
+  result), approved write, workspace-escape rejection.
+- **Per-tool-call gate** — every write/command passes through a `Permit` callback
+  the human answers; reads are never gated; all access confined to the workspace.
+  This is the thing BYO-CLI agents can't do (closes the Phase 11 caveat).
+- **`agent.nativeRunner`** behind `agent.Runner`; `NewRunner` is the single factory
+  (native for `"native"`, else BYO-CLI). `Detect`/`Available`/`SupportsHeadless`
+  know native; `session.Build`, `Manager.launch`, `ship`/task authoring route
+  through the factory — no consumer churn. `karya agent native [prompt]` runs it
+  one-shot or as a REPL; offered only when `ANTHROPIC_API_KEY` is set.
+- Gate green (fmt, vet, lint 0, race, integration, build).
+- **Arc complete (Phases 9–13).** karya is now a human-in-the-loop, agents-first
+  IDE: pluggable engines, task-level worktree isolation, four review gates, a fleet
+  dashboard, and a native engine with true per-tool-call permission prompts — all
+  atop the original environment isolation.
+
 ### Phase 12 — fleet (parallel, worktree-isolated agents) — 2026-08-05
 The parallelism fell out of the Phase 10 model — every `karya task new` is an
 independent worktree + `task-<id>` session — so Phase 12 added the missing piece:

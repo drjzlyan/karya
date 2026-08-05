@@ -378,6 +378,8 @@ func cmdAgent(args []string) int {
 		return agentPrefs(a)
 	case "send":
 		return agentSend(a, rest)
+	case "native":
+		return cmdAgentNative(a, rest)
 	case "switch", "switch-to", "next", "prev", "reset", "clear", "focus":
 		return agentInSession(a, sub, rest)
 	default:

@@ -294,13 +294,26 @@ worktree/branch.
 
 ---
 
-## Phase 13 — Native agent engine (second Runner impl)
+## Phase 13 — Native agent engine (second Runner impl) ✅
 **Goal:** the Phase 9 pluggability pays off.
 
-- ☐ `nativeRunner` behind `agent.Runner` using the Claude API (tool-use: edit,
-  run, read); config for keys/models; **BYO-CLI stays the default**
-- ☐ Unlocks true per-tool-call **permission prompts** + streaming plan/diff,
-  closing the Phase 11 caveat
+- ☑ `internal/native` — a Claude-API tool-use loop (`read_file`/`write_file`/
+  `run_command`) over **stdlib `net/http`** (no SDK dependency — keeps the
+  single-binary/no-CGO promise), default model `claude-opus-5` (override with
+  `KARYA_AGENT_MODEL`). Hermetic `httptest` coverage of a tool round-trip,
+  permission denial, an approved write, and workspace-escape rejection.
+- ☑ **Per-tool-call permission prompts** — every `write_file`/`run_command` the
+  model requests passes through a `Permit` callback the human answers; declines
+  return an `is_error` tool_result so the model adapts. This is what BYO-CLI
+  agents can't offer, closing the Phase 11 caveat. Reads are never gated; all
+  file access is confined to the workspace.
+- ☑ `agent.nativeRunner` behind `agent.Runner` (`Name`/`InteractiveCommand`/
+  `Headless`); `NewRunner` is the single factory (native for `"native"`, else
+  BYO-CLI). `Detect`/`Available`/`SupportsHeadless` know about native;
+  `session.Build`, `Manager.launch`, and `ship`/task authoring all route through
+  the factory — **no consumer churn**, BYO-CLI stays the default.
+- ☑ `karya agent native [prompt]` — one-shot or a REPL; the interactive pane form
+  of the engine. Offered only when `ANTHROPIC_API_KEY` is set.
 
-**Status:** the interface (Phase 9) already exists; this is an additive
-implementation, no consumer churn.
+**Status:** the interface (Phase 9) already existed; this was an additive
+implementation, exactly as designed.

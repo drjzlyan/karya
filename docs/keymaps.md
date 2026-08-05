@@ -26,6 +26,7 @@ reference. For a guided, hands-on path through it, see
 | `karya agent reset` | Reset pane layout (preserves the editor) |
 | `karya agent focus` | Jump to the agent pane |
 | `karya agent send [--file f --line n --label t]` | Paste stdin into the agent pane (editor↔agent bridge) |
+| `karya agent native [prompt]` | Run karya's built-in Claude-API agent — approves each file write / command (needs `ANTHROPIC_API_KEY`) |
 | `karya agent prefs` / `clear` | Show / clear per-project agent preference |
 | `karya edit <file> [line]` | Open a file in the editor pane (used as `$EDITOR`) |
 | `karya run [-d dir] <cmd>` | Run a command in the build/test pane |

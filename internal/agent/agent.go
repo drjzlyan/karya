@@ -19,15 +19,24 @@ var Known = []string{"crush", "claude", "codex", "gemini", "aider", "copilot"}
 // None is the sentinel for "no agent, just a shell".
 const None = "none"
 
-// Available reports whether a command is on PATH.
+// Available reports whether an agent can run: the native engine when its API key
+// is set, otherwise a CLI on PATH.
 func Available(name string) bool {
+	if name == Native {
+		return NativeAvailable()
+	}
 	_, err := exec.LookPath(name)
 	return err == nil
 }
 
-// Detect returns the known agents currently installed, in preference order.
+// Detect returns the available agents in preference order: the native engine
+// first when configured (karya's own, most deeply integrated), then the detected
+// BYO CLIs.
 func Detect() []string {
 	var found []string
+	if NativeAvailable() {
+		found = append(found, Native)
+	}
 	for _, a := range Known {
 		if Available(a) {
 			found = append(found, a)

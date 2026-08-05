@@ -110,13 +110,14 @@ func Build(t *tmuxx.Tmux, o Options) error {
 	_ = t.Run("split-window", "-h", "-l", "35%", "-t", p1, "-c", o.Workdir)
 	_ = t.Run("split-window", "-v", "-l", "40%", "-t", p2, "-c", o.Workdir)
 
-	// Agent pane.
+	// Agent pane. Launch through the agent's Runner so the command is engine-
+	// agnostic (a BYO-CLI is its own name; the native engine is karya's own loop).
 	_ = t.Run("select-pane", "-t", p2, "-T", "agent")
-	if o.Agent != "" && o.Agent != agent.None && agent.Available(o.Agent) {
+	if cmd, ok := agent.NewRunner(o.Agent).InteractiveCommand(); ok && agent.Available(o.Agent) {
 		time.Sleep(time.Second) // let the shell settle before typing
-		_ = t.Run("send-keys", "-t", p2, o.Agent, "Enter")
+		_ = t.Run("send-keys", "-t", p2, cmd, "Enter")
 	} else if o.Agent != "" && o.Agent != agent.None {
-		fmt.Fprintf(os.Stderr, "warning: agent %q not found on PATH; opening a shell\n", o.Agent)
+		fmt.Fprintf(os.Stderr, "warning: agent %q not available; opening a shell\n", o.Agent)
 	}
 
 	// Build/test pane.
