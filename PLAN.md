@@ -133,6 +133,12 @@ karya run --focus             Focus the build/test pane
 karya new <lang> <name> [dir] Scaffold a project (python|java|typescript|go|cpp|rust)
 karya ship [--push --pr]      Stage, agent-write the commit message, commit (--no-verify)
 
+karya task new "<prompt>"     Create a task: isolated worktree (branch karya/<id>) + agent
+  --agent <name|none>         Agent for this task (else per-project pref / picker)
+karya task list | tasks       List the project's tasks + status
+karya task switch <id>        Attach to a task's session (rooted at its worktree)
+karya task rm <id> [-y]       Remove a task: its worktree, branch, and record
+
 karya lang                    Interactive language + version selector
 karya lang list | add | remove | all
 
@@ -318,6 +324,32 @@ karya prefix — never Homebrew or the user's global mise.
   embedded configs when the asset `manifest.json` version changed, refreshes
   managed tools, and runs `Lazy! sync`.
 - Version metadata injected at build time via `-ldflags` into `internal/version`.
+
+### 6.6 Tasks & task-level isolation (`internal/task`, `internal/worktree`)
+
+The human-in-the-loop, agents-first arc (ROADMAP Phases 10–13) makes the **task**
+karya's primary noun and adds a second kind of isolation on top of the
+environment isolation of §2: **task-level isolation**.
+
+- A `task.Task` (id, title, prompt, agent, status, branch, worktree, repo,
+  timestamps) is one unit of agent work. Its lifecycle is
+  `planning → awaiting-plan → working → awaiting-review → merged | rejected`
+  (the plan states are entered only when plan approval is requested — Phase 11).
+- `task.Store` persists the tasks of one project as a single JSON file under
+  `config.Paths.TasksDir()`, named by `worktree.ProjectSlug(repo)` so a project's
+  tasks stay grouped and never touch the user's config.
+- `worktree.Manager` gives each task an isolated `git worktree`: a namespaced
+  branch `karya/<id>` checked out under `config.Paths.WorktreesDir()`
+  (`~/.local/state/karya/worktrees/<project-slug>/<id>`) — **never** in the user's
+  own tree. It runs git behind a consumer-defined `Runner` (the same shape as
+  `ship.Runner`, satisfied by `ship.ExecRunner`), keeping the plumbing
+  unit-testable. `Remove` force-removes the worktree, deletes the branch, prunes,
+  and clears any residual dir, so a task leaves nothing behind.
+- `karya task new/list/switch/rm` (`internal/cli/task.go`) drive it: `new` creates
+  the worktree + record and, inside a karya session, opens a session rooted at the
+  worktree with the task's agent; `switch` attaches; `rm` tears the task down. The
+  agent thus works **inside the isolated worktree**, and the human reviews before
+  merge (the four gates land in Phase 11).
 
 ---
 

@@ -231,17 +231,24 @@ the full gate is green, and existing agent/ship behavior is unchanged.
 
 ---
 
-## Phase 10 — Task model + isolated task workspace (the spine)
+## Phase 10 — Task model + isolated task workspace (the spine) ✅
 **Goal:** the **task** becomes karya's primary noun; each gets an isolated
 worktree/branch.
 
-- ☐ `internal/task` — `Task` (id, title, prompt, agent, status, branch, worktree,
-  checkpoints); per-project JSON store under the karya prefix
-- ☐ Worktree management (`internal/worktree`, reusing the `ship.Git`/`Runner`
-  pattern): `git worktree add` `karya/<id>` into `~/.local/state/karya/worktrees/…`
-- ☐ `karya task new "<prompt>" [--agent] [--plan]`, `task list`, `task switch`,
-  `task rm`; the agent works **inside the worktree**, not the raw cwd
-- ☐ Isolation test: worktrees/branches live under karya dirs; `task rm` leaves none
+- ☑ `internal/task` — `Task` (id, title, prompt, agent, status, branch, worktree,
+  repo, timestamps) + lifecycle statuses; per-project JSON `Store`
+  (List/Get/Save-upsert/Delete) under `config.Paths.TasksDir()`
+- ☑ `internal/worktree` — git worktree management behind a consumer-defined
+  `Runner` (satisfied by `ship.ExecRunner`): `Add` creates branch `karya/<id>`
+  checked out under `config.Paths.WorktreesDir()`; `Remove` force-removes the
+  worktree + branch + residual dir; `ProjectSlug` groups tasks per repo
+- ☑ `karya task new "<prompt>" [--agent]`, `task list`/`tasks`, `task switch <id>`,
+  `task rm <id> [-y]`; order-independent flag parsing (prompt is free-form); the
+  agent works **inside the worktree** session, not the raw cwd. (`--plan` lands
+  with the plan gate in Phase 11.)
+- ☑ Isolation proven: real-git integration test asserts the checkout lives under
+  the karya root (never in the user tree), the branch is namespaced, and `Remove`
+  leaves nothing behind; end-to-end smoke confirms the user repo stays pristine
 
 ---
 

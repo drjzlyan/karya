@@ -12,6 +12,30 @@ every working session.
 
 ## Recent work
 
+### Phase 10 — task model + isolated task workspace — 2026-08-05
+Made the **task** karya's primary noun and added **task-level isolation** — a git
+worktree/branch per task — on top of the environment isolation of PLAN §2.
+- **`internal/task`** — `Task` (id/title/prompt/agent/status/branch/worktree/repo/
+  timestamps) with the review lifecycle; per-project JSON `Store`
+  (List/Get/Save-upsert/Delete) under `config.Paths.TasksDir()`. Hermetic unit tests.
+- **`internal/worktree`** — `Manager.Add` creates branch `karya/<id>` checked out
+  under `config.Paths.WorktreesDir()` (never in the user tree); `Remove` force-
+  removes worktree + branch + residual dir; `ProjectSlug` groups per repo. Git runs
+  behind a consumer `Runner` (satisfied by `ship.ExecRunner`). Unit test (fake
+  runner) + **real-git integration test** proving isolation and clean teardown.
+- **`config.Paths`** — added `WorktreesDir()` and `TasksDir()` under State (+ test).
+- **`karya task new/list/switch/rm`** (`internal/cli/task.go`, wired in `cli.go` +
+  usage). `new` creates the worktree/record and, inside a karya session, opens a
+  session rooted at the worktree with the task's agent; `switch` attaches; `rm`
+  tears it down (confirm/`-y`). Order-independent flag parsing (the prompt is
+  free-form, so `--agent`/`-y` may follow it — fixes the Go `flag` positional
+  gotcha); runtime provisioning only when a session is actually opened.
+- End-to-end smoke (isolated HOME + throwaway repo): task new→list→rm leaves the
+  user repo pristine, the `karya/<id>` branch and worktree fully cleaned up.
+- Gate green (fmt, vet, lint 0, race, integration, build).
+- **Next:** Phase 11 — the four HITL gates (plan approval, diff review before
+  apply, checkpoint/rewind, permission prompts) on the task flow. Not started.
+
 ### Phase 9 — agent-runner interface (agents-first arc begins) — 2026-08-05
 Kicked off the **human-in-the-loop, AI-agents-first** direction (audit + approved
 5-phase plan; see [ROADMAP.md](ROADMAP.md) Phases 9–13 and [PLAN.md](PLAN.md) §6.2/§8).

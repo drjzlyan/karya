@@ -129,7 +129,9 @@ internal/version/       version/build info
 internal/assets/        go:embed payload (tmux.conf + vendored nvim config) + extract/version
 internal/tmuxx/         tmux wrapper (dedicated socket)
 internal/session/       `dev` layout: Build (testable) + Dev (Build+Attach), Quit
-internal/agent/         detect/select (switch/next/prev/reset land in Phase 2)
+internal/agent/         detect/select/switch/send + Runner interface (pluggable engine)
+internal/task/          Task model + per-project store         [Phase 10]
+internal/worktree/      git worktree-per-task isolation        [Phase 10]
 internal/editor/        `edit` (editor pane) + `run` (build/test pane) routing
 internal/project/       `new` scaffolds                      [Phase 4]
 internal/lang/          language/version selection           [Phase 5]
@@ -148,6 +150,7 @@ README.md CONTRIBUTING.md                  user landing + contributor entry
 |---|---|
 | `dev` (default) | Build/attach the isolated tmux IDE session for the cwd |
 | `agent` | Switch/cycle/reset the coding-agent pane in a session |
+| `task` | Create/list/switch/remove tasks, each in an isolated worktree (branch `karya/<id>`) |
 | `run` | Send a command to the build/test pane (or run it directly) |
 | `edit` | Open a file in the editor pane; also karya's `$EDITOR` |
 | `new` / `project` | Scaffold a new project for a supported language |
