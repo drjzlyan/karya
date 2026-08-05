@@ -133,8 +133,12 @@ func (c *Client) runTools(ctx context.Context, dir string, content []block, perm
 	return results
 }
 
+// commandTimeout bounds a single run_command so a hanging command (a server, a
+// prompt-for-input) can't wedge the whole agent loop.
+const commandTimeout = 2 * time.Minute
+
 // execTool runs one tool call and returns its result text plus whether it errored.
-func (c *Client) execTool(_ context.Context, dir string, b block, permit Permit, out io.Writer) (string, bool) {
+func (c *Client) execTool(ctx context.Context, dir string, b block, permit Permit, out io.Writer) (string, bool) {
 	switch b.Name {
 	case "read_file":
 		path, err := safePath(dir, b.input("path"))
@@ -172,7 +176,9 @@ func (c *Client) execTool(_ context.Context, dir string, b block, permit Permit,
 			return "The user declined this command.", true
 		}
 		fmt.Fprintf(out, "  · run: %s\n", cmdStr)
-		cmd := exec.Command("sh", "-c", cmdStr)
+		cctx, cancel := context.WithTimeout(ctx, commandTimeout)
+		defer cancel()
+		cmd := exec.CommandContext(cctx, "sh", "-c", cmdStr)
 		cmd.Dir = dir
 		combined, err := cmd.CombinedOutput()
 		if err != nil {

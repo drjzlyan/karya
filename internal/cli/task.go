@@ -599,7 +599,12 @@ func cmdTaskMerge(a *app, args []string) int {
 		return fail(err)
 	}
 	if err := gitAt(top).Merge(t.Branch, true); err != nil {
-		return fail(fmt.Errorf("merge failed (resolve conflicts in %s, or reject the task): %w", top, err))
+		// Don't leave the user's working tree half-merged — abort the merge, keep
+		// the task at awaiting-review, and point them at how to resolve it.
+		_ = gitAt(top).AbortMerge()
+		return fail(fmt.Errorf("merge of %s into %s has conflicts (aborted to keep your tree clean).\n"+
+			"Update the task branch so it merges cleanly, or merge it yourself: cd %s && git merge %s\nunderlying error: %w",
+			t.Branch, top, top, t.Branch, err))
 	}
 	t.Status = task.StatusMerged
 	if _, err := store.Save(t); err != nil {

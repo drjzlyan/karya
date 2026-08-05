@@ -137,6 +137,13 @@ func (g Git) Merge(branch string, noFF bool) error {
 	return g.Runner.Run(g.Dir, "git", args...)
 }
 
+// AbortMerge aborts an in-progress merge, restoring Dir to its pre-merge state.
+// karya calls it when a task merge hits conflicts so the user's working tree is
+// never left half-merged.
+func (g Git) AbortMerge() error {
+	return g.Runner.Run(g.Dir, "git", "merge", "--abort")
+}
+
 // Push pushes the current branch, setting upstream when it has none.
 func (g Git) Push() error {
 	branch, err := g.CurrentBranch()

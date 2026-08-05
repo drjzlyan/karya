@@ -141,6 +141,19 @@ func TestRunPermitAllowsWrite(t *testing.T) {
 	}
 }
 
+func TestRunCommandRespectsContext(t *testing.T) {
+	// A cancelled context must abort a run_command rather than let it execute —
+	// the guard against a hanging command wedging the agent loop.
+	c := &Client{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	b := toolUseBlock("r1", "run_command", map[string]string{"command": "echo should-not-run"})
+	_, isErr := c.execTool(ctx, t.TempDir(), b, allowAll, io.Discard)
+	if !isErr {
+		t.Error("run_command with a cancelled context should return an error result")
+	}
+}
+
 func TestSafePathRejectsEscape(t *testing.T) {
 	dir := t.TempDir()
 	if _, err := safePath(dir, "../escape"); err == nil {

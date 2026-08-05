@@ -27,8 +27,13 @@ func cmdAgentNative(a *app, args []string) int {
 	}
 
 	// permit is the per-tool-call gate: write_file and run_command pause here.
+	// One reader for both the REPL prompt and the per-tool-call approvals. They
+	// share stdin, so they must share a single buffered reader — otherwise the
+	// REPL scanner and the approval reader keep separate buffers over the same fd
+	// and steal each other's input.
+	reader := bufio.NewReader(os.Stdin)
 	permit := func(action, detail string) bool {
-		return confirm(os.Stdin, fmt.Sprintf("Allow the agent to %s: %s?", action, detail))
+		return askYesNo(reader, fmt.Sprintf("Allow the agent to %s: %s?", action, detail))
 	}
 
 	if prompt := strings.TrimSpace(strings.Join(args, " ")); prompt != "" {
@@ -37,20 +42,36 @@ func cmdAgentNative(a *app, args []string) int {
 
 	// REPL.
 	fmt.Printf("karya native agent (%s) in %s — type a task, or 'exit' to quit.\n", client.Model, dir)
-	sc := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print("\nagent> ")
-		if !sc.Scan() {
-			return 0
-		}
-		line := strings.TrimSpace(sc.Text())
-		if line == "" {
-			continue
-		}
+		raw, err := reader.ReadString('\n')
+		line := strings.TrimSpace(raw)
 		if line == "exit" || line == "quit" {
 			return 0
 		}
-		runNative(client, dir, line, permit)
+		if line != "" {
+			runNative(client, dir, line, permit)
+		}
+		if err != nil { // EOF (Ctrl-D) after handling any trailing input
+			return 0
+		}
+	}
+}
+
+// askYesNo prompts on the shared reader and returns true only for an explicit
+// yes. It mirrors confirm but reuses the caller's reader so it never competes
+// with another reader over the same stdin.
+func askYesNo(r *bufio.Reader, prompt string) bool {
+	fmt.Printf("%s [y/N] ", prompt)
+	line, err := r.ReadString('\n')
+	if err != nil && line == "" {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true
+	default:
+		return false
 	}
 }
 

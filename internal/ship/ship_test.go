@@ -165,6 +165,17 @@ func TestMergeNoFF(t *testing.T) {
 	}
 }
 
+func TestAbortMerge(t *testing.T) {
+	fr := newFakeRunner()
+	g := Git{Runner: fr, Dir: "/x"}
+	if err := g.AbortMerge(); err != nil {
+		t.Fatalf("AbortMerge: %v", err)
+	}
+	if !fr.ranPrefix("git", "merge", "--abort") {
+		t.Errorf("expected merge --abort, got %v", fr.runs)
+	}
+}
+
 func TestResetHard(t *testing.T) {
 	fr := newFakeRunner()
 	g := Git{Runner: fr, Dir: "/x"}
