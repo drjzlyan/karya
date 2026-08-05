@@ -12,6 +12,22 @@ every working session.
 
 ## Recent work
 
+### Phase 12 — fleet (parallel, worktree-isolated agents) — 2026-08-05
+The parallelism fell out of the Phase 10 model — every `karya task new` is an
+independent worktree + `task-<id>` session — so Phase 12 added the missing piece:
+a way to see and navigate the fleet.
+- **`karya task dashboard`** — a numbered table of every task + live status; enter
+  a number or id to switch to that task's session. `renderTasks`/`dashboardChoice`
+  are pure and unit-tested.
+- **`Ctrl-a T`** — bound in the embedded `tmux.conf` to open the dashboard in a
+  `display-popup` so the switch lands in the underlying client (same pattern as
+  `Ctrl-a G` ship).
+- Verified: 3 concurrent tasks → 3 isolated worktrees + `karya/<id>` branches, all
+  listed in the dashboard.
+- Docs: ROADMAP/PLAN/PROGRESS + tmux keymaps (synced to embedded). Gate green.
+- **Next:** Phase 13 — native Claude-API `Runner` behind the Phase 9 interface;
+  unlocks true per-tool-call permission prompts (closes the Phase 11 caveat).
+
 ### Phase 11 — human-in-the-loop gates (all four) — 2026-08-05
 Layered the four review gates on the task model — the heart of the agents-first
 pivot. Nothing an agent does lands on the user's branch unreviewed.

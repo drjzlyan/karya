@@ -279,12 +279,18 @@ worktree/branch.
 
 ---
 
-## Phase 12 — Fleet (parallel, worktree-isolated agents)
+## Phase 12 — Fleet (parallel, worktree-isolated agents) ✅
 **Goal:** many agents at once, once one task reviews cleanly.
 
-- ☐ Concurrent tasks, each its own worktree/branch/agent
-- ☐ Tasks dashboard (tmux window "tasks", `Ctrl-a T`) with live status
-- ☐ `task switch` attaches a task's pane set; simple review/merge queue
+- ☑ Concurrent tasks, each its own worktree/branch/agent/session — this falls out
+  of the Phase 10 model: every `karya task new` is an independent worktree +
+  `task-<id>` session, so a fleet just works (verified: 3 tasks, 3 isolated
+  worktrees + `karya/<id>` branches side by side).
+- ☑ `karya task dashboard` — the fleet view: a numbered table of every task with
+  its live status; pick a number/id to switch to it. Bound to **`Ctrl-a T`** via a
+  tmux popup so the switch lands in the underlying client.
+- ☑ `task switch` attaches a task's session (Phase 10); the diff-review/merge gates
+  (Phase 11) are the per-task review queue.
 
 ---
 

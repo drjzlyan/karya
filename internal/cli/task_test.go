@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/drjzlyan/karya/internal/task"
@@ -109,6 +110,37 @@ func TestParseTaskRemoveArgs(t *testing.T) {
 				t.Errorf("parseTaskRemoveArgs(%v) = (%q, %v), want (%q, %v)", c.args, id, yes, c.wantID, c.wantYes)
 			}
 		})
+	}
+}
+
+func TestDashboardChoice(t *testing.T) {
+	tasks := []task.Task{{ID: "aa11"}, {ID: "bb22"}, {ID: "cc33"}}
+	cases := []struct {
+		in   string
+		want int
+	}{
+		{"1", 0}, {"3", 2}, {"0", -1}, {"4", -1},
+		{"bb22", 1}, {"cc", 2}, {"zz", -1},
+	}
+	for _, c := range cases {
+		if got := dashboardChoice(c.in, tasks); got != c.want {
+			t.Errorf("dashboardChoice(%q) = %d, want %d", c.in, got, c.want)
+		}
+	}
+}
+
+func TestRenderTasksNumbered(t *testing.T) {
+	tasks := []task.Task{
+		{ID: "aa11", Status: task.StatusWorking, Agent: "claude", Title: "first"},
+		{ID: "bb22", Status: task.StatusMerged, Agent: "none", Title: "second"},
+	}
+	numbered := renderTasks(tasks, true)
+	if !strings.Contains(numbered, "#") || !strings.Contains(numbered, "1") || !strings.Contains(numbered, "aa11") {
+		t.Errorf("numbered table missing index/id:\n%s", numbered)
+	}
+	plain := renderTasks(tasks, false)
+	if strings.Contains(strings.SplitN(plain, "\n", 2)[0], "#") {
+		t.Errorf("plain table should have no index column:\n%s", plain)
 	}
 }
 

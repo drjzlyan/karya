@@ -34,6 +34,7 @@ reference. For a guided, hands-on path through it, see
 | `karya ship [--push --pr --no-verify]` | Stage, let the agent write the commit message, commit (& push / open PR) |
 | `karya task new "<prompt>" [--agent n] [--plan]` | Start a task in an isolated worktree (branch `karya/<id>`) |
 | `karya task list` / `tasks` | List the project's tasks and their status |
+| `karya task dashboard` | Fleet view — pick a task to switch to (also `Ctrl-a T`) |
 | `karya task switch <id>` | Attach to a task's session (rooted at its worktree) |
 | `karya task plan <id>` / `approve-plan <id>` | Show the drafted plan / approve it (→ working) |
 | `karya task review [id]` | Show the task's diff vs its base — the pre-apply review |
@@ -93,6 +94,7 @@ Bindings marked *(default)* are standard tmux built-ins.
 | `Ctrl-a D` | Reset layout → `karya agent reset` |
 | `Ctrl-a P` | New project (`language:name`) → `karya new` |
 | `Ctrl-a G` | Ship: agent writes the commit message, then commit & push → `karya ship --push` |
+| `Ctrl-a T` | Tasks dashboard: pick a task from the fleet to switch to → `karya task dashboard` |
 | `Ctrl-a S` | Toggle synchronize-panes |
 | `Ctrl-a g` | Open lazygit (reuse or create the `git` window) |
 | `Ctrl-a ?` | Pop up this key map & command reference → `karya docs keymaps` |

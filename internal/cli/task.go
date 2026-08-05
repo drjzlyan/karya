@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -38,6 +39,8 @@ func cmdTask(args []string) int {
 		return cmdTaskNew(a, rest)
 	case "list", "ls":
 		return cmdTaskList(a)
+	case "dashboard":
+		return cmdTaskDashboard(a)
 	case "switch":
 		return cmdTaskSwitch(a, rest)
 	case "rm", "remove":
@@ -266,13 +269,93 @@ func cmdTaskList(a *app) int {
 		fmt.Println(`No tasks yet. Create one with: karya task new "<prompt>"`)
 		return 0
 	}
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tSTATUS\tAGENT\tTITLE")
-	for _, t := range tasks {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", t.ID, t.Status, t.Agent, t.Title)
+	fmt.Print(renderTasks(tasks, false))
+	return 0
+}
+
+// renderTasks returns an aligned table of tasks. When numbered, a leading 1-based
+// index column lets the dashboard pick a task by number.
+func renderTasks(tasks []task.Task, numbered bool) string {
+	var b strings.Builder
+	w := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+	if numbered {
+		fmt.Fprintln(w, "#\tID\tSTATUS\tAGENT\tTITLE")
+		for i, t := range tasks {
+			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n", i+1, t.ID, t.Status, t.Agent, t.Title)
+		}
+	} else {
+		fmt.Fprintln(w, "ID\tSTATUS\tAGENT\tTITLE")
+		for _, t := range tasks {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", t.ID, t.Status, t.Agent, t.Title)
+		}
 	}
 	_ = w.Flush()
+	return b.String()
+}
+
+// cmdTaskDashboard is the fleet view (bound to Ctrl-a T via a tmux popup): it
+// lists every task with its live status and, interactively, switches to the one
+// the user picks. Running many tasks at once is already supported — each is its
+// own worktree and session — so this is the single place to see and navigate the
+// fleet.
+func cmdTaskDashboard(a *app) int {
+	_, store, _, err := taskContext(a)
+	if err != nil {
+		return fail(err)
+	}
+	tasks, err := store.List()
+	if err != nil {
+		return fail(err)
+	}
+	fmt.Println("karya · task fleet")
+	fmt.Println()
+	if len(tasks) == 0 {
+		fmt.Println(`No tasks yet. Create one with: karya task new "<prompt>"`)
+		return 0
+	}
+	fmt.Print(renderTasks(tasks, true))
+	if !isInteractive() {
+		return 0
+	}
+	fmt.Print("\nEnter a task # (or id) to switch, or q to quit: ")
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	choice := strings.TrimSpace(line)
+	if choice == "" || choice == "q" {
+		return 0
+	}
+	idx := dashboardChoice(choice, tasks)
+	if idx < 0 {
+		fmt.Println("No such task.")
+		return 0
+	}
+	t := tasks[idx]
+	if openTaskSession(a, t) {
+		return 0
+	}
+	if err := ensureRuntime(a); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	}
+	if err := session.Dev(a.tmux, taskSessionOptions(t)); err != nil {
+		return fail(err)
+	}
 	return 0
+}
+
+// dashboardChoice resolves a user's dashboard input to a task index: a 1-based
+// number, or an id (prefix) match. It returns -1 when nothing matches.
+func dashboardChoice(choice string, tasks []task.Task) int {
+	if n, err := strconv.Atoi(choice); err == nil {
+		if n >= 1 && n <= len(tasks) {
+			return n - 1
+		}
+		return -1
+	}
+	for i, t := range tasks {
+		if strings.HasPrefix(t.ID, choice) {
+			return i
+		}
+	}
+	return -1
 }
 
 // cmdTaskSwitch attaches to (or, inside tmux, switches the client to) the task's

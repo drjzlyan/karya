@@ -137,6 +137,7 @@ karya task new "<prompt>"     Create a task: isolated worktree (branch karya/<id
   --agent <name|none>         Agent for this task (else per-project pref / picker)
   --plan                      Draft a plan and hold at awaiting-plan for approval
 karya task list | tasks       List the project's tasks + status
+karya task dashboard          Fleet view: pick a task to switch to (Ctrl-a T)
 karya task switch <id>        Attach to a task's session (rooted at its worktree)
 karya task plan <id>          Show the drafted plan
 karya task approve-plan <id>  Approve the plan: awaiting-plan → working
@@ -187,6 +188,7 @@ from the current setup and wired to karya:
 | `Ctrl-a D` | Reset layout | `karya agent reset` |
 | `Ctrl-a P` | New project (`lang:name`) | `karya new` |
 | `Ctrl-a G` | Ship (agent commit & push) | `karya ship --push` |
+| `Ctrl-a T` | Tasks dashboard (fleet view) | `karya task dashboard` |
 | `Ctrl-a S` | Toggle synchronize-panes | tmux native |
 | `Ctrl-a g` | Git window (lazygit) | tmux native |
 | `Ctrl-a Q` | Kill session (confirm) | `karya dev -q` |
