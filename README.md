@@ -108,7 +108,8 @@ make build                 # -> ./bin/karya
 **For users** (product docs, in `docs/`):
 
 - [docs/tutorial.md](docs/tutorial.md) — **self-guided tutorial**: learn every
-  keymap, movement, and per-language workflow hands-on
+  keymap, movement, per-language workflow, and the human-in-the-loop task flow
+- [docs/commands.md](docs/commands.md) — every `karya` command, grouped by task
 - [docs/keymaps.md](docs/keymaps.md) — full CLI / tmux / Neovim key reference
 
 **For contributors** (internal engineering docs, at the repo root):

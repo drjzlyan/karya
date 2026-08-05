@@ -83,6 +83,67 @@ func (g Git) Commit(message string, noVerify bool) error {
 	return g.Runner.Run(g.Dir, "git", args...)
 }
 
+// RevParse resolves a revision (e.g. "HEAD", a branch, a tag) to its commit SHA.
+// karya records a task's base commit at creation so a review can diff the whole
+// task branch against exactly where it started.
+func (g Git) RevParse(rev string) (string, error) {
+	out, err := g.Runner.Output(g.Dir, "git", "rev-parse", rev)
+	return strings.TrimSpace(out), err
+}
+
+// CommitAll stages every change in Dir and commits it with message, returning
+// whether a commit was made (false when there was nothing to commit). It is how
+// karya turns an agent's in-progress worktree edits into a reviewable commit —
+// for a checkpoint or just before a merge.
+func (g Git) CommitAll(message string, noVerify bool) (bool, error) {
+	if err := g.StageAll(); err != nil {
+		return false, err
+	}
+	staged, err := g.HasStaged()
+	if err != nil {
+		return false, err
+	}
+	if !staged {
+		return false, nil
+	}
+	if err := g.Commit(message, noVerify); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// DiffCachedAgainst returns the diff of Dir's staged tree against base. Callers
+// StageAll first so the review includes new (untracked) files as well as edits —
+// the complete set of changes an agent made in its worktree since base.
+func (g Git) DiffCachedAgainst(base string) (string, error) {
+	return g.Runner.Output(g.Dir, "git", "diff", "--cached", base)
+}
+
+// ResetHard resets Dir's working tree and index to ref, discarding changes after
+// it. It backs `karya task rewind`, restoring a worktree to an earlier checkpoint.
+func (g Git) ResetHard(ref string) error {
+	return g.Runner.Run(g.Dir, "git", "reset", "--hard", ref)
+}
+
+// Merge merges branch into Dir's current branch. noFF forces a merge commit
+// (--no-ff) so a task's history stays a distinct, revertible unit; otherwise git
+// may fast-forward. It backs the diff-review "apply" step (`karya task merge`).
+func (g Git) Merge(branch string, noFF bool) error {
+	args := []string{"merge"}
+	if noFF {
+		args = append(args, "--no-ff")
+	}
+	args = append(args, branch)
+	return g.Runner.Run(g.Dir, "git", args...)
+}
+
+// AbortMerge aborts an in-progress merge, restoring Dir to its pre-merge state.
+// karya calls it when a task merge hits conflicts so the user's working tree is
+// never left half-merged.
+func (g Git) AbortMerge() error {
+	return g.Runner.Run(g.Dir, "git", "merge", "--abort")
+}
+
 // Push pushes the current branch, setting upstream when it has none.
 func (g Git) Push() error {
 	branch, err := g.CurrentBranch()

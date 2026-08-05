@@ -124,6 +124,7 @@ karya agent next | prev       Cycle agents
 karya agent reset             Reset the pane layout (preserves editor)
 karya agent focus             Jump to the agent pane
 karya agent send [flags]      Paste stdin (+ --file/--line/--label header) into the agent pane
+karya agent native [prompt]   Run karya's built-in Claude-API agent (needs ANTHROPIC_API_KEY)
 karya agent prefs | clear     Inspect / clear per-project preference
 
 karya edit <file> [line]      Open a file in the editor pane (used as $EDITOR)
@@ -132,6 +133,23 @@ karya run --focus             Focus the build/test pane
 
 karya new <lang> <name> [dir] Scaffold a project (python|java|typescript|go|cpp|rust)
 karya ship [--push --pr]      Stage, agent-write the commit message, commit (--no-verify)
+
+karya task new "<prompt>"     Create a task: isolated worktree (branch karya/<id>) + agent
+  --agent <name|none>         Agent for this task (else per-project pref / picker)
+  --plan                      Draft a plan and hold at awaiting-plan for approval
+karya task list | tasks       List the project's tasks + status
+karya task dashboard          Fleet view: pick a task to switch to (Ctrl-a T)
+karya task switch <id>        Attach to a task's session (rooted at its worktree)
+karya task plan <id>          Show the drafted plan
+karya task approve-plan <id>  Approve the plan: awaiting-plan → working
+karya task review [<id>]      Show the task's diff vs its base (pre-apply review)
+karya task merge [<id>] [--push]  Commit + merge karya/<id> into the project branch
+karya task reject [<id>]      Mark the task rejected (worktree kept)
+karya task checkpoint [<id>] [label]  Record a restorable snapshot
+karya task rewind [<id>] [index|sha]  Reset the worktree to a checkpoint
+karya task allow <action>     Pre-authorize merge|push|rewind for this project
+karya task rm <id> [-y]       Remove a task: its worktree, branch, and record
+  (id defaults to the current task inside a task-<id> session)
 
 karya lang                    Interactive language + version selector
 karya lang list | add | remove | all
@@ -153,9 +171,13 @@ identical in every language — `<leader>ct` nearest test, `<leader>cf` format,
 refactor, `<leader>ci` organize imports, `<leader>cd` debug — dispatched to the
 active buffer's language (no per-language `<leader>p/o/j/r/C/y` prefixes). A
 `<leader>a` **"Agent"** group bridges editor→agent (`ab` buffer, `as` selection,
-`ad` diagnostic, `af` file ref, `ac` explain, `aa` focus). Close-buffer is
-`<leader>x`. `util/langmaps.lua` is the single registration point; an integration
-test enforces the cross-language interface.
+`ad` diagnostic, `af` file ref, `ac` explain, `aa` focus). A `<leader>k` **"Karya
+Tasks"** group (`features/karyatasks.lua`) drives the task gates from the editor —
+`kn` new, `kl` list, `kr` review, `km` merge, `kj` reject, `kc` checkpoint, `kw`
+rewind — defaulting to the current task session and running in the build pane.
+Close-buffer is `<leader>x`. `util/langmaps.lua` is the single registration point
+for the `<leader>c` interface; an integration guardrail enforces the cross-language
+interface and that the `<leader>k` task group stays bound.
 
 In-session tmux keybindings (embedded `tmux.conf`, prefix `Ctrl-a`), preserved
 from the current setup and wired to karya:
@@ -167,6 +189,7 @@ from the current setup and wired to karya:
 | `Ctrl-a D` | Reset layout | `karya agent reset` |
 | `Ctrl-a P` | New project (`lang:name`) | `karya new` |
 | `Ctrl-a G` | Ship (agent commit & push) | `karya ship --push` |
+| `Ctrl-a T` | Tasks dashboard (fleet view) | `karya task dashboard` |
 | `Ctrl-a S` | Toggle synchronize-panes | tmux native |
 | `Ctrl-a g` | Git window (lazygit) | tmux native |
 | `Ctrl-a Q` | Kill session (confirm) | `karya dev -q` |
@@ -254,6 +277,21 @@ binary (Phase 7). The **internal** engineering docs (`PLAN.md`, `ROADMAP.md`,
   `internal/prefs`), keyed by absolute workdir.
 - Switch/next/prev respawn the agent pane; reset rebuilds the layout while
   preserving the editor pane.
+- **Pluggable engine (`agent.Runner`, Phase 9).** Every agent is driven through a
+  small consumer-defined interface — `Name`, `InteractiveCommand` (the pane-launch
+  command), and `Headless(ctx, dir, prompt)` (a one-shot invocation returning
+  stdout, or `ErrNoHeadless`). `cliRunner` wraps each BYO-CLI; `nativeRunner`
+  (Phase 13) is the second implementation. `agent.NewRunner` is the single
+  factory; `session.Build`, `Manager.launch`, and `ship`/task authoring all go
+  through it, so BYO-CLI vs native is transparent to every consumer.
+- **Native engine (`internal/native`, Phase 13).** karya's own Claude-API tool-use
+  loop (`read_file`/`write_file`/`run_command`) over stdlib `net/http` — no SDK
+  dependency, default model `claude-opus-5`. Its reason to exist is **per-tool-call
+  permission prompts**: each write or command the model requests passes through a
+  human-answered `Permit` gate (reads are never gated; access is confined to the
+  workspace) — the one thing karya cannot enforce for a BYO-CLI, closing the
+  Phase 11 caveat. Offered only when `ANTHROPIC_API_KEY` is set; BYO-CLI is the
+  default. Interactive form: `karya agent native`.
 
 ### 6.3 Editor integration (`internal/editor`)
 
@@ -313,6 +351,52 @@ karya prefix — never Homebrew or the user's global mise.
   managed tools, and runs `Lazy! sync`.
 - Version metadata injected at build time via `-ldflags` into `internal/version`.
 
+### 6.6 Tasks & task-level isolation (`internal/task`, `internal/worktree`)
+
+The human-in-the-loop, agents-first arc (ROADMAP Phases 10–13) makes the **task**
+karya's primary noun and adds a second kind of isolation on top of the
+environment isolation of §2: **task-level isolation**.
+
+- A `task.Task` (id, title, prompt, agent, status, branch, worktree, repo,
+  timestamps) is one unit of agent work. Its lifecycle is
+  `planning → awaiting-plan → working → awaiting-review → merged | rejected`
+  (the plan states are entered only when plan approval is requested — Phase 11).
+- `task.Store` persists the tasks of one project as a single JSON file under
+  `config.Paths.TasksDir()`, named by `worktree.ProjectSlug(repo)` so a project's
+  tasks stay grouped and never touch the user's config.
+- `worktree.Manager` gives each task an isolated `git worktree`: a namespaced
+  branch `karya/<id>` checked out under `config.Paths.WorktreesDir()`
+  (`~/.local/state/karya/worktrees/<project-slug>/<id>`) — **never** in the user's
+  own tree. It runs git behind a consumer-defined `Runner` (the same shape as
+  `ship.Runner`, satisfied by `ship.ExecRunner`), keeping the plumbing
+  unit-testable. `Remove` force-removes the worktree, deletes the branch, prunes,
+  and clears any residual dir, so a task leaves nothing behind.
+- `karya task new/list/switch/rm` (`internal/cli/task.go`) drive it: `new` creates
+  the worktree + record and, inside a karya session, opens a session rooted at the
+  worktree with the task's agent; `switch` attaches; `rm` tears the task down. The
+  agent thus works **inside the isolated worktree**, and the human reviews before
+  merge.
+
+**The four human-in-the-loop gates (Phase 11)** are layered on the task model,
+all reusing the extended `ship.Git` plumbing (`RevParse`, `CommitAll`,
+`DiffCachedAgainst`, `Merge`, `ResetHard`):
+
+1. **Plan approval** — `task new --plan` drafts a plan through the agent's
+   headless `Runner` and holds the task at `awaiting-plan`; `task approve-plan`
+   advances it to `working` (validated by `task.CanTransition`).
+2. **Diff review before apply** — `task review` shows the whole task diff against
+   its recorded `BaseCommit` (the user's branch is still untouched, since the work
+   lives on `karya/<id>`); `task merge` merges it in, `task reject` discards it.
+3. **Checkpoint & rollback** — `task checkpoint` records a restorable commit;
+   `task rewind` resets the worktree to one.
+4. **Permission prompts** — `gateAction` confirms karya-initiated merge/push/
+   rewind, honored by a per-project allowlist (`task allow`). It gates only
+   karya's **own** actions — a BYO-CLI agent's internal tool calls are outside
+   karya's reach until the native engine (Phase 13).
+
+Gate commands default to the **current task** when run inside its `task-<id>`
+session, so the `<leader>k` "Karya Tasks" editor group can invoke them id-free.
+
 ---
 
 ## 7. Distribution
@@ -328,10 +412,14 @@ karya prefix — never Homebrew or the user's global mise.
 
 ## 8. Open questions / deferred decisions
 
-- **Native agent** (own LLM API loop) is explicitly deferred; the agent
-  interface is designed to allow plugging one in later (see ROADMAP Phase 9).
-  The Phase 8 headless-agent capability map (`agent.HeadlessPrompt`) and the
-  editor↔agent bridge already exercise that interface from the BYO-CLI side.
+- **Human-in-the-loop, agents-first arc (Phases 9–13, complete).** karya evolved
+  from "an agent in a pane" into a human-in-the-loop, AI-agents-first IDE built on
+  a new **task-level** isolation (a worktree/branch per task) layered on the
+  existing environment isolation. The pluggable `agent.Runner` interface (Phase 9)
+  made the engine swappable; the **native agent** (own Claude-API tool-use loop,
+  `internal/native`) landed as the second implementation behind it (Phase 13),
+  unlocking per-tool-call permission prompts — **BYO-CLI stays the default**. See
+  ROADMAP Phases 9–13 and §6.2/§6.6.
 - **Linux tool bootstrap** parity (no Homebrew) — designed for, validated later.
 - **Ghostty / terminal config** stays optional and never overwrites user files;
   may ship as a documented sample rather than an applied config.

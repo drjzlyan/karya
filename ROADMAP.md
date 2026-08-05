@@ -199,11 +199,137 @@ and authors commits; and the guardrail + full gate are green. **Ready for `v0.2.
 
 ---
 
-## Phase 9 — (Deferred) Native agent option
-**Goal:** optional built-in LLM agent behind the existing agent interface.
+## Human-in-the-loop, AI-agents-first arc (Phases 9–13)
 
-- ☐ Define pluggable agent interface (BYO-CLI vs native)
-- ☐ Native agent loop (tool-use, edits, run) using the Claude API
-- ☐ Config for keys/models; keep BYO-CLI as default
+karya's next arc turns it from "an agent in a pane" into a **human-in-the-loop,
+AI-agents-first IDE**: agents are the primary way work gets done and the human
+directs and reviews them. It adds a *second* kind of isolation on top of karya's
+existing **environment** isolation — **task-level** isolation: each unit of agent
+work in its own git worktree/branch (`karya/<task-id>`) under karya-owned dirs, so
+changes are contained and reviewable before they touch the user's real branch.
+Full design in [PLAN.md](PLAN.md) §6.6. Locked decisions: pluggable agent engine
+(BYO-CLI first, native drops in behind one interface); gates before fleet; all
+four HITL gates (plan approval, diff review, checkpoint/rollback, permission
+prompts).
 
-**Status:** deferred by decision; the Phase 2 interface must not preclude it.
+## Phase 9 — Agent-runner interface (make the engine pluggable) ✅
+**Goal:** one interface for every agent engine so nothing downstream depends on a
+specific CLI. Foundational refactor; no user-visible behavior change.
+
+- ☑ `agent.Runner` interface — `Name`, `InteractiveCommand` (pane launch),
+  `Headless(ctx, dir, prompt)` (one-shot); `ErrNoHeadless` sentinel + a
+  `SupportsHeadless` capability probe (`internal/agent/runner.go`, `headless.go`)
+- ☑ `cliRunner` wraps each BYO-CLI behind the interface; `headlessArgv` is now the
+  internal lookup table it consumes
+- ☑ Real consumers wired: `Manager.launch` starts the agent via
+  `InteractiveCommand`; `cli/ship.go` authors commit messages via
+  `Runner.Headless` — identical behavior, engine-agnostic path
+- ☑ Native engine seam reserved for Phase 13 (interface only)
+
+**Done when:** both interactive and headless paths run through `agent.Runner`,
+the full gate is green, and existing agent/ship behavior is unchanged.
+
+---
+
+## Phase 10 — Task model + isolated task workspace (the spine) ✅
+**Goal:** the **task** becomes karya's primary noun; each gets an isolated
+worktree/branch.
+
+- ☑ `internal/task` — `Task` (id, title, prompt, agent, status, branch, worktree,
+  repo, timestamps) + lifecycle statuses; per-project JSON `Store`
+  (List/Get/Save-upsert/Delete) under `config.Paths.TasksDir()`
+- ☑ `internal/worktree` — git worktree management behind a consumer-defined
+  `Runner` (satisfied by `ship.ExecRunner`): `Add` creates branch `karya/<id>`
+  checked out under `config.Paths.WorktreesDir()`; `Remove` force-removes the
+  worktree + branch + residual dir; `ProjectSlug` groups tasks per repo
+- ☑ `karya task new "<prompt>" [--agent]`, `task list`/`tasks`, `task switch <id>`,
+  `task rm <id> [-y]`; order-independent flag parsing (prompt is free-form); the
+  agent works **inside the worktree** session, not the raw cwd. (`--plan` lands
+  with the plan gate in Phase 11.)
+- ☑ Isolation proven: real-git integration test asserts the checkout lives under
+  the karya root (never in the user tree), the branch is namespaced, and `Remove`
+  leaves nothing behind; end-to-end smoke confirms the user repo stays pristine
+
+---
+
+## Phase 11 — Human-in-the-loop gates (all four) ✅
+**Goal:** the human directs and reviews; nothing lands unreviewed.
+
+- ☑ **Plan approval** — `task new --plan` drafts a plan via the agent's headless
+  mode and parks the task at `awaiting-plan`; `task plan` shows it;
+  `task approve-plan` gates `awaiting-plan → working`. (Agents with no headless
+  mode still park at the gate for a hand-written/approved plan.)
+- ☑ **Diff review before apply** — `task review` stages the worktree and shows the
+  whole task diff against its recorded base commit (user branch still untouched);
+  `task merge` commits + merges `karya/<id>` into the project branch (`--no-ff`),
+  `task reject` marks it rejected. Reuses/extends `ship.Git`
+  (`RevParse`/`CommitAll`/`DiffCachedAgainst`/`Merge`/`ResetHard`).
+- ☑ **Checkpoint & rollback** — `task checkpoint [label]` commits a restorable
+  snapshot on the branch; `task rewind [index|sha]` resets the worktree to one.
+  (Explicit per the honest note below — automatic per-turn checkpoints need the
+  native engine to observe turns, Phase 13.)
+- ☑ **Permission prompts** — `gateAction` confirms karya-initiated merge/push/
+  rewind, with a per-project allowlist (`task allow <action>`) and `-y` to skip.
+  *Caveat, stated in-code:* this gates only karya's **own** actions; per-tool-call
+  gating of a BYO-CLI's internal calls needs the native engine (Phase 13).
+- ☑ Gate commands default to the **current task** inside a `task-<id>` session
+  (no id needed). `<leader>k` "Karya Tasks" nvim group (Terminal already owns
+  `<leader>t`) drives new/list/review/merge/reject/checkpoint/rewind in the
+  build pane; the Phase-8-style headless-nvim guardrail asserts it stays bound.
+
+---
+
+## Phase 12 — Fleet (parallel, worktree-isolated agents) ✅
+**Goal:** many agents at once, once one task reviews cleanly.
+
+- ☑ Concurrent tasks, each its own worktree/branch/agent/session — this falls out
+  of the Phase 10 model: every `karya task new` is an independent worktree +
+  `task-<id>` session, so a fleet just works (verified: 3 tasks, 3 isolated
+  worktrees + `karya/<id>` branches side by side).
+- ☑ `karya task dashboard` — the fleet view: a numbered table of every task with
+  its live status; pick a number/id to switch to it. Bound to **`Ctrl-a T`** via a
+  tmux popup so the switch lands in the underlying client.
+- ☑ `task switch` attaches a task's session (Phase 10); the diff-review/merge gates
+  (Phase 11) are the per-task review queue.
+
+---
+
+## Phase 13 — Native agent engine (second Runner impl) ✅
+**Goal:** the Phase 9 pluggability pays off.
+
+- ☑ `internal/native` — a Claude-API tool-use loop (`read_file`/`write_file`/
+  `run_command`) over **stdlib `net/http`** (no SDK dependency — keeps the
+  single-binary/no-CGO promise), default model `claude-opus-5` (override with
+  `KARYA_AGENT_MODEL`). Hermetic `httptest` coverage of a tool round-trip,
+  permission denial, an approved write, and workspace-escape rejection.
+- ☑ **Per-tool-call permission prompts** — every `write_file`/`run_command` the
+  model requests passes through a `Permit` callback the human answers; declines
+  return an `is_error` tool_result so the model adapts. This is what BYO-CLI
+  agents can't offer, closing the Phase 11 caveat. Reads are never gated; all
+  file access is confined to the workspace.
+- ☑ `agent.nativeRunner` behind `agent.Runner` (`Name`/`InteractiveCommand`/
+  `Headless`); `NewRunner` is the single factory (native for `"native"`, else
+  BYO-CLI). `Detect`/`Available`/`SupportsHeadless` know about native;
+  `session.Build`, `Manager.launch`, and `ship`/task authoring all route through
+  the factory — **no consumer churn**, BYO-CLI stays the default.
+- ☑ `karya agent native [prompt]` — one-shot or a REPL; the interactive pane form
+  of the engine. Offered only when `ANTHROPIC_API_KEY` is set.
+
+**Status:** the interface (Phase 9) already existed; this was an additive
+implementation, exactly as designed.
+
+---
+
+## Phase 14 — User docs & tutorial for the agents-first workflow ✅
+**Goal:** teach the task/gate/fleet/native workflow offline from the binary.
+
+- ☑ `docs/tutorial.md` §1.6 "Human-in-the-loop tasks" — the task lifecycle, the
+  review gates, the `<leader>k` group + `Ctrl-a T` dashboard, and the native agent,
+  all in the narrative tutorial.
+- ☑ New `docs/commands.md` — the full per-command reference (grouped), embedded
+  and browsable via `karya docs commands`.
+- ☑ `karya tutorial` gains a **self-working** "Human-in-the-loop tasks" lesson: it
+  creates and tears down a real isolated worktree (branch `karya/<id>`) under a
+  sandbox root via the same `worktree.Manager`, proving task-level isolation on the
+  user's machine (degrades to a Note without git).
+- ☑ Docs synced to the embedded copy; drift + help/topic tests green.

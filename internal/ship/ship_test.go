@@ -116,6 +116,77 @@ func TestPushSetsUpstream(t *testing.T) {
 	}
 }
 
+func TestRevParse(t *testing.T) {
+	fr := newFakeRunner()
+	fr.out[key("git", "rev-parse", "HEAD")] = "abc123\n"
+	g := Git{Runner: fr, Dir: "/x"}
+	if sha, err := g.RevParse("HEAD"); err != nil || sha != "abc123" {
+		t.Errorf("RevParse = %q,%v; want abc123,nil", sha, err)
+	}
+}
+
+func TestCommitAllSkipsWhenNothingStaged(t *testing.T) {
+	fr := newFakeRunner()
+	fr.out[key("git", "diff", "--cached", "--name-only")] = "\n" // nothing staged
+	g := Git{Runner: fr, Dir: "/x"}
+	committed, err := g.CommitAll("checkpoint", false)
+	if err != nil {
+		t.Fatalf("CommitAll: %v", err)
+	}
+	if committed {
+		t.Error("CommitAll reported a commit with nothing staged")
+	}
+	if fr.ranPrefix("git", "commit") {
+		t.Error("CommitAll must not commit when nothing is staged")
+	}
+}
+
+func TestCommitAllCommitsWhenStaged(t *testing.T) {
+	fr := newFakeRunner()
+	fr.out[key("git", "diff", "--cached", "--name-only")] = "a.go\n"
+	g := Git{Runner: fr, Dir: "/x"}
+	committed, err := g.CommitAll("checkpoint", false)
+	if err != nil || !committed {
+		t.Fatalf("CommitAll = %v,%v; want true,nil", committed, err)
+	}
+	if !fr.ranPrefix("git", "add", "-A") || !fr.ranPrefix("git", "commit") {
+		t.Errorf("CommitAll should stage and commit; got %v", fr.runs)
+	}
+}
+
+func TestMergeNoFF(t *testing.T) {
+	fr := newFakeRunner()
+	g := Git{Runner: fr, Dir: "/x"}
+	if err := g.Merge("karya/t1", true); err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	if !fr.ranPrefix("git", "merge", "--no-ff", "karya/t1") {
+		t.Errorf("expected no-ff merge, got %v", fr.runs)
+	}
+}
+
+func TestAbortMerge(t *testing.T) {
+	fr := newFakeRunner()
+	g := Git{Runner: fr, Dir: "/x"}
+	if err := g.AbortMerge(); err != nil {
+		t.Fatalf("AbortMerge: %v", err)
+	}
+	if !fr.ranPrefix("git", "merge", "--abort") {
+		t.Errorf("expected merge --abort, got %v", fr.runs)
+	}
+}
+
+func TestResetHard(t *testing.T) {
+	fr := newFakeRunner()
+	g := Git{Runner: fr, Dir: "/x"}
+	if err := g.ResetHard("deadbeef"); err != nil {
+		t.Fatalf("ResetHard: %v", err)
+	}
+	if !fr.ranPrefix("git", "reset", "--hard", "deadbeef") {
+		t.Errorf("expected reset --hard, got %v", fr.runs)
+	}
+}
+
 func TestSanitizeMessage(t *testing.T) {
 	tests := []struct {
 		name, in, want string

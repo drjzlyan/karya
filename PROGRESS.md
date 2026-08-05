@@ -12,6 +12,132 @@ every working session.
 
 ## Recent work
 
+### Phase 14 — user docs & tutorial for the agents-first workflow — 2026-08-05
+Taught the new workflow offline from the binary (follows the review-fixes commit).
+- **`docs/tutorial.md` §1.6** — "Human-in-the-loop tasks": lifecycle, review gates,
+  `<leader>k` group + `Ctrl-a T` dashboard, native agent, task-level isolation.
+- **`docs/commands.md`** (new) — full per-command reference, grouped; embedded and
+  browsable via `karya docs commands` (auto-picked up by `DocTopics()`).
+- **`karya tutorial`** — new self-working lesson `verifyTasks` creates + removes a
+  real isolated worktree (`karya/<id>` under a sandbox root) with the same
+  `worktree.Manager` the CLI uses; proves containment on the user's machine
+  (Note without git). README user-docs list updated.
+- Synced to embedded docs; drift/help/topic tests green; full gate green.
+
+### Phase 13 — native agent engine (arc complete) — 2026-08-05
+The Phase 9 pluggability paid off: karya's own Claude-API agent landed as the
+second `Runner`, unlocking per-tool-call permission prompts. **BYO-CLI stays the
+default.**
+- **`internal/native`** — a tool-use loop (`read_file`/`write_file`/`run_command`)
+  over stdlib `net/http` (no SDK dep — keeps single-binary/no-CGO), default model
+  `claude-opus-5` (`KARYA_AGENT_MODEL` overrides). Thinking disabled so wire blocks
+  round-trip cleanly, with the documented Opus-5 mitigations in the system prompt.
+  Hermetic `httptest` tests: tool round-trip, permission denial (→ is_error
+  result), approved write, workspace-escape rejection.
+- **Per-tool-call gate** — every write/command passes through a `Permit` callback
+  the human answers; reads are never gated; all access confined to the workspace.
+  This is the thing BYO-CLI agents can't do (closes the Phase 11 caveat).
+- **`agent.nativeRunner`** behind `agent.Runner`; `NewRunner` is the single factory
+  (native for `"native"`, else BYO-CLI). `Detect`/`Available`/`SupportsHeadless`
+  know native; `session.Build`, `Manager.launch`, `ship`/task authoring route
+  through the factory — no consumer churn. `karya agent native [prompt]` runs it
+  one-shot or as a REPL; offered only when `ANTHROPIC_API_KEY` is set.
+- Gate green (fmt, vet, lint 0, race, integration, build).
+- **Arc complete (Phases 9–13).** karya is now a human-in-the-loop, agents-first
+  IDE: pluggable engines, task-level worktree isolation, four review gates, a fleet
+  dashboard, and a native engine with true per-tool-call permission prompts — all
+  atop the original environment isolation.
+
+### Phase 12 — fleet (parallel, worktree-isolated agents) — 2026-08-05
+The parallelism fell out of the Phase 10 model — every `karya task new` is an
+independent worktree + `task-<id>` session — so Phase 12 added the missing piece:
+a way to see and navigate the fleet.
+- **`karya task dashboard`** — a numbered table of every task + live status; enter
+  a number or id to switch to that task's session. `renderTasks`/`dashboardChoice`
+  are pure and unit-tested.
+- **`Ctrl-a T`** — bound in the embedded `tmux.conf` to open the dashboard in a
+  `display-popup` so the switch lands in the underlying client (same pattern as
+  `Ctrl-a G` ship).
+- Verified: 3 concurrent tasks → 3 isolated worktrees + `karya/<id>` branches, all
+  listed in the dashboard.
+- Docs: ROADMAP/PLAN/PROGRESS + tmux keymaps (synced to embedded). Gate green.
+- **Next:** Phase 13 — native Claude-API `Runner` behind the Phase 9 interface;
+  unlocks true per-tool-call permission prompts (closes the Phase 11 caveat).
+
+### Phase 11 — human-in-the-loop gates (all four) — 2026-08-05
+Layered the four review gates on the task model — the heart of the agents-first
+pivot. Nothing an agent does lands on the user's branch unreviewed.
+- **Plan approval** — `task new --plan` drafts a plan via the agent's headless
+  `Runner` and parks at `awaiting-plan`; `task plan` shows it; `task approve-plan`
+  → `working`. Agents without a headless mode still park at the gate.
+- **Diff review before apply** — `task review` stages the worktree and diffs the
+  whole task against its recorded `BaseCommit` (user branch untouched); `task
+  merge` commits + `--no-ff` merges `karya/<id>` into the project branch; `task
+  reject` marks rejected.
+- **Checkpoint & rollback** — `task checkpoint [label]` commits a restorable
+  snapshot; `task rewind [index|sha]` resets the worktree to one.
+- **Permission prompts** — `gateAction` confirms karya-initiated merge/push/rewind
+  with a per-project allowlist (`task allow`) and `-y`. *Honest caveat in code &
+  docs:* gates only karya's own actions; per-tool-call gating of a BYO-CLI needs
+  the native engine (Phase 13).
+- **Plumbing** — extended `ship.Git` (`RevParse`, `CommitAll`, `DiffCachedAgainst`,
+  `Merge`, `ResetHard`); `task.Task` gained `Plan`/`BaseCommit`/`Checkpoints` and a
+  `CanTransition` lifecycle guard. Gate commands default to the **current task**
+  inside a `task-<id>` session.
+- **Editor** — `<leader>k` "Karya Tasks" nvim group (`features/karyatasks.lua`;
+  Terminal owns `<leader>t`) runs the gates in the build pane; the Phase-8-style
+  headless-nvim keymap guardrail now also asserts `<leader>kn`/`<leader>kr` stay
+  bound.
+- Smoke (isolated HOME + repo, agent none): new→checkpoint→review→rewind→merge
+  applied `karya/<id>` into `main` with the user tree untouched until merge.
+- Gate green (fmt, vet, lint 0, race, integration, build).
+- **Next:** Phase 12 — fleet: parallel worktree-isolated tasks + a tasks dashboard
+  (tmux window, `Ctrl-a T`). Not started.
+
+### Phase 10 — task model + isolated task workspace — 2026-08-05
+Made the **task** karya's primary noun and added **task-level isolation** — a git
+worktree/branch per task — on top of the environment isolation of PLAN §2.
+- **`internal/task`** — `Task` (id/title/prompt/agent/status/branch/worktree/repo/
+  timestamps) with the review lifecycle; per-project JSON `Store`
+  (List/Get/Save-upsert/Delete) under `config.Paths.TasksDir()`. Hermetic unit tests.
+- **`internal/worktree`** — `Manager.Add` creates branch `karya/<id>` checked out
+  under `config.Paths.WorktreesDir()` (never in the user tree); `Remove` force-
+  removes worktree + branch + residual dir; `ProjectSlug` groups per repo. Git runs
+  behind a consumer `Runner` (satisfied by `ship.ExecRunner`). Unit test (fake
+  runner) + **real-git integration test** proving isolation and clean teardown.
+- **`config.Paths`** — added `WorktreesDir()` and `TasksDir()` under State (+ test).
+- **`karya task new/list/switch/rm`** (`internal/cli/task.go`, wired in `cli.go` +
+  usage). `new` creates the worktree/record and, inside a karya session, opens a
+  session rooted at the worktree with the task's agent; `switch` attaches; `rm`
+  tears it down (confirm/`-y`). Order-independent flag parsing (the prompt is
+  free-form, so `--agent`/`-y` may follow it — fixes the Go `flag` positional
+  gotcha); runtime provisioning only when a session is actually opened.
+- End-to-end smoke (isolated HOME + throwaway repo): task new→list→rm leaves the
+  user repo pristine, the `karya/<id>` branch and worktree fully cleaned up.
+- Gate green (fmt, vet, lint 0, race, integration, build).
+- **Next:** Phase 11 — the four HITL gates (plan approval, diff review before
+  apply, checkpoint/rewind, permission prompts) on the task flow. Not started.
+
+### Phase 9 — agent-runner interface (agents-first arc begins) — 2026-08-05
+Kicked off the **human-in-the-loop, AI-agents-first** direction (audit + approved
+5-phase plan; see [ROADMAP.md](ROADMAP.md) Phases 9–13 and [PLAN.md](PLAN.md) §6.2/§8).
+Landed the foundational, behavior-neutral refactor:
+- **`agent.Runner`** (`internal/agent/runner.go`) — one small consumer-defined
+  interface for every agent engine: `Name`, `InteractiveCommand` (pane launch),
+  `Headless(ctx, dir, prompt)` (one-shot → stdout). `ErrNoHeadless` sentinel;
+  `SupportsHeadless` capability probe. `cliRunner` wraps each BYO-CLI.
+- **`HeadlessPrompt` → internal `headlessArgv`** — the argv table is now the
+  lookup behind `cliRunner.Headless`, not an exported API.
+- **Real consumers wired, no behavior change:** `Manager.launch` starts the agent
+  via `InteractiveCommand`; `cli/ship.go shipMessage` authors commit messages via
+  `Runner.Headless` (exec moved into `execHeadless`, `os/exec` dropped from cli).
+- **Native engine seam** reserved for Phase 13 — interface only.
+- Gate green: gofmt, `go vet`, golangci-lint v2 @latest (0 issues), `go test -race`,
+  `-tags=integration`, `go build`. New white-box tests in `runner_test.go`.
+- **Next:** Phase 10 — `internal/task` + worktree-per-task isolation (`karya task
+  new/list/switch/rm`); the agent works inside `karya/<id>` worktrees under the
+  karya prefix. Not yet started.
+
 ### Reliable fresh-install tooling from the vendored mise — 2026-08-04
 Fixed a greenfield break where **tmux, Neovim, and fzf were all missing** after
 `karya install` (and lazygit was never provisioned at all, so the `Ctrl-a g` git

@@ -55,6 +55,11 @@ vim.lsp.enable = function() end
 -- Global keymaps: core.keymaps binds the top-level leader keys we assert on.
 require("core.keymaps")
 
+-- The Karya Tasks feature (<leader>k…) registers its maps at import time. It is
+-- hermetic (features.terminal defers its toggleterm require), so loading it here
+-- lets the guard assert the task group stays wired.
+pcall(require, "features.karyatasks")
+
 local langs = { "go", "rust", "typescript", "cpp", "python", "java" }
 local filetype = {
   go = "go",
@@ -104,4 +109,7 @@ local function global_has(lhs)
 end
 print("GLOBAL c " .. (global_has(" c") and "present" or "absent"))
 print("GLOBAL x " .. (global_has(" x") and "present" or "absent"))
+-- Karya Tasks group: a couple of representative <leader>k maps must stay bound.
+print("GLOBAL kn " .. (global_has(" kn") and "present" or "absent"))
+print("GLOBAL kr " .. (global_has(" kr") and "present" or "absent"))
 print("OK")

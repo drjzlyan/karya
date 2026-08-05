@@ -22,7 +22,10 @@ import (
 	"github.com/drjzlyan/karya/internal/assets"
 	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/project"
+	"github.com/drjzlyan/karya/internal/ship"
+	"github.com/drjzlyan/karya/internal/task"
 	"github.com/drjzlyan/karya/internal/tmuxx"
+	"github.com/drjzlyan/karya/internal/worktree"
 )
 
 // Sandbox is a throwaway workspace a lesson may write into. It is created fresh
@@ -155,6 +158,18 @@ func Lessons() []Lesson {
 			Run:    verifyAgents,
 		},
 		{
+			Title: "Human-in-the-loop tasks",
+			Body: "karya can hand work to an agent as a *task* that runs in its own isolated\n" +
+				"git worktree (branch karya/<id>), so nothing touches your real branch until\n" +
+				"you review it. `karya task new \"<prompt>\"` starts one; `karya task review`,\n" +
+				"`merge`, `reject`, and `rewind` are the review gates; `karya task dashboard`\n" +
+				"(Ctrl-a T) lists the fleet. karya will create and tear down a real isolated\n" +
+				"worktree now to prove the containment.",
+			Expect: "karya task list",
+			Hint:   "type it exactly: karya task list",
+			Run:    verifyTasks,
+		},
+		{
 			Title: "Where to go next — try the IDE tutorial",
 			Body: "That's the core loop, driven by you. Next, learn the editor the same way:\n" +
 				"`karya tutorial ide` runs a keystroke-by-keystroke walkthrough inside the\n" +
@@ -249,6 +264,62 @@ func verifyGitInit(sb *Sandbox) (Outcome, string) {
 		return Fail, fmt.Sprintf("expected a .git directory in %s", dir)
 	}
 	return Pass, "initialized a git repository (.git created)"
+}
+
+// verifyTasks proves task-level isolation for real: it creates a git repo in the
+// sandbox, adds a task worktree on a namespaced karya/<id> branch under a
+// sandbox-local root, records the task, and tears it all down — the same
+// worktree.Manager the `karya task` commands use. It degrades to a Note when git
+// is not installed rather than failing on a machine still being set up.
+func verifyTasks(sb *Sandbox) (Outcome, string) {
+	if _, err := exec.LookPath("git"); err != nil {
+		return Note, "git is not installed yet — install it to use task worktrees"
+	}
+	r := ship.ExecRunner{}
+	repo := filepath.Join(sb.Dir, "taskrepo")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		return Fail, err.Error()
+	}
+	for _, args := range [][]string{
+		{"init"},
+		{"config", "user.email", "tutorial@karya.local"},
+		{"config", "user.name", "karya tutorial"},
+	} {
+		if err := r.Run(repo, "git", args...); err != nil {
+			return Fail, err.Error()
+		}
+	}
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("hello\n"), 0o644); err != nil {
+		return Fail, err.Error()
+	}
+	if err := r.Run(repo, "git", "add", "-A"); err != nil {
+		return Fail, err.Error()
+	}
+	if err := r.Run(repo, "git", "commit", "-m", "init"); err != nil {
+		return Fail, err.Error()
+	}
+
+	mgr := worktree.Manager{Runner: r, Root: filepath.Join(sb.Dir, "worktrees")}
+	const id = "demo"
+	path, err := mgr.Add(repo, id)
+	if err != nil {
+		return Fail, err.Error()
+	}
+	// Isolation: the checkout lives under the sandbox root, not inside the repo.
+	if !strings.HasPrefix(path, sb.Dir) || strings.HasPrefix(path, repo) {
+		return Fail, fmt.Sprintf("task worktree %q is not isolated from the repo", path)
+	}
+	store := task.NewStore(filepath.Join(sb.Dir, "tasks.json"))
+	if _, err := store.Save(task.Task{
+		ID: id, Title: "demo task", Status: task.StatusWorking,
+		Branch: worktree.Branch(id), Worktree: path, Repo: repo,
+	}); err != nil {
+		return Fail, err.Error()
+	}
+	if err := mgr.Remove(repo, id); err != nil {
+		return Fail, err.Error()
+	}
+	return Pass, fmt.Sprintf("created and cleaned up an isolated worktree on branch %s (contained, reviewable)", worktree.Branch(id))
 }
 
 // verifyEmbeddedDocs confirms the offline documentation is present in the binary.
