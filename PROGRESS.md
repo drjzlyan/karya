@@ -12,6 +12,18 @@ every working session.
 
 ## Recent work
 
+### Phase 14 — user docs & tutorial for the agents-first workflow — 2026-08-05
+Taught the new workflow offline from the binary (follows the review-fixes commit).
+- **`docs/tutorial.md` §1.6** — "Human-in-the-loop tasks": lifecycle, review gates,
+  `<leader>k` group + `Ctrl-a T` dashboard, native agent, task-level isolation.
+- **`docs/commands.md`** (new) — full per-command reference, grouped; embedded and
+  browsable via `karya docs commands` (auto-picked up by `DocTopics()`).
+- **`karya tutorial`** — new self-working lesson `verifyTasks` creates + removes a
+  real isolated worktree (`karya/<id>` under a sandbox root) with the same
+  `worktree.Manager` the CLI uses; proves containment on the user's machine
+  (Note without git). README user-docs list updated.
+- Synced to embedded docs; drift/help/topic tests green; full gate green.
+
 ### Phase 13 — native agent engine (arc complete) — 2026-08-05
 The Phase 9 pluggability paid off: karya's own Claude-API agent landed as the
 second `Runner`, unlocking per-tool-call permission prompts. **BYO-CLI stays the

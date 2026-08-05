@@ -317,3 +317,19 @@ worktree/branch.
 
 **Status:** the interface (Phase 9) already existed; this was an additive
 implementation, exactly as designed.
+
+---
+
+## Phase 14 — User docs & tutorial for the agents-first workflow ✅
+**Goal:** teach the task/gate/fleet/native workflow offline from the binary.
+
+- ☑ `docs/tutorial.md` §1.6 "Human-in-the-loop tasks" — the task lifecycle, the
+  review gates, the `<leader>k` group + `Ctrl-a T` dashboard, and the native agent,
+  all in the narrative tutorial.
+- ☑ New `docs/commands.md` — the full per-command reference (grouped), embedded
+  and browsable via `karya docs commands`.
+- ☑ `karya tutorial` gains a **self-working** "Human-in-the-loop tasks" lesson: it
+  creates and tears down a real isolated worktree (branch `karya/<id>`) under a
+  sandbox root via the same `worktree.Manager`, proving task-level isolation on the
+  user's machine (degrades to a Note without git).
+- ☑ Docs synced to the embedded copy; drift + help/topic tests green.
