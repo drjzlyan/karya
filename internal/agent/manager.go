@@ -136,8 +136,10 @@ func (m *Manager) launch(name string) error {
 	_ = m.tmux.Run("respawn-pane", "-t", pane, "-k", "-c", workdir)
 	time.Sleep(300 * time.Millisecond)
 
-	if name != None && Available(name) {
-		_ = m.tmux.Run("send-keys", "-t", pane, name, "Enter")
+	// Start the agent through its Runner so the launch path is engine-agnostic
+	// (a native engine plugs in behind the same interface, ROADMAP Phase 13).
+	if cmd, ok := NewCLIRunner(name).InteractiveCommand(); ok && Available(name) {
+		_ = m.tmux.Run("send-keys", "-t", pane, cmd, "Enter")
 	}
 
 	m.setOpt("@ide_current_agent", name)

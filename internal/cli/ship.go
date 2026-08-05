@@ -1,10 +1,10 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/drjzlyan/karya/internal/agent"
@@ -107,32 +107,20 @@ func shipAgent(a *app) string {
 // shipMessage asks the agent to author a commit message from the staged diff via
 // its headless mode, returning "" when the agent has no headless mode, is not on
 // PATH, errors, or replies emptily — every one of which triggers the fallback.
+// It drives the agent through its Runner so the flow is engine-agnostic.
 func shipMessage(name, dir, diff string) string {
-	if name == "" {
-		return ""
-	}
-	argv, ok := agent.HeadlessPrompt(name, ship.BuildPrompt(diff))
-	if !ok {
-		return ""
-	}
-	if _, err := exec.LookPath(argv[0]); err != nil {
+	if name == "" || !agent.SupportsHeadless(name) {
 		return ""
 	}
 	fmt.Printf("Asking %s to write a commit message…\n", name)
-	cmd := exec.Command(argv[0], argv[1:]...)
-	cmd.Dir = dir
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
+	out, err := agent.NewCLIRunner(name).Headless(context.Background(), dir, ship.BuildPrompt(diff))
 	if err != nil {
 		// Explain why we are falling back to the conversational pane instead of
 		// silently producing no message.
-		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			fmt.Fprintf(os.Stderr, "karya ship: %s could not draft a message: %s\n", name, msg)
-		}
+		fmt.Fprintf(os.Stderr, "karya ship: %s could not draft a message: %v\n", name, err)
 		return ""
 	}
-	return ship.SanitizeMessage(string(out))
+	return ship.SanitizeMessage(out)
 }
 
 // shipFallback delegates the whole commit to the agent pane when no headless

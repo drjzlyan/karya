@@ -12,6 +12,26 @@ every working session.
 
 ## Recent work
 
+### Phase 9 — agent-runner interface (agents-first arc begins) — 2026-08-05
+Kicked off the **human-in-the-loop, AI-agents-first** direction (audit + approved
+5-phase plan; see [ROADMAP.md](ROADMAP.md) Phases 9–13 and [PLAN.md](PLAN.md) §6.2/§8).
+Landed the foundational, behavior-neutral refactor:
+- **`agent.Runner`** (`internal/agent/runner.go`) — one small consumer-defined
+  interface for every agent engine: `Name`, `InteractiveCommand` (pane launch),
+  `Headless(ctx, dir, prompt)` (one-shot → stdout). `ErrNoHeadless` sentinel;
+  `SupportsHeadless` capability probe. `cliRunner` wraps each BYO-CLI.
+- **`HeadlessPrompt` → internal `headlessArgv`** — the argv table is now the
+  lookup behind `cliRunner.Headless`, not an exported API.
+- **Real consumers wired, no behavior change:** `Manager.launch` starts the agent
+  via `InteractiveCommand`; `cli/ship.go shipMessage` authors commit messages via
+  `Runner.Headless` (exec moved into `execHeadless`, `os/exec` dropped from cli).
+- **Native engine seam** reserved for Phase 13 — interface only.
+- Gate green: gofmt, `go vet`, golangci-lint v2 @latest (0 issues), `go test -race`,
+  `-tags=integration`, `go build`. New white-box tests in `runner_test.go`.
+- **Next:** Phase 10 — `internal/task` + worktree-per-task isolation (`karya task
+  new/list/switch/rm`); the agent works inside `karya/<id>` worktrees under the
+  karya prefix. Not yet started.
+
 ### Reliable fresh-install tooling from the vendored mise — 2026-08-04
 Fixed a greenfield break where **tmux, Neovim, and fzf were all missing** after
 `karya install` (and lazygit was never provisioned at all, so the `Ctrl-a g` git

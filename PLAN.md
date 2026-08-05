@@ -254,6 +254,12 @@ binary (Phase 7). The **internal** engineering docs (`PLAN.md`, `ROADMAP.md`,
   `internal/prefs`), keyed by absolute workdir.
 - Switch/next/prev respawn the agent pane; reset rebuilds the layout while
   preserving the editor pane.
+- **Pluggable engine (`agent.Runner`, Phase 9).** Every agent is driven through a
+  small consumer-defined interface — `Name`, `InteractiveCommand` (the pane-launch
+  command), and `Headless(ctx, dir, prompt)` (a one-shot invocation returning
+  stdout, or `ErrNoHeadless`). `cliRunner` wraps each BYO-CLI; a native Claude-API
+  engine plugs in behind the same interface (Phase 13) with no consumer churn.
+  `Manager.launch` and `karya ship` are the interactive and headless consumers.
 
 ### 6.3 Editor integration (`internal/editor`)
 
@@ -328,10 +334,13 @@ karya prefix — never Homebrew or the user's global mise.
 
 ## 8. Open questions / deferred decisions
 
-- **Native agent** (own LLM API loop) is explicitly deferred; the agent
-  interface is designed to allow plugging one in later (see ROADMAP Phase 9).
-  The Phase 8 headless-agent capability map (`agent.HeadlessPrompt`) and the
-  editor↔agent bridge already exercise that interface from the BYO-CLI side.
+- **Human-in-the-loop, agents-first arc (Phases 9–13).** karya is evolving from
+  "an agent in a pane" into a human-in-the-loop, AI-agents-first IDE built on a new
+  **task-level** isolation (a worktree/branch per task) layered on the existing
+  environment isolation. The pluggable `agent.Runner` interface (Phase 9, done)
+  makes the engine swappable; the **native agent** (own Claude-API tool-use loop)
+  is the last step (Phase 13), an additive implementation behind that interface —
+  BYO-CLI stays the default. See ROADMAP Phases 9–13 and §6.6 (below, as landed).
 - **Linux tool bootstrap** parity (no Homebrew) — designed for, validated later.
 - **Ghostty / terminal config** stays optional and never overwrites user files;
   may ship as a documented sample rather than an applied config.

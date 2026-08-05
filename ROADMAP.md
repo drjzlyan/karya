@@ -199,11 +199,84 @@ and authors commits; and the guardrail + full gate are green. **Ready for `v0.2.
 
 ---
 
-## Phase 9 — (Deferred) Native agent option
-**Goal:** optional built-in LLM agent behind the existing agent interface.
+## Human-in-the-loop, AI-agents-first arc (Phases 9–13)
 
-- ☐ Define pluggable agent interface (BYO-CLI vs native)
-- ☐ Native agent loop (tool-use, edits, run) using the Claude API
-- ☐ Config for keys/models; keep BYO-CLI as default
+karya's next arc turns it from "an agent in a pane" into a **human-in-the-loop,
+AI-agents-first IDE**: agents are the primary way work gets done and the human
+directs and reviews them. It adds a *second* kind of isolation on top of karya's
+existing **environment** isolation — **task-level** isolation: each unit of agent
+work in its own git worktree/branch (`karya/<task-id>`) under karya-owned dirs, so
+changes are contained and reviewable before they touch the user's real branch.
+Full design in [PLAN.md](PLAN.md) §6.6. Locked decisions: pluggable agent engine
+(BYO-CLI first, native drops in behind one interface); gates before fleet; all
+four HITL gates (plan approval, diff review, checkpoint/rollback, permission
+prompts).
 
-**Status:** deferred by decision; the Phase 2 interface must not preclude it.
+## Phase 9 — Agent-runner interface (make the engine pluggable) ✅
+**Goal:** one interface for every agent engine so nothing downstream depends on a
+specific CLI. Foundational refactor; no user-visible behavior change.
+
+- ☑ `agent.Runner` interface — `Name`, `InteractiveCommand` (pane launch),
+  `Headless(ctx, dir, prompt)` (one-shot); `ErrNoHeadless` sentinel + a
+  `SupportsHeadless` capability probe (`internal/agent/runner.go`, `headless.go`)
+- ☑ `cliRunner` wraps each BYO-CLI behind the interface; `headlessArgv` is now the
+  internal lookup table it consumes
+- ☑ Real consumers wired: `Manager.launch` starts the agent via
+  `InteractiveCommand`; `cli/ship.go` authors commit messages via
+  `Runner.Headless` — identical behavior, engine-agnostic path
+- ☑ Native engine seam reserved for Phase 13 (interface only)
+
+**Done when:** both interactive and headless paths run through `agent.Runner`,
+the full gate is green, and existing agent/ship behavior is unchanged.
+
+---
+
+## Phase 10 — Task model + isolated task workspace (the spine)
+**Goal:** the **task** becomes karya's primary noun; each gets an isolated
+worktree/branch.
+
+- ☐ `internal/task` — `Task` (id, title, prompt, agent, status, branch, worktree,
+  checkpoints); per-project JSON store under the karya prefix
+- ☐ Worktree management (`internal/worktree`, reusing the `ship.Git`/`Runner`
+  pattern): `git worktree add` `karya/<id>` into `~/.local/state/karya/worktrees/…`
+- ☐ `karya task new "<prompt>" [--agent] [--plan]`, `task list`, `task switch`,
+  `task rm`; the agent works **inside the worktree**, not the raw cwd
+- ☐ Isolation test: worktrees/branches live under karya dirs; `task rm` leaves none
+
+---
+
+## Phase 11 — Human-in-the-loop gates (all four)
+**Goal:** the human directs and reviews; nothing lands unreviewed.
+
+- ☐ **Plan approval** — `--plan` drafts a plan headless; review buffer;
+  `task approve-plan` gates `awaiting-plan → working`
+- ☐ **Diff review before apply** — `task review` shows `git diff main…karya/<id>`;
+  `task merge` / `task reject` (reuse `ship.Git`)
+- ☐ **Checkpoint & rollback** — each agent turn auto-commits a checkpoint;
+  `task rewind [checkpoint]`
+- ☐ **Permission prompts** — gate karya-initiated actions (merge/push/ship/build)
+  + per-project allowlist. *Caveat:* per-tool-call gating of a BYO-CLI's own calls
+  needs the native engine (Phase 13)
+- ☐ `<leader>t` "Task" nvim group; headless-nvim guardrail like Phase 8
+
+---
+
+## Phase 12 — Fleet (parallel, worktree-isolated agents)
+**Goal:** many agents at once, once one task reviews cleanly.
+
+- ☐ Concurrent tasks, each its own worktree/branch/agent
+- ☐ Tasks dashboard (tmux window "tasks", `Ctrl-a T`) with live status
+- ☐ `task switch` attaches a task's pane set; simple review/merge queue
+
+---
+
+## Phase 13 — Native agent engine (second Runner impl)
+**Goal:** the Phase 9 pluggability pays off.
+
+- ☐ `nativeRunner` behind `agent.Runner` using the Claude API (tool-use: edit,
+  run, read); config for keys/models; **BYO-CLI stays the default**
+- ☐ Unlocks true per-tool-call **permission prompts** + streaming plan/diff,
+  closing the Phase 11 caveat
+
+**Status:** the interface (Phase 9) already exists; this is an additive
+implementation, no consumer churn.
