@@ -80,4 +80,13 @@ func TestKeymapConsistency(t *testing.T) {
 	if globals["x"] != "present" {
 		t.Errorf("close-buffer should be bound to <leader>x (got %q)", globals["x"])
 	}
+	// The Karya Tasks group (<leader>k…) drives the human-in-the-loop task flow;
+	// guard that its entry maps stay bound so the editor surface can't silently
+	// regress.
+	if globals["kn"] != "present" {
+		t.Errorf("<leader>kn (new task) should be bound (got %q)", globals["kn"])
+	}
+	if globals["kr"] != "present" {
+		t.Errorf("<leader>kr (review task) should be bound (got %q)", globals["kr"])
+	}
 }

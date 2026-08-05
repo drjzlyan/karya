@@ -252,19 +252,30 @@ worktree/branch.
 
 ---
 
-## Phase 11 — Human-in-the-loop gates (all four)
+## Phase 11 — Human-in-the-loop gates (all four) ✅
 **Goal:** the human directs and reviews; nothing lands unreviewed.
 
-- ☐ **Plan approval** — `--plan` drafts a plan headless; review buffer;
-  `task approve-plan` gates `awaiting-plan → working`
-- ☐ **Diff review before apply** — `task review` shows `git diff main…karya/<id>`;
-  `task merge` / `task reject` (reuse `ship.Git`)
-- ☐ **Checkpoint & rollback** — each agent turn auto-commits a checkpoint;
-  `task rewind [checkpoint]`
-- ☐ **Permission prompts** — gate karya-initiated actions (merge/push/ship/build)
-  + per-project allowlist. *Caveat:* per-tool-call gating of a BYO-CLI's own calls
-  needs the native engine (Phase 13)
-- ☐ `<leader>t` "Task" nvim group; headless-nvim guardrail like Phase 8
+- ☑ **Plan approval** — `task new --plan` drafts a plan via the agent's headless
+  mode and parks the task at `awaiting-plan`; `task plan` shows it;
+  `task approve-plan` gates `awaiting-plan → working`. (Agents with no headless
+  mode still park at the gate for a hand-written/approved plan.)
+- ☑ **Diff review before apply** — `task review` stages the worktree and shows the
+  whole task diff against its recorded base commit (user branch still untouched);
+  `task merge` commits + merges `karya/<id>` into the project branch (`--no-ff`),
+  `task reject` marks it rejected. Reuses/extends `ship.Git`
+  (`RevParse`/`CommitAll`/`DiffCachedAgainst`/`Merge`/`ResetHard`).
+- ☑ **Checkpoint & rollback** — `task checkpoint [label]` commits a restorable
+  snapshot on the branch; `task rewind [index|sha]` resets the worktree to one.
+  (Explicit per the honest note below — automatic per-turn checkpoints need the
+  native engine to observe turns, Phase 13.)
+- ☑ **Permission prompts** — `gateAction` confirms karya-initiated merge/push/
+  rewind, with a per-project allowlist (`task allow <action>`) and `-y` to skip.
+  *Caveat, stated in-code:* this gates only karya's **own** actions; per-tool-call
+  gating of a BYO-CLI's internal calls needs the native engine (Phase 13).
+- ☑ Gate commands default to the **current task** inside a `task-<id>` session
+  (no id needed). `<leader>k` "Karya Tasks" nvim group (Terminal already owns
+  `<leader>t`) drives new/list/review/merge/reject/checkpoint/rewind in the
+  build pane; the Phase-8-style headless-nvim guardrail asserts it stays bound.
 
 ---
 

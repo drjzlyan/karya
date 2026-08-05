@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/drjzlyan/karya/internal/agent"
 	"github.com/drjzlyan/karya/internal/session"
@@ -39,12 +42,52 @@ func cmdTask(args []string) int {
 		return cmdTaskSwitch(a, rest)
 	case "rm", "remove":
 		return cmdTaskRemove(a, rest)
+	case "plan":
+		return cmdTaskPlan(a, rest)
+	case "approve-plan":
+		return cmdTaskApprovePlan(a, rest)
+	case "review":
+		return cmdTaskReview(a, rest)
+	case "merge":
+		return cmdTaskMerge(a, rest)
+	case "reject":
+		return cmdTaskReject(a, rest)
+	case "checkpoint":
+		return cmdTaskCheckpoint(a, rest)
+	case "rewind":
+		return cmdTaskRewind(a, rest)
+	case "allow":
+		return cmdTaskAllow(a, rest)
 	default:
 		fmt.Fprintf(os.Stderr, "karya task: unknown subcommand %q\n", sub)
-		fmt.Fprintln(os.Stderr, "usage: karya task new|list|switch|rm")
+		fmt.Fprintln(os.Stderr,
+			"usage: karya task new|list|switch|rm|plan|approve-plan|review|merge|reject|checkpoint|rewind|allow")
 		return 2
 	}
 }
+
+// gitAt returns a ship.Git bound to dir, backed by the real command runner. It is
+// the single home for the git plumbing the gates share (review diff, merge,
+// checkpoint commit, rewind reset).
+func gitAt(dir string) ship.Git {
+	return ship.Git{Runner: ship.ExecRunner{}, Dir: dir}
+}
+
+// gateAction asks for permission before karya takes a side-effecting action it
+// initiates (merge, push, rewind). It is satisfied by an explicit -y, by a
+// per-project allowlist entry (`karya task allow <action>`), or by an
+// interactive yes. NOTE: this gates only karya's own actions — it cannot
+// intercept a BYO-CLI agent's internal tool calls; that arrives with the native
+// engine (ROADMAP Phase 13).
+func gateAction(a *app, repo, actionKey, phrase string, yes bool) bool {
+	if yes || a.prefs.Get(allowKey(repo, actionKey)) == "1" {
+		return true
+	}
+	return confirm(os.Stdin, "Allow karya to "+phrase+"?")
+}
+
+// allowKey is the per-project prefs key authorizing a karya-initiated action.
+func allowKey(repo, action string) string { return "allow." + repo + "." + action }
 
 // taskContext resolves the git repository the caller is in and returns the
 // worktree Manager and per-project task Store bound to it. Every task command
@@ -71,12 +114,12 @@ func taskContext(a *app) (worktree.Manager, *task.Store, string, error) {
 // that worktree with the resolved agent. The prompt is kept with the task; the
 // agent works inside the worktree, and the human reviews before merge (Phase 11).
 func cmdTaskNew(a *app, args []string) int {
-	// The prompt is free-form positional text, so --agent may sit before or after
-	// it. Go's flag package stops at the first positional, which would swallow a
-	// trailing --agent into the prompt; parse order-independently instead.
-	prompt, agentFlag := parseTaskNewArgs(args)
+	// The prompt is free-form positional text, so the flags may sit before or
+	// after it. Go's flag package stops at the first positional, which would
+	// swallow a trailing --agent into the prompt; parse order-independently.
+	prompt, agentFlag, plan := parseTaskNewArgs(args)
 	if prompt == "" {
-		fmt.Fprintln(os.Stderr, `usage: karya task new "<prompt>" [--agent <name>]`)
+		fmt.Fprintln(os.Stderr, `usage: karya task new "<prompt>" [--agent <name>] [--plan]`)
 		return 2
 	}
 
@@ -94,30 +137,51 @@ func cmdTaskNew(a *app, args []string) int {
 	}
 	resolved := agent.Resolve(explicit, detected)
 
+	// Record the commit the task branch forks from so a later review can diff the
+	// whole task against exactly where it started.
+	base, _ := gitAt(top).RevParse("HEAD")
+
 	id := task.NewID()
 	wt, err := mgr.Add(top, id)
 	if err != nil {
 		return fail(err)
 	}
 
-	saved, err := store.Save(task.Task{
-		ID:       id,
-		Title:    task.TitleFromPrompt(prompt),
-		Prompt:   prompt,
-		Agent:    resolved,
-		Status:   task.StatusWorking,
-		Branch:   worktree.Branch(id),
-		Worktree: wt,
-		Repo:     top,
-	})
+	t := task.Task{
+		ID:         id,
+		Title:      task.TitleFromPrompt(prompt),
+		Prompt:     prompt,
+		Agent:      resolved,
+		Status:     task.StatusWorking,
+		Branch:     worktree.Branch(id),
+		Worktree:   wt,
+		Repo:       top,
+		BaseCommit: base,
+	}
+
+	// Plan gate: when requested, draft a plan with the agent's headless mode and
+	// hold the task at awaiting-plan until the human approves it.
+	if plan {
+		t = draftPlan(t, resolved)
+	}
+
+	saved, err := store.Save(t)
 	if err != nil {
 		// Roll back the worktree so a failed save never leaks a checkout/branch.
 		_ = mgr.Remove(top, id)
 		return fail(err)
 	}
 
-	fmt.Printf("Created task %s — %s\n  branch:   %s\n  worktree: %s\n  agent:    %s\n",
-		saved.ID, saved.Title, saved.Branch, saved.Worktree, saved.Agent)
+	fmt.Printf("Created task %s — %s\n  branch:   %s\n  worktree: %s\n  agent:    %s\n  status:   %s\n",
+		saved.ID, saved.Title, saved.Branch, saved.Worktree, saved.Agent, saved.Status)
+
+	if saved.Status == task.StatusAwaitingPlan {
+		if saved.Plan != "" {
+			fmt.Printf("\nProposed plan:\n\n%s\n", saved.Plan)
+		}
+		fmt.Printf("\nApprove with: karya task approve-plan %s\n", saved.ID)
+		return 0
+	}
 
 	// Only when we are inside a karya session do we open the task session — and
 	// only then is it worth provisioning the runtime. A standalone `task new`
@@ -134,10 +198,38 @@ func cmdTaskNew(a *app, args []string) int {
 	return 0
 }
 
-// parseTaskNewArgs splits `task new` arguments into the free-form prompt and the
-// optional --agent value, accepting the flag before or after the prompt and in
-// `--agent x`, `--agent=x`, and single-dash forms.
-func parseTaskNewArgs(args []string) (prompt, agentName string) {
+// draftPlan asks the agent to author an implementation plan via its headless
+// mode and returns the task moved to awaiting-plan. When the agent has no
+// headless mode (or is none), it still parks the task at awaiting-plan with an
+// empty plan so the human can write or approve one — the gate holds either way.
+func draftPlan(t task.Task, agentName string) task.Task {
+	t.Status = task.StatusAwaitingPlan
+	if !agent.SupportsHeadless(agentName) {
+		fmt.Fprintf(os.Stderr,
+			"note: %s has no headless mode; write the plan yourself or approve to proceed.\n", agentName)
+		return t
+	}
+	fmt.Printf("Asking %s to draft a plan…\n", agentName)
+	out, err := agent.NewCLIRunner(agentName).Headless(context.Background(), t.Worktree, planPrompt(t.Prompt))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "note: could not draft a plan (%v); approve to proceed.\n", err)
+		return t
+	}
+	t.Plan = strings.TrimSpace(out)
+	return t
+}
+
+// planPrompt is the instruction handed to the agent to produce a review-ready
+// implementation plan and nothing else.
+func planPrompt(prompt string) string {
+	return "Produce a concise, numbered implementation plan for the task below. " +
+		"Output ONLY the plan — no preamble, no code, no commentary.\n\nTask: " + prompt
+}
+
+// parseTaskNewArgs splits `task new` arguments into the free-form prompt, the
+// optional --agent value, and the --plan flag, accepting the flags before or
+// after the prompt and in `--agent x`, `--agent=x`, and single-dash forms.
+func parseTaskNewArgs(args []string) (prompt, agentName string, plan bool) {
 	var rest []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
@@ -151,11 +243,13 @@ func parseTaskNewArgs(args []string) (prompt, agentName string) {
 			agentName = strings.TrimPrefix(a, "--agent=")
 		case strings.HasPrefix(a, "-agent="):
 			agentName = strings.TrimPrefix(a, "-agent=")
+		case a == "--plan" || a == "-plan":
+			plan = true
 		default:
 			rest = append(rest, a)
 		}
 	}
-	return strings.TrimSpace(strings.Join(rest, " ")), agentName
+	return strings.TrimSpace(strings.Join(rest, " ")), agentName, plan
 }
 
 // cmdTaskList prints the project's tasks, newest last, as an aligned table.
@@ -261,6 +355,372 @@ func parseTaskRemoveArgs(args []string) (id string, yes bool) {
 		}
 	}
 	return id, yes
+}
+
+// currentTaskID returns the task whose session the caller is inside — task
+// sessions are named "task-<id>" — or "" when not in one. It lets the gate
+// commands (review/merge/checkpoint/…) default their <id> to the current task,
+// so the editor keymaps and an in-session human can omit it.
+func currentTaskID(a *app) string {
+	if os.Getenv("TMUX") == "" {
+		return ""
+	}
+	name, err := a.tmux.Output("display-message", "-p", "#{session_name}")
+	if err != nil {
+		return ""
+	}
+	if name = strings.TrimSpace(name); strings.HasPrefix(name, "task-") {
+		return strings.TrimPrefix(name, "task-")
+	}
+	return ""
+}
+
+// resolveTaskID returns explicit when non-empty, else the current task session's
+// id.
+func resolveTaskID(a *app, explicit string) string {
+	if explicit != "" {
+		return explicit
+	}
+	return currentTaskID(a)
+}
+
+// taskByID loads a task by id within the caller's project.
+func taskByID(a *app, id string) (worktree.Manager, *task.Store, string, task.Task, error) {
+	mgr, store, top, err := taskContext(a)
+	if err != nil {
+		return mgr, store, top, task.Task{}, err
+	}
+	t, err := store.Get(id)
+	return mgr, store, top, t, err
+}
+
+// cmdTaskPlan prints a task's drafted plan (the plan-approval gate's artifact).
+func cmdTaskPlan(a *app, args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: karya task plan <id>")
+		return 2
+	}
+	_, _, _, t, err := taskByID(a, args[0])
+	if err != nil {
+		return fail(err)
+	}
+	if strings.TrimSpace(t.Plan) == "" {
+		fmt.Println("No plan recorded for this task.")
+		return 0
+	}
+	fmt.Println(t.Plan)
+	return 0
+}
+
+// cmdTaskApprovePlan clears the plan gate: awaiting-plan → working, then opens
+// the task session so the agent can start on the approved plan.
+func cmdTaskApprovePlan(a *app, args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: karya task approve-plan <id>")
+		return 2
+	}
+	_, store, _, t, err := taskByID(a, args[0])
+	if err != nil {
+		return fail(err)
+	}
+	if t.Status != task.StatusAwaitingPlan {
+		return fail(fmt.Errorf("task %s is not awaiting plan approval (status: %s)", t.ID, t.Status))
+	}
+	t.Status = task.StatusWorking
+	saved, err := store.Save(t)
+	if err != nil {
+		return fail(err)
+	}
+	fmt.Printf("Plan approved; task %s is now working.\n", saved.ID)
+	if os.Getenv("TMUX") != "" {
+		if err := ensureRuntime(a); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		}
+		if openTaskSession(a, saved) {
+			return 0
+		}
+	}
+	fmt.Printf("Switch to it with: karya task switch %s\n", saved.ID)
+	return 0
+}
+
+// cmdTaskReview is the diff-review gate: it shows the whole of a task's changes
+// (against its base commit) so the human can decide to merge or reject. Because
+// the agent worked in an isolated worktree, nothing has touched the user's branch
+// yet — this is the pre-apply review.
+func cmdTaskReview(a *app, args []string) int {
+	id := resolveTaskID(a, firstPositional(args))
+	if id == "" {
+		fmt.Fprintln(os.Stderr, "usage: karya task review <id>")
+		return 2
+	}
+	_, store, _, t, err := taskByID(a, id)
+	if err != nil {
+		return fail(err)
+	}
+	diff, err := taskDiff(t)
+	if err != nil {
+		return fail(err)
+	}
+	if strings.TrimSpace(diff) == "" {
+		fmt.Println("No changes in this task's worktree yet.")
+		return 0
+	}
+	if t.Status == task.StatusWorking {
+		t.Status = task.StatusAwaitingReview
+		if _, err := store.Save(t); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+		}
+	}
+	fmt.Print(diff)
+	if !strings.HasSuffix(diff, "\n") {
+		fmt.Println()
+	}
+	fmt.Printf("\nApply with: karya task merge %s   ·   discard with: karya task reject %s\n", t.ID, t.ID)
+	return 0
+}
+
+// taskDiff stages the worktree (so new files are included) and returns the diff
+// of the whole task against its base commit.
+func taskDiff(t task.Task) (string, error) {
+	g := gitAt(t.Worktree)
+	if err := g.StageAll(); err != nil {
+		return "", err
+	}
+	if t.BaseCommit == "" {
+		// A task created before base tracking: fall back to the staged diff.
+		return g.StagedDiff()
+	}
+	return g.DiffCachedAgainst(t.BaseCommit)
+}
+
+// cmdTaskMerge applies a reviewed task: it commits any in-progress worktree edits
+// onto the task branch, then merges that branch into the project's current
+// branch. The merge (and optional --push) are permission-gated.
+func cmdTaskMerge(a *app, args []string) int {
+	id, yes := parseTaskRemoveArgs(args)
+	id = resolveTaskID(a, id)
+	if id == "" {
+		fmt.Fprintln(os.Stderr, "usage: karya task merge <id> [--push] [-y]")
+		return 2
+	}
+	_, store, top, t, err := taskByID(a, id)
+	if err != nil {
+		return fail(err)
+	}
+	if !gateAction(a, top, "merge", "merge task "+t.ID, yes) {
+		fmt.Println("Aborted.")
+		return 0
+	}
+	if _, err := gitAt(t.Worktree).CommitAll(fmt.Sprintf("task %s: %s", t.ID, t.Title), false); err != nil {
+		return fail(err)
+	}
+	if err := gitAt(top).Merge(t.Branch, true); err != nil {
+		return fail(fmt.Errorf("merge failed (resolve conflicts in %s, or reject the task): %w", top, err))
+	}
+	t.Status = task.StatusMerged
+	if _, err := store.Save(t); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+	}
+	fmt.Printf("Merged %s into %s.\n", t.Branch, top)
+	if hasFlag(args, "--push") {
+		if !gateAction(a, top, "push", "push", yes) {
+			fmt.Println("Skipped push.")
+		} else if err := gitAt(top).Push(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: push failed: %v\n", err)
+		}
+	}
+	fmt.Printf("Remove the task's worktree with: karya task rm %s\n", t.ID)
+	return 0
+}
+
+// cmdTaskReject marks a task rejected without applying it. The worktree is kept
+// so the human can inspect it; `karya task rm` clears it.
+func cmdTaskReject(a *app, args []string) int {
+	id, _ := parseTaskRemoveArgs(args)
+	id = resolveTaskID(a, id)
+	if id == "" {
+		fmt.Fprintln(os.Stderr, "usage: karya task reject <id>")
+		return 2
+	}
+	_, store, _, t, err := taskByID(a, id)
+	if err != nil {
+		return fail(err)
+	}
+	t.Status = task.StatusRejected
+	if _, err := store.Save(t); err != nil {
+		return fail(err)
+	}
+	fmt.Printf("Rejected task %s. Remove its worktree with: karya task rm %s\n", t.ID, t.ID)
+	return 0
+}
+
+// cmdTaskCheckpoint records a restorable snapshot of a task's worktree: it
+// commits the current state on the task branch and remembers the commit so
+// `karya task rewind` can return to it.
+func cmdTaskCheckpoint(a *app, args []string) int {
+	// With no args, checkpoint the current task session with a default label;
+	// otherwise the first arg is the id and the rest is the label.
+	var id, label string
+	if len(args) > 0 {
+		id, label = args[0], strings.TrimSpace(strings.Join(args[1:], " "))
+	} else {
+		id = currentTaskID(a)
+	}
+	if id == "" {
+		fmt.Fprintln(os.Stderr, "usage: karya task checkpoint <id> [label]")
+		return 2
+	}
+	if label == "" {
+		label = "checkpoint"
+	}
+	_, store, _, t, err := taskByID(a, id)
+	if err != nil {
+		return fail(err)
+	}
+	g := gitAt(t.Worktree)
+	if _, err := g.CommitAll("checkpoint: "+label, false); err != nil {
+		return fail(err)
+	}
+	sha, err := g.RevParse("HEAD")
+	if err != nil {
+		return fail(err)
+	}
+	t.Checkpoints = append(t.Checkpoints, task.Checkpoint{SHA: sha, Label: label, Created: time.Now().UTC()})
+	if _, err := store.Save(t); err != nil {
+		return fail(err)
+	}
+	fmt.Printf("Checkpoint %d saved (%s) at %s.\n", len(t.Checkpoints), label, short(sha))
+	return 0
+}
+
+// cmdTaskRewind restores a task's worktree to a checkpoint, discarding changes
+// made after it. The target is a 1-based checkpoint index or a SHA prefix;
+// omitted, it rewinds to the most recent checkpoint. It is permission-gated
+// because it is destructive to the worktree.
+func cmdTaskRewind(a *app, args []string) int {
+	id, target, yes := parseTaskRewindArgs(args)
+	id = resolveTaskID(a, id)
+	if id == "" {
+		fmt.Fprintln(os.Stderr, "usage: karya task rewind <id> [index|sha] [-y]")
+		return 2
+	}
+	_, _, top, t, err := taskByID(a, id)
+	if err != nil {
+		return fail(err)
+	}
+	if len(t.Checkpoints) == 0 {
+		return fail(fmt.Errorf("task %s has no checkpoints; create one with: karya task checkpoint %s", t.ID, t.ID))
+	}
+	cp, err := resolveCheckpoint(t, target)
+	if err != nil {
+		return fail(err)
+	}
+	if !gateAction(a, top, "rewind", "rewind (discard changes after the checkpoint)", yes) {
+		fmt.Println("Aborted.")
+		return 0
+	}
+	if err := gitAt(t.Worktree).ResetHard(cp.SHA); err != nil {
+		return fail(err)
+	}
+	fmt.Printf("Rewound task %s to checkpoint %q (%s).\n", t.ID, cp.Label, short(cp.SHA))
+	return 0
+}
+
+// cmdTaskAllow pre-authorizes a karya-initiated action for this project so its
+// permission prompt is skipped going forward.
+func cmdTaskAllow(a *app, args []string) int {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: karya task allow <merge|push|rewind>")
+		return 2
+	}
+	action := args[0]
+	switch action {
+	case "merge", "push", "rewind":
+	default:
+		return fail(fmt.Errorf("unknown action %q (allow: merge, push, rewind)", action))
+	}
+	_, _, top, err := taskContext(a)
+	if err != nil {
+		return fail(err)
+	}
+	if err := a.prefs.Set(allowKey(top, action), "1"); err != nil {
+		return fail(err)
+	}
+	fmt.Printf("karya will no longer prompt before %q in this project.\n", action)
+	return 0
+}
+
+// resolveCheckpoint selects a checkpoint by 1-based index, by SHA prefix, or —
+// when target is empty — the most recent one.
+func resolveCheckpoint(t task.Task, target string) (task.Checkpoint, error) {
+	cps := t.Checkpoints
+	if target == "" {
+		return cps[len(cps)-1], nil
+	}
+	if n, err := strconv.Atoi(target); err == nil {
+		if n < 1 || n > len(cps) {
+			return task.Checkpoint{}, fmt.Errorf("checkpoint %d out of range (1..%d)", n, len(cps))
+		}
+		return cps[n-1], nil
+	}
+	for _, cp := range cps {
+		if strings.HasPrefix(cp.SHA, target) {
+			return cp, nil
+		}
+	}
+	return task.Checkpoint{}, fmt.Errorf("no checkpoint matching %q", target)
+}
+
+// parseTaskRewindArgs pulls the id, an optional target (index or sha), and -y
+// from `task rewind` arguments regardless of order.
+func parseTaskRewindArgs(args []string) (id, target string, yes bool) {
+	var pos []string
+	for _, a := range args {
+		switch a {
+		case "-y", "--yes", "-yes":
+			yes = true
+		default:
+			if !strings.HasPrefix(a, "-") {
+				pos = append(pos, a)
+			}
+		}
+	}
+	if len(pos) > 0 {
+		id = pos[0]
+	}
+	if len(pos) > 1 {
+		target = pos[1]
+	}
+	return id, target, yes
+}
+
+// firstPositional returns the first non-flag argument, or "".
+func firstPositional(args []string) string {
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			return a
+		}
+	}
+	return ""
+}
+
+// hasFlag reports whether flag appears in args.
+func hasFlag(args []string, flag string) bool {
+	for _, a := range args {
+		if a == flag {
+			return true
+		}
+	}
+	return false
+}
+
+// short returns the first 8 characters of a SHA (or the whole string if shorter).
+func short(sha string) string {
+	if len(sha) > 8 {
+		return sha[:8]
+	}
+	return sha
 }
 
 // taskSessionName is the tmux session name for a task.

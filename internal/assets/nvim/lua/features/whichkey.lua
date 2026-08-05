@@ -27,6 +27,8 @@ return {
         { "<leader>cw", group = "Workspace (Java)" },
         -- Agent bridge: send editor context to the coding-agent pane.
         { "<leader>a", group = "Agent" },
+        -- Karya tasks: create/review/merge isolated agent tasks (human-in-the-loop).
+        { "<leader>k", group = "Karya Tasks" },
         { "<leader>?", "<cmd>KaryaTutorial<cr>", desc = "Start the karya tutorial" },
         { "<leader>S", desc = "Save" },
         { "<leader>Z", desc = "Quit" },

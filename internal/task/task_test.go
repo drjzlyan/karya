@@ -34,6 +34,46 @@ func TestTitleFromPrompt(t *testing.T) {
 	}
 }
 
+func TestCanTransition(t *testing.T) {
+	ok := [][2]Status{
+		{StatusAwaitingPlan, StatusWorking},
+		{StatusWorking, StatusAwaitingReview},
+		{StatusWorking, StatusMerged},
+		{StatusAwaitingReview, StatusRejected},
+		{StatusAwaitingReview, StatusWorking},
+	}
+	for _, p := range ok {
+		if !CanTransition(p[0], p[1]) {
+			t.Errorf("CanTransition(%s,%s) = false, want true", p[0], p[1])
+		}
+	}
+	bad := [][2]Status{
+		{StatusAwaitingPlan, StatusMerged}, // can't merge straight from planning
+		{StatusMerged, StatusWorking},      // terminal
+		{StatusRejected, StatusWorking},    // terminal
+	}
+	for _, p := range bad {
+		if CanTransition(p[0], p[1]) {
+			t.Errorf("CanTransition(%s,%s) = true, want false", p[0], p[1])
+		}
+	}
+}
+
+func TestCheckpointsRoundTrip(t *testing.T) {
+	s := newStore(t)
+	_, err := s.Save(Task{ID: "c1", Status: StatusWorking, Checkpoints: []Checkpoint{{SHA: "aaa", Label: "start"}}})
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := s.Get("c1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if len(got.Checkpoints) != 1 || got.Checkpoints[0].SHA != "aaa" {
+		t.Errorf("checkpoints did not round-trip: %+v", got.Checkpoints)
+	}
+}
+
 func newStore(t *testing.T) *Store {
 	t.Helper()
 	return NewStore(filepath.Join(t.TempDir(), "proj.json"))

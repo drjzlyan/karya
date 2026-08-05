@@ -12,6 +12,36 @@ every working session.
 
 ## Recent work
 
+### Phase 11 — human-in-the-loop gates (all four) — 2026-08-05
+Layered the four review gates on the task model — the heart of the agents-first
+pivot. Nothing an agent does lands on the user's branch unreviewed.
+- **Plan approval** — `task new --plan` drafts a plan via the agent's headless
+  `Runner` and parks at `awaiting-plan`; `task plan` shows it; `task approve-plan`
+  → `working`. Agents without a headless mode still park at the gate.
+- **Diff review before apply** — `task review` stages the worktree and diffs the
+  whole task against its recorded `BaseCommit` (user branch untouched); `task
+  merge` commits + `--no-ff` merges `karya/<id>` into the project branch; `task
+  reject` marks rejected.
+- **Checkpoint & rollback** — `task checkpoint [label]` commits a restorable
+  snapshot; `task rewind [index|sha]` resets the worktree to one.
+- **Permission prompts** — `gateAction` confirms karya-initiated merge/push/rewind
+  with a per-project allowlist (`task allow`) and `-y`. *Honest caveat in code &
+  docs:* gates only karya's own actions; per-tool-call gating of a BYO-CLI needs
+  the native engine (Phase 13).
+- **Plumbing** — extended `ship.Git` (`RevParse`, `CommitAll`, `DiffCachedAgainst`,
+  `Merge`, `ResetHard`); `task.Task` gained `Plan`/`BaseCommit`/`Checkpoints` and a
+  `CanTransition` lifecycle guard. Gate commands default to the **current task**
+  inside a `task-<id>` session.
+- **Editor** — `<leader>k` "Karya Tasks" nvim group (`features/karyatasks.lua`;
+  Terminal owns `<leader>t`) runs the gates in the build pane; the Phase-8-style
+  headless-nvim keymap guardrail now also asserts `<leader>kn`/`<leader>kr` stay
+  bound.
+- Smoke (isolated HOME + repo, agent none): new→checkpoint→review→rewind→merge
+  applied `karya/<id>` into `main` with the user tree untouched until merge.
+- Gate green (fmt, vet, lint 0, race, integration, build).
+- **Next:** Phase 12 — fleet: parallel worktree-isolated tasks + a tasks dashboard
+  (tmux window, `Ctrl-a T`). Not started.
+
 ### Phase 10 — task model + isolated task workspace — 2026-08-05
 Made the **task** karya's primary noun and added **task-level isolation** — a git
 worktree/branch per task — on top of the environment isolation of PLAN §2.

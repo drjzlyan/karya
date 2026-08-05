@@ -39,18 +39,49 @@ const (
 // ErrNotFound is returned by Store.Get/Delete when no task has the given id.
 var ErrNotFound = errors.New("task not found")
 
+// Checkpoint is a restorable snapshot of a task's worktree: a commit on the task
+// branch that `karya task rewind` can reset back to.
+type Checkpoint struct {
+	SHA     string    `json:"sha"`
+	Label   string    `json:"label"`
+	Created time.Time `json:"created"`
+}
+
 // Task is one unit of agent work and its isolated workspace.
 type Task struct {
-	ID       string    `json:"id"`
-	Title    string    `json:"title"`
-	Prompt   string    `json:"prompt"`
-	Agent    string    `json:"agent"`
-	Status   Status    `json:"status"`
-	Branch   string    `json:"branch"`   // namespaced git branch, e.g. karya/<id>
-	Worktree string    `json:"worktree"` // isolated checkout path (karya-owned)
-	Repo     string    `json:"repo"`     // repository top-level the task belongs to
-	Created  time.Time `json:"created"`
-	Updated  time.Time `json:"updated"`
+	ID          string       `json:"id"`
+	Title       string       `json:"title"`
+	Prompt      string       `json:"prompt"`
+	Agent       string       `json:"agent"`
+	Status      Status       `json:"status"`
+	Branch      string       `json:"branch"`   // namespaced git branch, e.g. karya/<id>
+	Worktree    string       `json:"worktree"` // isolated checkout path (karya-owned)
+	Repo        string       `json:"repo"`     // repository top-level the task belongs to
+	Plan        string       `json:"plan,omitempty"`
+	BaseCommit  string       `json:"base_commit,omitempty"` // repo HEAD the branch forked from
+	Checkpoints []Checkpoint `json:"checkpoints,omitempty"` // rewind targets, oldest first
+	Created     time.Time    `json:"created"`
+	Updated     time.Time    `json:"updated"`
+}
+
+// transitions is the allowed forward status graph. Merged and Rejected are
+// terminal. It keeps the review lifecycle honest — a task cannot, say, be merged
+// straight out of planning without passing through work.
+var transitions = map[Status][]Status{
+	StatusPlanning:       {StatusAwaitingPlan, StatusWorking, StatusRejected},
+	StatusAwaitingPlan:   {StatusWorking, StatusRejected},
+	StatusWorking:        {StatusAwaitingReview, StatusMerged, StatusRejected},
+	StatusAwaitingReview: {StatusMerged, StatusRejected, StatusWorking},
+}
+
+// CanTransition reports whether a task may move from status from to status to.
+func CanTransition(from, to Status) bool {
+	for _, s := range transitions[from] {
+		if s == to {
+			return true
+		}
+	}
+	return false
 }
 
 // NewID returns a short, unique task id (8 hex chars) suitable for use in a

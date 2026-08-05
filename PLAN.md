@@ -135,9 +135,19 @@ karya ship [--push --pr]      Stage, agent-write the commit message, commit (--n
 
 karya task new "<prompt>"     Create a task: isolated worktree (branch karya/<id>) + agent
   --agent <name|none>         Agent for this task (else per-project pref / picker)
+  --plan                      Draft a plan and hold at awaiting-plan for approval
 karya task list | tasks       List the project's tasks + status
 karya task switch <id>        Attach to a task's session (rooted at its worktree)
+karya task plan <id>          Show the drafted plan
+karya task approve-plan <id>  Approve the plan: awaiting-plan → working
+karya task review [<id>]      Show the task's diff vs its base (pre-apply review)
+karya task merge [<id>] [--push]  Commit + merge karya/<id> into the project branch
+karya task reject [<id>]      Mark the task rejected (worktree kept)
+karya task checkpoint [<id>] [label]  Record a restorable snapshot
+karya task rewind [<id>] [index|sha]  Reset the worktree to a checkpoint
+karya task allow <action>     Pre-authorize merge|push|rewind for this project
 karya task rm <id> [-y]       Remove a task: its worktree, branch, and record
+  (id defaults to the current task inside a task-<id> session)
 
 karya lang                    Interactive language + version selector
 karya lang list | add | remove | all
@@ -159,9 +169,13 @@ identical in every language — `<leader>ct` nearest test, `<leader>cf` format,
 refactor, `<leader>ci` organize imports, `<leader>cd` debug — dispatched to the
 active buffer's language (no per-language `<leader>p/o/j/r/C/y` prefixes). A
 `<leader>a` **"Agent"** group bridges editor→agent (`ab` buffer, `as` selection,
-`ad` diagnostic, `af` file ref, `ac` explain, `aa` focus). Close-buffer is
-`<leader>x`. `util/langmaps.lua` is the single registration point; an integration
-test enforces the cross-language interface.
+`ad` diagnostic, `af` file ref, `ac` explain, `aa` focus). A `<leader>k` **"Karya
+Tasks"** group (`features/karyatasks.lua`) drives the task gates from the editor —
+`kn` new, `kl` list, `kr` review, `km` merge, `kj` reject, `kc` checkpoint, `kw`
+rewind — defaulting to the current task session and running in the build pane.
+Close-buffer is `<leader>x`. `util/langmaps.lua` is the single registration point
+for the `<leader>c` interface; an integration guardrail enforces the cross-language
+interface and that the `<leader>k` task group stays bound.
 
 In-session tmux keybindings (embedded `tmux.conf`, prefix `Ctrl-a`), preserved
 from the current setup and wired to karya:
@@ -349,7 +363,27 @@ environment isolation of §2: **task-level isolation**.
   the worktree + record and, inside a karya session, opens a session rooted at the
   worktree with the task's agent; `switch` attaches; `rm` tears the task down. The
   agent thus works **inside the isolated worktree**, and the human reviews before
-  merge (the four gates land in Phase 11).
+  merge.
+
+**The four human-in-the-loop gates (Phase 11)** are layered on the task model,
+all reusing the extended `ship.Git` plumbing (`RevParse`, `CommitAll`,
+`DiffCachedAgainst`, `Merge`, `ResetHard`):
+
+1. **Plan approval** — `task new --plan` drafts a plan through the agent's
+   headless `Runner` and holds the task at `awaiting-plan`; `task approve-plan`
+   advances it to `working` (validated by `task.CanTransition`).
+2. **Diff review before apply** — `task review` shows the whole task diff against
+   its recorded `BaseCommit` (the user's branch is still untouched, since the work
+   lives on `karya/<id>`); `task merge` merges it in, `task reject` discards it.
+3. **Checkpoint & rollback** — `task checkpoint` records a restorable commit;
+   `task rewind` resets the worktree to one.
+4. **Permission prompts** — `gateAction` confirms karya-initiated merge/push/
+   rewind, honored by a per-project allowlist (`task allow`). It gates only
+   karya's **own** actions — a BYO-CLI agent's internal tool calls are outside
+   karya's reach until the native engine (Phase 13).
+
+Gate commands default to the **current task** when run inside its `task-<id>`
+session, so the `<leader>k` "Karya Tasks" editor group can invoke them id-free.
 
 ---
 

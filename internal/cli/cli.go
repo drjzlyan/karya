@@ -532,7 +532,9 @@ Usage:
   karya dev [name] [path]   Explicit session launch (-a agent, -k kill, -q quit)
 
   karya agent <cmd>         status | switch | next | prev | reset | prefs | clear
-  karya task <cmd>          new "<prompt>" [--agent] | list | switch <id> | rm <id>
+  karya task <cmd>          new "<prompt>" [--agent] [--plan] | list | switch | rm
+                            plan | approve-plan | review | merge | reject
+                            checkpoint | rewind | allow  (see: karya help task)
   karya edit <file> [line]  Open a file in the editor pane (used as $EDITOR)
   karya run <cmd...>        Run a command in the build/test pane
   karya new <lang> <name>   Scaffold a project (python|java|typescript|go|cpp|rust)
