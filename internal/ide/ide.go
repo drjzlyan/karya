@@ -8,7 +8,9 @@ package ide
 import (
 	"errors"
 	"os"
+	"os/exec"
 
+	"github.com/drjzlyan/karya/internal/agent"
 	"github.com/drjzlyan/karya/internal/cellbuf"
 	"github.com/drjzlyan/karya/internal/gate"
 	"github.com/drjzlyan/karya/internal/gateview"
@@ -245,7 +247,7 @@ func (m *Model) handleKey(k term.Key) tui.Cmd {
 	m.whichkey = nil
 	switch res.Kind {
 	case keymap.ResForward:
-		m.forward(res.Key)
+		return m.forward(res.Key)
 	case keymap.ResDispatch:
 		return m.dispatch(res.Action)
 	case keymap.ResPending:
@@ -271,8 +273,9 @@ func (m *Model) context() keymap.Context {
 
 // forward sends an unclaimed key to the focused pane: shells receive raw bytes,
 // the embedded editor receives Neovim key notation, and karya views handle it
-// directly (closing the pane if the view asks).
-func (m *Model) forward(k term.Key) {
+// directly (opening reviews/agents or closing the pane as they ask). It returns
+// a command when a view spawns a new backend pane (e.g. an agent shell).
+func (m *Model) forward(k term.Key) tui.Cmd {
 	switch p := m.tree.FocusedContent().(type) {
 	case *editorPane:
 		p.write(k)
@@ -285,7 +288,17 @@ func (m *Model) forward(k term.Key) {
 		if inbox, ok := p.(*gateview.Inbox); ok {
 			if openID := inbox.OpenRequest(); openID != "" {
 				m.openReviewFor(openID)
-				return
+				return nil
+			}
+		}
+		// The task board can request a review or an agent pane for a task.
+		if board, ok := p.(*taskview.Board); ok {
+			if rid := board.ReviewRequest(); rid != "" {
+				m.openReviewFor(rid)
+				return nil
+			}
+			if aid := board.AgentRequest(); aid != "" {
+				return m.openAgentPane(aid)
 			}
 		}
 		if p.Done() {
@@ -303,6 +316,51 @@ func (m *Model) forward(k term.Key) {
 			m.syncPaneSizes()
 		}
 	}
+	return nil
+}
+
+// openAgentPane runs the task's preferred (or first detected) agent CLI in a PTY
+// pane bound to the task's worktree, so an interactive agent session works inside
+// the task's isolated checkout. Falls back to a shell if no agent CLI is found.
+func (m *Model) openAgentPane(id string) tui.Cmd {
+	store := task.NewStore(m.dir)
+	t, err := store.Get(id)
+	if err != nil {
+		m.status = "agent: " + err.Error()
+		return nil
+	}
+	if t.Worktree == "" {
+		m.status = "start the task first: karya task start " + id
+		return nil
+	}
+	// Pick deterministically (never agent.Resolve — it can prompt on stdin, which
+	// would fight the TUI's own input reader): the task's preferred agent if
+	// available, else the first detected (highest preference), else a shell.
+	name := ""
+	if t.Agent != "" && agent.Available(t.Agent) {
+		name = t.Agent
+	} else if detected := agent.Detect(); len(detected) > 0 {
+		name = detected[0]
+	}
+	inner := m.treeRect()
+	cols, rows := inner.W-2, inner.H-2
+
+	var sp *shellPane
+	title := "shell"
+	if name != "" {
+		sp, err = newShellPane(exec.Command(name), t.Worktree, cols, rows)
+		title = name
+	} else {
+		sp, err = defaultShellPane(t.Worktree, cols, rows)
+	}
+	if err != nil {
+		m.status = "agent: " + err.Error()
+		return nil
+	}
+	m.tree.AddTab(title+" · "+id, sp)
+	cmd := m.adopt(sp)
+	m.syncPaneSizes()
+	return cmd
 }
 
 // openGitPanel focuses the git panel if open, else opens it in a new tab.

@@ -61,6 +61,29 @@ func TestBoardRefresh(t *testing.T) {
 	}
 }
 
+func TestBoardReviewRequest(t *testing.T) {
+	b := New(func() []Item { return sampleItems() })
+	b.HandleKey(term.RuneKey('j'))         // select second
+	b.HandleKey(term.Named(term.SymEnter)) // request review
+	if got := b.ReviewRequest(); got != "2026-08-06-b" {
+		t.Fatalf("ReviewRequest = %q want 2026-08-06-b", got)
+	}
+	if got := b.ReviewRequest(); got != "" {
+		t.Fatalf("ReviewRequest should be consumed, got %q", got)
+	}
+}
+
+func TestBoardAgentRequest(t *testing.T) {
+	b := New(func() []Item { return sampleItems() })
+	b.HandleKey(term.RuneKey('a')) // request agent for first
+	if got := b.AgentRequest(); got != "2026-08-06-a" {
+		t.Fatalf("AgentRequest = %q want 2026-08-06-a", got)
+	}
+	if got := b.AgentRequest(); got != "" {
+		t.Fatalf("AgentRequest should be consumed, got %q", got)
+	}
+}
+
 func TestBoardQuitCloses(t *testing.T) {
 	b := New(func() []Item { return nil })
 	if b.Done() {

@@ -20,11 +20,13 @@ type Item struct {
 
 // Board is the task board view.
 type Board struct {
-	load   func() []Item
-	items  []Item
-	sel    int
-	status string
-	closed bool
+	load      func() []Item
+	items     []Item
+	sel       int
+	status    string
+	reviewReq string // set to a task id when the user asks to review it
+	agentReq  string // set to a task id when the user asks to run an agent in it
+	closed    bool
 }
 
 // New builds a board using load to (re)fetch tasks, and loads them immediately.
@@ -63,9 +65,27 @@ func (b *Board) HandleKey(k term.Key) {
 		b.move(-1)
 	case k == term.RuneKey('r'):
 		b.refresh()
+	case k == term.Named(term.SymEnter):
+		b.reviewReq = b.Selected()
+	case k == term.RuneKey('a'):
+		b.agentReq = b.Selected()
 	case k == term.RuneKey('q') || k == term.Named(term.SymEsc):
 		b.closed = true
 	}
+}
+
+// ReviewRequest returns (once) the task id the user asked to review, or "".
+func (b *Board) ReviewRequest() string {
+	id := b.reviewReq
+	b.reviewReq = ""
+	return id
+}
+
+// AgentRequest returns (once) the task id the user asked to run an agent in.
+func (b *Board) AgentRequest() string {
+	id := b.agentReq
+	b.agentReq = ""
+	return id
 }
 
 func (b *Board) move(delta int) {
@@ -120,7 +140,7 @@ func (b *Board) drawBottom(buf *cellbuf.Buffer, r cellbuf.Rect, y int) {
 	buf.Fill(cellbuf.Rect{X: r.X, Y: y, W: r.W, H: 1}, cellbuf.Cell{Rune: ' ', Width: 1, Style: st})
 	text := b.status
 	if text == "" {
-		text = "j/k move · r refresh · q close"
+		text = "j/k move · Enter review · a agent · r refresh · q close"
 	}
 	buf.SetString(r.X, y, fit(text, r.W), st)
 }
