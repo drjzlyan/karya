@@ -63,6 +63,10 @@ func Run(args []string) int {
 		return cmdTask(rest)
 	case "tasks":
 		return cmdTask(append([]string{"list"}, rest...))
+	case "gate":
+		return cmdGate(rest)
+	case "review":
+		return cmdReview(rest)
 	case "init":
 		return cmdInit(rest)
 	case "lang":

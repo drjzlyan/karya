@@ -9,10 +9,13 @@ import (
 	"os"
 
 	"github.com/drjzlyan/karya/internal/cellbuf"
+	"github.com/drjzlyan/karya/internal/gate"
 	"github.com/drjzlyan/karya/internal/git"
 	"github.com/drjzlyan/karya/internal/gitui"
 	"github.com/drjzlyan/karya/internal/keymap"
 	"github.com/drjzlyan/karya/internal/layout"
+	"github.com/drjzlyan/karya/internal/review"
+	"github.com/drjzlyan/karya/internal/reviewview"
 	"github.com/drjzlyan/karya/internal/task"
 	"github.com/drjzlyan/karya/internal/taskview"
 	"github.com/drjzlyan/karya/internal/term"
@@ -52,14 +55,15 @@ type Model struct {
 	rows   int
 	status string
 
-	whichkey   []keymap.Candidate
-	shells     []*shellPane
-	editors    []*editorPane
-	file       string
-	leader     term.Key
-	prov       Provisioner
-	gitPaneID  layout.PaneID
-	taskPaneID layout.PaneID
+	whichkey     []keymap.Candidate
+	shells       []*shellPane
+	editors      []*editorPane
+	file         string
+	leader       term.Key
+	prov         Provisioner
+	gitPaneID    layout.PaneID
+	taskPaneID   layout.PaneID
+	reviewPaneID layout.PaneID
 }
 
 // shellReadMsg carries a chunk of a shell pane's output back into the loop.
@@ -276,6 +280,8 @@ func (m *Model) forward(k term.Key) {
 				m.gitPaneID = 0
 			case m.taskPaneID:
 				m.taskPaneID = 0
+			case m.reviewPaneID:
+				m.reviewPaneID = 0
 			}
 			m.tree.CloseFocused()
 			m.syncPaneSizes()
@@ -307,6 +313,33 @@ func (m *Model) openTaskBoard() *taskview.Board {
 	m.taskPaneID = m.tree.AddTab("tasks", board)
 	m.syncPaneSizes()
 	return board
+}
+
+// openReview assembles and opens the review for the first task awaiting a gate,
+// replacing any stale review tab. Approve/reject remain explicit `karya gate`
+// crossings for now.
+func (m *Model) openReview() {
+	store := task.NewStore(m.dir)
+	tasks, err := store.List()
+	if err != nil {
+		m.status = "review: " + err.Error()
+		return
+	}
+	pending := gate.PendingTasks(tasks)
+	if len(pending) == 0 {
+		m.status = "no task awaiting review"
+		return
+	}
+	rev, err := review.Assemble(store, git.New(m.dir, nil), pending[0].ID)
+	if err != nil {
+		m.status = "review: " + err.Error()
+		return
+	}
+	if m.reviewPaneID != 0 && m.tree.FocusPane(m.reviewPaneID) {
+		m.tree.CloseFocused() // drop the stale review before opening a fresh one
+	}
+	m.reviewPaneID = m.tree.AddTab("review", reviewview.New(rev))
+	m.syncPaneSizes()
 }
 
 // loadTasks reads the repo's tasks for the board (decoupling taskview from the
@@ -378,6 +411,8 @@ func (m *Model) dispatch(a keymap.ActionID) tui.Cmd {
 		m.openGitPanel().EnterCommit()
 	case keymap.ActionGitPush:
 		m.openGitPanel().Push()
+	case keymap.ActionReview:
+		m.openReview()
 	case keymap.ActionSendLeader:
 		m.forward(m.leader)
 	case keymap.ActionQuit:
@@ -546,6 +581,8 @@ func paneTitle(c layout.PaneContent) string {
 		return "git"
 	case *taskview.Board:
 		return "tasks"
+	case *reviewview.Panel:
+		return "review"
 	case *placeholderPane:
 		return v.title
 	}

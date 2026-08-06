@@ -156,6 +156,12 @@ func (r *Repo) Diff(path string, staged bool) (string, error) {
 	return r.out(args...)
 }
 
+// DiffRange returns the unified diff of head relative to their merge base with
+// base (git diff base...head) — the diff a task's branch introduces.
+func (r *Repo) DiffRange(base, head string) (string, error) {
+	return r.out("diff", base+"..."+head)
+}
+
 // Commit summary line.
 type Commit struct {
 	Hash    string
