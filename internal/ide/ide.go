@@ -31,6 +31,8 @@ type Model struct {
 
 	whichkey []keymap.Candidate
 	shells   []*shellPane
+	editors  []*editorPane
+	file     string
 }
 
 // shellReadMsg carries a chunk of a shell pane's output back into the loop.
@@ -42,12 +44,29 @@ type shellReadMsg struct {
 
 const defaultStatus = "Ctrl+Space = leader · ? keys · Q quit"
 
-// New builds the root model for working directory dir at the given size, using
-// real shell panes.
+// New builds the root model for working directory dir at the given size. Its
+// first pane is a shell.
 func New(dir string, cols, rows int) *Model {
 	m := newModel(dir, cols, rows, nil)
 	m.spawn = m.spawnShell
 	m.seed()
+	return m
+}
+
+// NewWithFile builds the root model whose first pane is the embedded editor
+// opened on file.
+func NewWithFile(dir, file string, cols, rows int) *Model {
+	m := newModel(dir, cols, rows, nil)
+	m.spawn = m.spawnShell
+	m.file = file
+	inner := m.treeRect()
+	ep, err := newEditorPane(dir, file, inner.W-2, inner.H-2)
+	if err != nil {
+		return New(dir, cols, rows) // fall back to a shell if nvim is unavailable
+	}
+	m.tree.AddTab("editor", ep)
+	m.adopt(ep)
+	m.syncPaneSizes()
 	return m
 }
 
@@ -93,11 +112,16 @@ func (m *Model) spawnShell(cols, rows int) layout.PaneContent {
 	return sp
 }
 
-// adopt registers a shell pane for sizing/cleanup and returns its read command.
+// adopt registers a pane for sizing/cleanup and returns its background command
+// (reading shell output, or waiting for editor redraws).
 func (m *Model) adopt(content layout.PaneContent) tui.Cmd {
-	if sp, ok := content.(*shellPane); ok {
-		m.shells = append(m.shells, sp)
-		return readCmd(sp)
+	switch p := content.(type) {
+	case *shellPane:
+		m.shells = append(m.shells, p)
+		return readCmd(p)
+	case *editorPane:
+		m.editors = append(m.editors, p)
+		return editorWaitCmd(p)
 	}
 	return nil
 }
@@ -107,11 +131,14 @@ func (m *Model) treeRect() cellbuf.Rect {
 	return cellbuf.Rect{X: 0, Y: 0, W: m.cols, H: m.rows - 1}
 }
 
-// Init starts reading from every shell pane.
+// Init starts reading from every shell pane and waiting on every editor pane.
 func (m *Model) Init() tui.Cmd {
 	var cmds []tui.Cmd
 	for _, sp := range m.shells {
 		cmds = append(cmds, readCmd(sp))
+	}
+	for _, ep := range m.editors {
+		cmds = append(cmds, editorWaitCmd(ep))
 	}
 	return tui.Batch(cmds...)
 }
@@ -127,6 +154,12 @@ func (m *Model) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 		return m, nil
 	case shellReadMsg:
 		return m, m.handleShellRead(v)
+	case editorFlushMsg:
+		if v.pane.dead {
+			return m, nil
+		}
+		// A repaint happens after every Update; just keep waiting for the next flush.
+		return m, editorWaitCmd(v.pane)
 	}
 	return m, nil
 }
@@ -152,6 +185,8 @@ func (m *Model) handleKey(k term.Key) tui.Cmd {
 // context reports the current focus kind for context-scoped bindings.
 func (m *Model) context() keymap.Context {
 	switch m.tree.FocusedContent().(type) {
+	case *editorPane:
+		return keymap.Context{Focus: keymap.FocusEditor}
 	case *shellPane:
 		return keymap.Context{Focus: keymap.FocusTerminal}
 	default:
@@ -159,11 +194,14 @@ func (m *Model) context() keymap.Context {
 	}
 }
 
-// forward sends an unclaimed key to the focused pane (only shells accept input
-// in the Phase-1 skeleton).
+// forward sends an unclaimed key to the focused pane: shells receive raw bytes,
+// the embedded editor receives Neovim key notation.
 func (m *Model) forward(k term.Key) {
-	if sp, ok := m.tree.FocusedContent().(*shellPane); ok {
-		sp.write(encodeKey(k))
+	switch p := m.tree.FocusedContent().(type) {
+	case *editorPane:
+		p.write(k)
+	case *shellPane:
+		p.write(encodeKey(k))
 	}
 }
 
@@ -243,11 +281,15 @@ func (m *Model) newTab() tui.Cmd {
 	return cmd
 }
 
-// closePane closes the focused pane, killing its shell if any.
+// closePane closes the focused pane, tearing down its shell or editor.
 func (m *Model) closePane() tui.Cmd {
-	if sp, ok := m.tree.FocusedContent().(*shellPane); ok {
-		sp.close()
-		m.removeShell(sp)
+	switch p := m.tree.FocusedContent().(type) {
+	case *shellPane:
+		p.close()
+		m.removeShell(p)
+	case *editorPane:
+		p.close()
+		m.removeEditor(p)
 	}
 	m.tree.CloseFocused()
 	m.syncPaneSizes()
@@ -269,16 +311,17 @@ func (m *Model) handleShellRead(msg shellReadMsg) tui.Cmd {
 	return readCmd(msg.pane)
 }
 
-// syncPaneSizes resizes each shell pane's PTY/emulator to its current inner
-// rectangle.
+// syncPaneSizes resizes each pane's backend (PTY or Neovim UI) to its current
+// inner rectangle.
 func (m *Model) syncPaneSizes() {
 	for _, p := range m.tree.Compute(m.treeRect()) {
-		sp, ok := p.Content.(*shellPane)
-		if !ok {
-			continue
-		}
 		inner := innerRect(p.Rect)
-		sp.resize(inner.W, inner.H)
+		switch c := p.Content.(type) {
+		case *shellPane:
+			c.resize(inner.W, inner.H)
+		case *editorPane:
+			c.resize(inner.W, inner.H)
+		}
 	}
 }
 
@@ -291,10 +334,22 @@ func (m *Model) removeShell(target *shellPane) {
 	}
 }
 
-// shutdown kills all shell processes before the program exits.
+func (m *Model) removeEditor(target *editorPane) {
+	for i, ep := range m.editors {
+		if ep == target {
+			m.editors = append(m.editors[:i], m.editors[i+1:]...)
+			return
+		}
+	}
+}
+
+// shutdown tears down all shell and editor processes before the program exits.
 func (m *Model) shutdown() {
 	for _, sp := range m.shells {
 		sp.close()
+	}
+	for _, ep := range m.editors {
+		ep.close()
 	}
 }
 
@@ -324,6 +379,19 @@ func readCmd(sp *shellPane) tui.Cmd {
 	}
 }
 
+// editorWaitCmd returns a command that blocks until the editor pane flushes a
+// redraw, then asks the program to repaint. It stops when the pane is closed.
+func editorWaitCmd(ep *editorPane) tui.Cmd {
+	return func() tui.Msg {
+		select {
+		case <-ep.flush:
+			return editorFlushMsg{pane: ep}
+		case <-ep.closed:
+			return nil
+		}
+	}
+}
+
 // innerRect mirrors drawFrame's inner region for a bordered pane.
 func innerRect(r cellbuf.Rect) cellbuf.Rect {
 	if r.W < 2 || r.H < 2 {
@@ -336,6 +404,8 @@ func paneTitle(c layout.PaneContent) string {
 	switch v := c.(type) {
 	case *shellPane:
 		return "shell"
+	case *editorPane:
+		return "editor"
 	case *placeholderPane:
 		return v.title
 	}
@@ -366,15 +436,22 @@ func tabGotoIndex(a keymap.ActionID) int {
 	return 0
 }
 
-// Run launches the IDE against the real terminal for working directory dir.
-func Run(dir string) error {
+// Run launches the IDE against the real terminal for working directory dir. If
+// file is non-empty, the first pane is the embedded editor opened on it;
+// otherwise it is a shell.
+func Run(dir, file string) error {
 	cols, rows := 80, 24
 	fd := int(os.Stdout.Fd())
 	if c, r, err := term.Size(fd); err == nil && c > 0 && r > 0 {
 		cols, rows = c, r
 	}
 	caps := term.DetectCaps(os.Getenv)
-	m := New(dir, cols, rows)
+	var m *Model
+	if file != "" {
+		m = NewWithFile(dir, file, cols, rows)
+	} else {
+		m = New(dir, cols, rows)
+	}
 	prog := tui.NewProgram(m, tui.WithCaps(caps))
 	_, err := prog.Run()
 	return err

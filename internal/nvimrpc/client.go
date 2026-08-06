@@ -228,14 +228,17 @@ func (c *Client) shutdown(err error) {
 	})
 }
 
-// Close terminates the connection (and the process, if spawned).
+// Close terminates the connection and the spawned process. It does not block on
+// process reaping: closing stdin lets nvim exit on its own, a Kill guarantees
+// it, and Wait is reaped in the background so callers (e.g. an IDE quitting) are
+// never held up.
 func (c *Client) Close() error {
 	if c.cl != nil {
-		_ = c.cl.Close()
+		_ = c.cl.Close() // closing stdin makes nvim --embed exit
 	}
 	if c.cmd != nil && c.cmd.Process != nil {
 		_ = c.cmd.Process.Kill()
-		_ = c.cmd.Wait()
+		go func() { _ = c.cmd.Wait() }()
 	}
 	c.shutdown(fmt.Errorf("closed by caller"))
 	return nil

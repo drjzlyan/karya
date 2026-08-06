@@ -4,6 +4,7 @@ package ide_test
 
 import (
 	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,15 +14,38 @@ import (
 	"github.com/drjzlyan/karya/internal/pty"
 )
 
-// TestTUISmoke builds karya, launches `karya tui` on a real pseudo-terminal,
-// waits for it to render its pane frame, then quits it with Ctrl+Space Q.
-func TestTUISmoke(t *testing.T) {
+// quitAndWait sends Ctrl+Space Q, keeps draining the pty (so karya's teardown
+// output never blocks on a full buffer), and waits for the process to exit.
+func quitAndWait(t *testing.T, p *pty.PTY, cmd *exec.Cmd) {
+	t.Helper()
+	go func() { _, _ = io.Copy(io.Discard, p) }()
+	_, _ = p.Write([]byte{0x00, 'Q'}) // Ctrl+Space then Q
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("karya tui did not quit after Ctrl+Space Q")
+	}
+}
+
+// buildKarya compiles the karya binary into a temp dir and returns its path.
+func buildKarya(t *testing.T) string {
+	t.Helper()
 	bin := filepath.Join(t.TempDir(), "karya")
 	build := exec.Command("go", "build", "-o", bin, "github.com/drjzlyan/karya")
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
 		t.Fatalf("build karya: %v", err)
 	}
+	return bin
+}
+
+// TestTUISmoke builds karya, launches `karya tui` on a real pseudo-terminal,
+// waits for it to render its pane frame, then quits it with Ctrl+Space Q.
+func TestTUISmoke(t *testing.T) {
+	bin := buildKarya(t)
 
 	cmd := exec.Command(bin, "tui")
 	cmd.Dir = t.TempDir()
@@ -42,18 +66,38 @@ func TestTUISmoke(t *testing.T) {
 		t.Fatalf("status line not rendered; output:\n%q", got)
 	}
 
-	// Quit: Ctrl+Space (0x00) then Q.
-	_, _ = p.Write([]byte{0x00, 'Q'})
+	quitAndWait(t, p, cmd)
+}
 
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	select {
-	case <-done:
-		// exited cleanly
-	case <-time.After(5 * time.Second):
-		_ = cmd.Process.Kill()
-		t.Fatal("karya tui did not quit after Ctrl+Space Q")
+// TestTUIEditorSmoke opens a file in the embedded Neovim editor pane and checks
+// its content renders through the msgpack-RPC + Grid pipeline.
+func TestTUIEditorSmoke(t *testing.T) {
+	if _, err := exec.LookPath("nvim"); err != nil {
+		t.Skip("nvim not on PATH")
 	}
+	bin := buildKarya(t)
+
+	dir := t.TempDir()
+	file := filepath.Join(dir, "sample.txt")
+	if err := os.WriteFile(file, []byte("KARYA_EDITOR_SMOKE hello\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command(bin, "tui", file)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "SHELL=/bin/sh")
+	p, err := pty.Start(cmd, 80, 24)
+	if err != nil {
+		t.Skipf("pty unavailable: %v", err)
+	}
+	defer func() { _ = p.Close() }()
+
+	got := readUntilByte(t, p, []byte("KARYA_EDITOR_SMOKE"), 8*time.Second)
+	if !bytes.Contains(got, []byte("KARYA_EDITOR_SMOKE")) {
+		t.Fatalf("editor did not render file content; output:\n%q", got)
+	}
+
+	quitAndWait(t, p, cmd)
 }
 
 func readUntilByte(t *testing.T, p *pty.PTY, want []byte, timeout time.Duration) []byte {
