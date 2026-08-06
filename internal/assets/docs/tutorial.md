@@ -338,51 +338,46 @@ You're ready. Quit with `<leader>Z` and pick a language below. (Prefer to be
 guided? `karya tutorial ide` walks every one of these keys for a language you
 choose, detecting each keystroke as you go.)
 
-### 1.6 Human-in-the-loop tasks (agents-first)
+### 1.6 Human-in-the-loop tasks
 
-Beyond typing at one agent pane, karya can run agent work as **tasks** you direct
-and review. Each task runs in its own isolated **git worktree** on a namespaced
-`karya/<id>` branch under karya's own directories — so an agent's changes are
-contained and reviewable, and **your real branch is never touched until you merge**.
-This is task-level isolation, layered on top of karya's zero-impact isolation.
+Beyond typing at one agent pane, karya runs agent work as **tasks** you direct
+and review. A task is a **spec contract** — `.karya/tasks/<id>/SPEC.md` in your
+repo: objective, machine-checkable acceptance criteria, and the verification
+commands karya will run — executed in an isolated **git worktree** on a
+`task/<id>` branch under karya's own directories. **Your real branch is never
+touched until a human gate lets work merge.** This is task-level isolation,
+layered on top of karya's zero-impact isolation.
 
 ```bash
-karya task new "add a /health endpoint"   # isolated worktree + branch + agent
-karya task new "..." --agent none          # pick the agent (or the native engine)
-karya task new "..." --plan                # draft a plan and hold for your approval
-karya task list                            # or: karya tasks
-karya task switch <id>                      # jump into a task's session
+karya init                              # one-time: scaffold .karya/ + AGENTS.md
+karya task new add-health-endpoint      # scaffold the spec (opens in the editor)
+karya task start 2026-08-05-add-health-endpoint   # create the isolated worktree
+karya task list                         # the task board — or: karya tasks
+karya task status                       # per-state counts + the gate inbox
+karya task show <id>                    # state, spec summary, gate history
+karya task abandon <id>                 # teardown: worktree + branch + artifacts
 ```
 
-Then drive it through the review gates — nothing lands unreviewed:
-
-| Command | Gate |
-|---|---|
-| `karya task plan <id>` / `approve-plan <id>` | **Plan approval** — read the agent's plan, then let it start |
-| `karya task review [<id>]` | **Diff review** — the whole change vs. its base, before it applies |
-| `karya task merge [<id>] [--push]` | Apply it into your branch (permission-gated) |
-| `karya task reject [<id>]` | Discard it (the worktree is kept for inspection) |
-| `karya task checkpoint [<id>] [label]` | Save a restorable snapshot |
-| `karya task rewind [<id>] [n]` | Roll the worktree back to a checkpoint |
-| `karya task rm <id>` | Remove the task, its worktree, and its branch |
-
-Inside a task's session the `<id>` is optional (it defaults to the current task),
-so `karya task review` and `karya task merge` just work. `karya task allow
-<merge|push|rewind>` pre-approves an action for the project so it stops prompting.
+Only `SPEC.md` is meant to be committed from `.karya/` — the rest (state,
+plans, evidence) is local runtime state. Tasks advance through mandatory
+**human gates** (plan, diff, verification), each recorded in the task's
+`STATE.json` so you can always answer "who approved this, when, with what
+feedback". The agent-driven steps (`karya plan`, `implement`, `verify`,
+`merge`) arrive with the upcoming adapter layer.
 
 **From the editor and tmux:**
 
 | Key | Action |
 |---|---|
-| `<leader>kn` | New task (prompts for a description) |
-| `<leader>kl` / `<leader>kr` | List tasks / review the current task's diff |
-| `<leader>km` / `<leader>kj` | Merge / reject the current task |
-| `<leader>kc` / `<leader>kw` | Checkpoint / rewind the current task |
-| `Ctrl-a T` | Tasks **dashboard** — pick a task from the fleet to switch to |
+| `<leader>kn` | New task (prompts for a slug; scaffolds the spec) |
+| `<leader>kl` | List tasks (the task board) |
+| `<leader>ks` | Show a task's state, spec summary, and gate history |
+| `<leader>kt` | Start a task (create its isolated worktree) |
+| `<leader>ka` | Abandon a task |
+| `Ctrl-a T` | Task board popup |
 
-Because each task is its own worktree and session, you can run **several at once**
-and switch between them from the dashboard — a fleet of agents, each reviewed on
-its own terms.
+Because each task is its own worktree, you can run **several at once** — each
+reviewed on its own terms.
 
 **The built-in agent (optional).** With `ANTHROPIC_API_KEY` set, `karya agent
 native` runs karya's own Claude-API agent, which **pauses for your approval on

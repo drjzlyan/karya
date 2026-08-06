@@ -26,8 +26,8 @@ func (f *fakeRunner) Run(_, name string, args ...string) error {
 }
 
 func TestBranchIsNamespaced(t *testing.T) {
-	if got := Branch("abc"); got != "karya/abc" {
-		t.Errorf("Branch = %q, want karya/abc", got)
+	if got := Branch("abc"); got != "task/abc" {
+		t.Errorf("Branch = %q, want task/abc", got)
 	}
 }
 
@@ -57,12 +57,26 @@ func TestAddIssuesNamespacedWorktreeAdd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
-	want := []string{"git", "worktree", "add", "-b", "karya/task9", path}
+	want := []string{"git", "worktree", "add", "-b", "task/task9", path, "HEAD"}
 	if got := lastRun(f, "worktree"); !reflect.DeepEqual(got, want) {
 		t.Errorf("worktree add call = %v, want %v", got, want)
 	}
 	if !strings.HasPrefix(path, m.Root) {
 		t.Errorf("checkout path %q not under karya root %q", path, m.Root)
+	}
+}
+
+func TestAddFromUsesBaseRef(t *testing.T) {
+	f := &fakeRunner{toplevel: t.TempDir()}
+	m := Manager{Runner: f, Root: t.TempDir()}
+
+	path, err := m.AddFrom("/anywhere/in/repo", "task9", "release/1.2")
+	if err != nil {
+		t.Fatalf("AddFrom: %v", err)
+	}
+	want := []string{"git", "worktree", "add", "-b", "task/task9", path, "release/1.2"}
+	if got := lastRun(f, "worktree"); !reflect.DeepEqual(got, want) {
+		t.Errorf("worktree add call = %v, want %v", got, want)
 	}
 }
 
@@ -72,7 +86,7 @@ func TestRemoveDeletesWorktreeAndBranch(t *testing.T) {
 	if err := m.Remove("/anywhere", "task9"); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
-	if got := lastRun(f, "branch"); !reflect.DeepEqual(got, []string{"git", "branch", "-D", "karya/task9"}) {
+	if got := lastRun(f, "branch"); !reflect.DeepEqual(got, []string{"git", "branch", "-D", "task/task9"}) {
 		t.Errorf("branch delete call = %v", got)
 	}
 	if lastRun(f, "prune") == nil {

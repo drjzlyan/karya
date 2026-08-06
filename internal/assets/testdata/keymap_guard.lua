@@ -111,5 +111,5 @@ print("GLOBAL c " .. (global_has(" c") and "present" or "absent"))
 print("GLOBAL x " .. (global_has(" x") and "present" or "absent"))
 -- Karya Tasks group: a couple of representative <leader>k maps must stay bound.
 print("GLOBAL kn " .. (global_has(" kn") and "present" or "absent"))
-print("GLOBAL kr " .. (global_has(" kr") and "present" or "absent"))
+print("GLOBAL kt " .. (global_has(" kt") and "present" or "absent"))
 print("OK")

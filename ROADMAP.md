@@ -12,16 +12,16 @@ Legend: ☐ not started · ◐ in progress · ☑ done
 ## Phase A — Task engine foundation
 **Goal:** the task is a real, persistent, isolated unit of work.
 
-- ☐ `internal/task` — task lifecycle, `STATE.json`, artifact store
+- ☑ `internal/task` — task lifecycle, `STATE.json`, artifact store
   (`.karya/tasks/<id>/`); reworks the 9–14-era prefix-based store
-- ☐ `internal/spec` — spec parse/validate/render (front-matter + Objective /
+- ☑ `internal/spec` — spec parse/validate/render (front-matter + Objective /
   Acceptance criteria / Context / Constraints / Verification)
-- ☐ `internal/worktree` — git worktree create/lock/teardown per task, branch
+- ☑ `internal/worktree` — git worktree create/lock/teardown per task, branch
   `task/<id>`, base-ref selection, dirty-tree safety; reworks the 9–14-era
   `karya/<id>` manager
-- ☐ `karya task new|list|status|show|start|abandon` (CLI only; TUI in Phase C)
-- ☐ Integration tests: real `git worktree` in `t.TempDir()` repos
-- ☐ `karya init` — scaffold `.karya/` + repo `AGENTS.md` by toolchain detection
+- ☑ `karya task new|list|status|show|start|abandon` (CLI only; TUI in Phase C)
+- ☑ Integration tests: real `git worktree` in `t.TempDir()` repos
+- ☑ `karya init` — scaffold `.karya/` + repo `AGENTS.md` by toolchain detection
 
 **Done when:** a task can be created from a spec, gets an isolated worktree,
 and its state survives restarts — with zero effect on the user's working tree.

@@ -55,13 +55,10 @@ func TestEnvNamespacesNvimAndEditor(t *testing.T) {
 // TestMiseIsolation asserts karya's mise config, data, and cache all live under
 // the karya prefix and that Env pins mise there and prepends karya's tool dirs to
 // PATH — so `karya lang` never touches the user's global mise or Homebrew.
-func TestTaskAndWorktreePathsUnderState(t *testing.T) {
+func TestWorktreePathUnderState(t *testing.T) {
 	p := Paths{State: "/home/u/.local/state/karya"}
 	if !strings.HasPrefix(p.WorktreesDir(), p.State) {
 		t.Errorf("WorktreesDir %q not under State %q", p.WorktreesDir(), p.State)
-	}
-	if !strings.HasPrefix(p.TasksDir(), p.State) {
-		t.Errorf("TasksDir %q not under State %q", p.TasksDir(), p.State)
 	}
 }
 

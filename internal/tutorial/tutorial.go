@@ -23,6 +23,7 @@ import (
 	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/project"
 	"github.com/drjzlyan/karya/internal/ship"
+	"github.com/drjzlyan/karya/internal/spec"
 	"github.com/drjzlyan/karya/internal/task"
 	"github.com/drjzlyan/karya/internal/tmuxx"
 	"github.com/drjzlyan/karya/internal/worktree"
@@ -159,12 +160,13 @@ func Lessons() []Lesson {
 		},
 		{
 			Title: "Human-in-the-loop tasks",
-			Body: "karya can hand work to an agent as a *task* that runs in its own isolated\n" +
-				"git worktree (branch karya/<id>), so nothing touches your real branch until\n" +
-				"you review it. `karya task new \"<prompt>\"` starts one; `karya task review`,\n" +
-				"`merge`, `reject`, and `rewind` are the review gates; `karya task dashboard`\n" +
-				"(Ctrl-a T) lists the fleet. karya will create and tear down a real isolated\n" +
-				"worktree now to prove the containment.",
+			Body: "karya hands work to an agent as a *task*: a spec contract in your repo\n" +
+				"(.karya/tasks/<id>/SPEC.md) that runs in its own isolated git worktree\n" +
+				"(branch task/<id>), so nothing touches your real branch until you review\n" +
+				"it. `karya task new <slug>` scaffolds a spec, `karya task start <id>`\n" +
+				"creates the worktree, and human gates (plan/diff/verify) guard every\n" +
+				"step forward; `karya task list` (Ctrl-a T) is the task board. karya will\n" +
+				"create and tear down a real isolated worktree now to prove the containment.",
 			Expect: "karya task list",
 			Hint:   "type it exactly: karya task list",
 			Run:    verifyTasks,
@@ -267,7 +269,7 @@ func verifyGitInit(sb *Sandbox) (Outcome, string) {
 }
 
 // verifyTasks proves task-level isolation for real: it creates a git repo in the
-// sandbox, adds a task worktree on a namespaced karya/<id> branch under a
+// sandbox, adds a task worktree on a namespaced task/<id> branch under a
 // sandbox-local root, records the task, and tears it all down — the same
 // worktree.Manager the `karya task` commands use. It degrades to a Note when git
 // is not installed rather than failing on a machine still being set up.
@@ -309,14 +311,23 @@ func verifyTasks(sb *Sandbox) (Outcome, string) {
 	if !strings.HasPrefix(path, sb.Dir) || strings.HasPrefix(path, repo) {
 		return Fail, fmt.Sprintf("task worktree %q is not isolated from the repo", path)
 	}
-	store := task.NewStore(filepath.Join(sb.Dir, "tasks.json"))
-	if _, err := store.Save(task.Task{
-		ID: id, Title: "demo task", Status: task.StatusWorking,
-		Branch: worktree.Branch(id), Worktree: path, Repo: repo,
-	}); err != nil {
+	store := task.NewStore(repo)
+	tk, err := store.Create(id, spec.Template(id), "")
+	if err != nil {
 		return Fail, err.Error()
 	}
+	tk.Branch, tk.Worktree = worktree.Branch(id), path
+	if err := store.Save(tk); err != nil {
+		return Fail, err.Error()
+	}
+	// The task record lives inside the repo's .karya directory.
+	if _, err := os.Stat(store.SpecPath(id)); err != nil {
+		return Fail, fmt.Sprintf("task spec not recorded in the repo: %v", err)
+	}
 	if err := mgr.Remove(repo, id); err != nil {
+		return Fail, err.Error()
+	}
+	if err := store.Delete(id); err != nil {
 		return Fail, err.Error()
 	}
 	return Pass, fmt.Sprintf("created and cleaned up an isolated worktree on branch %s (contained, reviewable)", worktree.Branch(id))

@@ -1,81 +1,89 @@
-// Package task models karya's unit of agent work and persists it. A Task is the
-// primary noun of the human-in-the-loop, agents-first IDE: a prompt handed to an
-// agent that runs in its own isolated git worktree (internal/worktree) and moves
-// through a review lifecycle the human drives. The Store keeps tasks in a
-// per-project JSON file under the karya prefix (config.Paths.TasksDir), so — like
-// all karya state — they never touch the user's own config.
+// Package task is karya's task engine: the task is the unit of work in the
+// human-in-the-loop IDE (DESIGN.md §2). A task is a spec contract
+// (internal/spec), a state machine with mandatory human gates, and an audit
+// trail — all persisted inside the user's repository at
+// .karya/tasks/<id>/ (SPEC.md + STATE.json), so state survives restarts and is
+// diffable and greppable by humans and re-ingestible by agents.
+//
+// Tasks branch and work in isolated git worktrees (internal/worktree); the
+// user's working tree is never the agent's working tree. Only SPEC.md is meant
+// to be committed (DESIGN.md §15): EnsureProjectDir installs a .karya/.gitignore
+// that keeps the rest of the runtime state local.
 package task
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/drjzlyan/karya/internal/spec"
 )
 
-// Status is a task's position in the review lifecycle:
+// State is a task's position in the gate state machine (DESIGN.md §2):
 //
-//	planning → awaiting-plan → working → awaiting-review → merged | rejected
+//	DRAFT → PLANNED ─gate:plan→ APPROVED → IMPLEMENTING ─gate:diff→
+//	VERIFYING ─gate:verify→ MERGING → DONE
 //
-// The plan states (planning, awaiting-plan) are only entered when a task is
-// created with plan-approval requested; otherwise a task starts at working.
-type Status string
+// Rejection at a gate loops the task back with the human's feedback; ABANDONED
+// is the terminal state for torn-down tasks.
+type State string
 
 // The task lifecycle states.
 const (
-	StatusPlanning       Status = "planning"
-	StatusAwaitingPlan   Status = "awaiting-plan"
-	StatusWorking        Status = "working"
-	StatusAwaitingReview Status = "awaiting-review"
-	StatusMerged         Status = "merged"
-	StatusRejected       Status = "rejected"
+	StateDraft        State = "draft"
+	StatePlanned      State = "planned"
+	StateApproved     State = "approved"
+	StateImplementing State = "implementing"
+	StateVerifying    State = "verifying"
+	StateMerging      State = "merging"
+	StateDone         State = "done"
+	StateAbandoned    State = "abandoned"
 )
 
-// ErrNotFound is returned by Store.Get/Delete when no task has the given id.
-var ErrNotFound = errors.New("task not found")
+// Gate is a mandatory human (or recorded-delegation) approval point.
+type Gate string
 
-// Checkpoint is a restorable snapshot of a task's worktree: a commit on the task
-// branch that `karya task rewind` can reset back to.
-type Checkpoint struct {
-	SHA     string    `json:"sha"`
-	Label   string    `json:"label"`
-	Created time.Time `json:"created"`
+// The three gates between states.
+const (
+	GatePlan   Gate = "plan"
+	GateDiff   Gate = "diff"
+	GateVerify Gate = "verify"
+)
+
+// GateFor reports which gate a transition between two states crosses, if any.
+// APPROVED → IMPLEMENTING and MERGING → DONE cross no gate; every other
+// forward transition and every rejection does.
+func GateFor(from, to State) Gate {
+	switch {
+	case from == StatePlanned && (to == StateApproved || to == StateDraft):
+		return GatePlan
+	case from == StateImplementing && (to == StateVerifying || to == StateApproved):
+		return GateDiff
+	case from == StateVerifying && (to == StateMerging || to == StateImplementing):
+		return GateVerify
+	}
+	return ""
 }
 
-// Task is one unit of agent work and its isolated workspace.
-type Task struct {
-	ID          string       `json:"id"`
-	Title       string       `json:"title"`
-	Prompt      string       `json:"prompt"`
-	Agent       string       `json:"agent"`
-	Status      Status       `json:"status"`
-	Branch      string       `json:"branch"`   // namespaced git branch, e.g. karya/<id>
-	Worktree    string       `json:"worktree"` // isolated checkout path (karya-owned)
-	Repo        string       `json:"repo"`     // repository top-level the task belongs to
-	Plan        string       `json:"plan,omitempty"`
-	BaseCommit  string       `json:"base_commit,omitempty"` // repo HEAD the branch forked from
-	Checkpoints []Checkpoint `json:"checkpoints,omitempty"` // rewind targets, oldest first
-	Created     time.Time    `json:"created"`
-	Updated     time.Time    `json:"updated"`
+// transitions is the allowed state graph. Forward moves advance the workflow;
+// backward moves are gate rejections that return the task to the agent with
+// feedback. DONE and ABANDONED are terminal.
+var transitions = map[State][]State{
+	StateDraft:        {StatePlanned, StateAbandoned},
+	StatePlanned:      {StateApproved, StateDraft, StateAbandoned},
+	StateApproved:     {StateImplementing, StateAbandoned},
+	StateImplementing: {StateVerifying, StateApproved, StateAbandoned},
+	StateVerifying:    {StateMerging, StateImplementing, StateAbandoned},
+	StateMerging:      {StateDone, StateAbandoned},
 }
 
-// transitions is the allowed forward status graph. Merged and Rejected are
-// terminal. It keeps the review lifecycle honest — a task cannot, say, be merged
-// straight out of planning without passing through work.
-var transitions = map[Status][]Status{
-	StatusPlanning:       {StatusAwaitingPlan, StatusWorking, StatusRejected},
-	StatusAwaitingPlan:   {StatusWorking, StatusRejected},
-	StatusWorking:        {StatusAwaitingReview, StatusMerged, StatusRejected},
-	StatusAwaitingReview: {StatusMerged, StatusRejected, StatusWorking},
-}
-
-// CanTransition reports whether a task may move from status from to status to.
-func CanTransition(from, to Status) bool {
+// CanTransition reports whether a task may move from state from to state to.
+func CanTransition(from, to State) bool {
 	for _, s := range transitions[from] {
 		if s == to {
 			return true
@@ -84,137 +92,268 @@ func CanTransition(from, to Status) bool {
 	return false
 }
 
-// NewID returns a short, unique task id (8 hex chars) suitable for use in a
-// branch name and a directory segment.
-func NewID() string {
-	var b [4]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		// Fall back to a timestamp; collisions are astronomically unlikely either
-		// way and a task id is never security-sensitive.
-		return fmt.Sprintf("%08x", time.Now().UnixNano()&0xffffffff)
-	}
-	return hex.EncodeToString(b[:])
+// Transition is one recorded state crossing — the audit trail entry that
+// answers "who approved this, when, with what feedback" (DESIGN.md §13).
+type Transition struct {
+	At       time.Time `json:"at"`
+	From     State     `json:"from"`
+	To       State     `json:"to"`
+	Gate     Gate      `json:"gate,omitempty"`
+	Actor    string    `json:"actor"` // "human" or "agent:<name>" for delegated crossings
+	Feedback string    `json:"feedback,omitempty"`
 }
 
-// TitleFromPrompt derives a concise, single-line title from a prompt: its first
-// non-blank line, trimmed and truncated to a readable length.
-func TitleFromPrompt(prompt string) string {
-	for _, line := range strings.Split(prompt, "\n") {
-		if s := strings.TrimSpace(line); s != "" {
-			const max = 60
-			if len(s) > max {
-				return s[:max-1] + "…"
-			}
-			return s
+// Task is one unit of work: its state, its isolated workspace, and its history.
+// It is the STATE.json shadow of the task directory.
+type Task struct {
+	ID       string       `json:"id"`
+	State    State        `json:"state"`
+	Agent    string       `json:"agent,omitempty"`    // preferred agent (from the spec)
+	Base     string       `json:"base,omitempty"`     // base commit the task branch forked from
+	Branch   string       `json:"branch,omitempty"`   // task/<id>, set by `task start`
+	Worktree string       `json:"worktree,omitempty"` // isolated checkout path, set by `task start`
+	History  []Transition `json:"history,omitempty"`
+	Created  time.Time    `json:"created"`
+	Updated  time.Time    `json:"updated"`
+}
+
+// rejections are the backward moves: a gate sending the task back to the agent
+// with the human's feedback appended (DESIGN.md §2 — the core HITL loop).
+var rejections = map[State]State{
+	StatePlanned:      StateDraft,
+	StateImplementing: StateApproved,
+	StateVerifying:    StateImplementing,
+}
+
+// IsRejection reports whether moving from state from to state to is a gate
+// rejection (a backward move) rather than forward progress or an abandon.
+func IsRejection(from, to State) bool { return rejections[from] == to }
+
+// Transition moves t to state to, recording the crossing in the history. It
+// rejects illegal moves, actor-less crossings (every crossing names who or what
+// approved it — the history is the audit trail), and rejections without
+// feedback: the feedback is what the agent revises against, so a silent
+// rejection is a bug in the loop.
+func (t *Task) Transition(to State, actor, feedback string) error {
+	if !CanTransition(t.State, to) {
+		return fmt.Errorf("task: illegal transition %s → %s", t.State, to)
+	}
+	if actor == "" {
+		return fmt.Errorf("task: transition %s → %s must name its actor", t.State, to)
+	}
+	if IsRejection(t.State, to) && feedback == "" {
+		return fmt.Errorf("task: rejection %s → %s requires feedback", t.State, to)
+	}
+	gate := GateFor(t.State, to)
+	t.History = append(t.History, Transition{
+		At: time.Now().UTC(), From: t.State, To: to,
+		Gate: gate, Actor: actor, Feedback: feedback,
+	})
+	t.State = to
+	t.Updated = time.Now().UTC()
+	return nil
+}
+
+// ErrNotFound is returned by Store.Get/Spec when no task has the given id.
+var ErrNotFound = errors.New("task not found")
+
+// ErrExists is returned by Store.Create when a task with the id already exists.
+var ErrExists = errors.New("task already exists")
+
+// NewID derives a task id from a slug: date-prefixed so `task list` reads
+// chronologically, e.g. 2026-08-05-add-retry-to-downloader (DESIGN.md §3).
+func NewID(slug string, now time.Time) string {
+	return now.Format("2006-01-02") + "-" + slug
+}
+
+// ProjectDir is the karya directory inside a repository.
+func ProjectDir(repoRoot string) string { return filepath.Join(repoRoot, ".karya") }
+
+// karyaGitIgnore keeps karya runtime state out of the user's git status while
+// leaving task specs committable — SPEC.md is the contract (DESIGN.md §15).
+const karyaGitIgnore = `# karya runtime state is local; task specs (the contract) stay committable.
+*
+!*/
+!**/SPEC.md
+`
+
+// EnsureProjectDir creates .karya/tasks and installs .karya/.gitignore if
+// missing. Idempotent; never overwrites an existing .gitignore.
+func EnsureProjectDir(repoRoot string) error {
+	if err := os.MkdirAll(filepath.Join(ProjectDir(repoRoot), "tasks"), 0o755); err != nil {
+		return fmt.Errorf("task: create .karya: %w", err)
+	}
+	gi := filepath.Join(ProjectDir(repoRoot), ".gitignore")
+	if _, err := os.Stat(gi); errors.Is(err, os.ErrNotExist) {
+		if err := os.WriteFile(gi, []byte(karyaGitIgnore), 0o644); err != nil {
+			return fmt.Errorf("task: write .karya/.gitignore: %w", err)
 		}
 	}
-	return "untitled task"
+	return nil
 }
 
-// Store persists the tasks of a single project as one JSON file. Construct one
-// with NewStore; the file and its parent directory are created lazily on Save.
+// Store persists the tasks of one repository as per-task directories under
+// <repo>/.karya/tasks/. Construct one with NewStore.
 type Store struct {
-	path string
+	repoRoot string
 }
 
-// NewStore returns a Store backed by the JSON file at path. Callers name the file
-// per project (typically TasksDir/<worktree.ProjectSlug>.json) so each project's
-// tasks are kept together.
-func NewStore(path string) *Store { return &Store{path: path} }
+// NewStore returns a Store rooted at the repository's .karya directory.
+func NewStore(repoRoot string) *Store { return &Store{repoRoot: repoRoot} }
 
-// List returns all tasks in creation order (oldest first), or an empty slice if
-// the store file does not exist yet.
-func (s *Store) List() ([]Task, error) {
-	data, err := os.ReadFile(s.path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("task: read store: %w", err)
-	}
-	var tasks []Task
-	if err := json.Unmarshal(data, &tasks); err != nil {
-		return nil, fmt.Errorf("task: parse store %s: %w", s.path, err)
-	}
-	return tasks, nil
-}
+// tasksDir is where per-task directories live.
+func (s *Store) tasksDir() string { return filepath.Join(ProjectDir(s.repoRoot), "tasks") }
 
-// Get returns the task with id, or ErrNotFound.
-func (s *Store) Get(id string) (Task, error) {
-	tasks, err := s.List()
-	if err != nil {
+// Dir returns the task directory for id.
+func (s *Store) Dir(id string) string { return filepath.Join(s.tasksDir(), id) }
+
+// SpecPath returns the path of a task's SPEC.md.
+func (s *Store) SpecPath(id string) string { return filepath.Join(s.Dir(id), "SPEC.md") }
+
+// statePath returns the path of a task's STATE.json.
+func (s *Store) statePath(id string) string { return filepath.Join(s.Dir(id), "STATE.json") }
+
+// Create scaffolds a new task: the spec document and an initial STATE.json at
+// draft. It returns ErrExists if the id is taken. The spec is stored as
+// rendered — the template is expected to be filled in by the human before the
+// task advances.
+func (s *Store) Create(id string, doc string, agentName string) (Task, error) {
+	if _, err := os.Stat(s.Dir(id)); err == nil {
+		return Task{}, fmt.Errorf("task: %s: %w", id, ErrExists)
+	}
+	if err := EnsureProjectDir(s.repoRoot); err != nil {
 		return Task{}, err
 	}
-	for _, t := range tasks {
-		if t.ID == id {
-			return t, nil
-		}
+	if err := os.MkdirAll(s.Dir(id), 0o755); err != nil {
+		return Task{}, fmt.Errorf("task: create %s: %w", id, err)
 	}
-	return Task{}, ErrNotFound
-}
-
-// Save upserts t (matched by ID), stamping Updated (and Created on first save),
-// and writes the store. It returns the stored task.
-func (s *Store) Save(t Task) (Task, error) {
-	tasks, err := s.List()
-	if err != nil {
-		return Task{}, err
+	if err := os.WriteFile(s.SpecPath(id), []byte(doc), 0o644); err != nil {
+		return Task{}, fmt.Errorf("task: write spec: %w", err)
 	}
 	now := time.Now().UTC()
-	t.Updated = now
-	replaced := false
-	for i, existing := range tasks {
-		if existing.ID == t.ID {
-			t.Created = existing.Created
-			tasks[i] = t
-			replaced = true
-			break
-		}
-	}
-	if !replaced {
-		if t.Created.IsZero() {
-			t.Created = now
-		}
-		tasks = append(tasks, t)
-	}
-	if err := s.write(tasks); err != nil {
+	t := Task{ID: id, State: StateDraft, Agent: agentName, Created: now, Updated: now}
+	if err := s.Save(t); err != nil {
 		return Task{}, err
 	}
 	return t, nil
 }
 
-// Delete removes the task with id. It returns ErrNotFound if no such task exists.
-func (s *Store) Delete(id string) error {
-	tasks, err := s.List()
+// Get loads the task with id, or ErrNotFound.
+func (s *Store) Get(id string) (Task, error) {
+	data, err := os.ReadFile(s.statePath(id))
+	if errors.Is(err, os.ErrNotExist) {
+		return Task{}, ErrNotFound
+	}
 	if err != nil {
-		return err
+		return Task{}, fmt.Errorf("task: read state: %w", err)
 	}
-	kept := tasks[:0]
-	found := false
-	for _, t := range tasks {
-		if t.ID == id {
-			found = true
-			continue
-		}
-		kept = append(kept, t)
+	var t Task
+	if err := json.Unmarshal(data, &t); err != nil {
+		return Task{}, fmt.Errorf("task: parse %s: %w", s.statePath(id), err)
 	}
-	if !found {
-		return ErrNotFound
-	}
-	return s.write(kept)
+	return t, nil
 }
 
-// write serializes tasks to the store file, creating the parent dir as needed.
-func (s *Store) write(tasks []Task) error {
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		return fmt.Errorf("task: create dir: %w", err)
+// Spec loads and parses a task's SPEC.md.
+func (s *Store) Spec(id string) (*spec.Spec, error) {
+	data, err := os.ReadFile(s.SpecPath(id))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, ErrNotFound
 	}
-	data, err := json.MarshalIndent(tasks, "", "  ")
 	if err != nil {
-		return fmt.Errorf("task: encode store: %w", err)
+		return nil, fmt.Errorf("task: read spec: %w", err)
 	}
-	if err := os.WriteFile(s.path, data, 0o644); err != nil {
-		return fmt.Errorf("task: write %s: %w", s.path, err)
+	return spec.Parse(data)
+}
+
+// List returns every task, sorted by id (chronological, since ids are
+// date-prefixed). A missing tasks dir is an empty list, not an error.
+func (s *Store) List() ([]Task, error) {
+	entries, err := os.ReadDir(s.tasksDir())
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("task: list: %w", err)
+	}
+	var out []Task
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		t, err := s.Get(e.Name())
+		if err != nil {
+			continue // a task dir without valid STATE.json is not a task
+		}
+		out = append(out, t)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+
+// Save writes t's STATE.json, stamping Updated.
+func (s *Store) Save(t Task) error {
+	t.Updated = time.Now().UTC()
+	data, err := json.MarshalIndent(t, "", "  ")
+	if err != nil {
+		return fmt.Errorf("task: encode state: %w", err)
+	}
+	if err := os.WriteFile(s.statePath(t.ID), data, 0o644); err != nil {
+		return fmt.Errorf("task: write state: %w", err)
 	}
 	return nil
+}
+
+// Delete removes the task directory (spec, state, artifacts). It is the
+// teardown half of `task abandon`; the worktree/branch teardown lives in
+// internal/worktree. ErrNotFound if no such task exists.
+func (s *Store) Delete(id string) error {
+	if _, err := os.Stat(s.Dir(id)); errors.Is(err, os.ErrNotExist) {
+		return ErrNotFound
+	}
+	if err := os.RemoveAll(s.Dir(id)); err != nil {
+		return fmt.Errorf("task: remove %s: %w", id, err)
+	}
+	return nil
+}
+
+// Summary is the per-state count board `karya task status` renders.
+type Summary struct {
+	Counts  map[State]int
+	Total   int
+	Pending []Task // tasks waiting on a human gate crossing
+}
+
+// gatePendingStates are the states whose next forward move crosses a human gate.
+var gatePendingStates = map[State]bool{
+	StatePlanned:      true,
+	StateImplementing: true,
+	StateVerifying:    true,
+}
+
+// Summarize counts tasks per state and collects the gate inbox: tasks parked
+// at a state whose forward transition needs a human approval.
+func Summarize(tasks []Task) Summary {
+	sum := Summary{Counts: map[State]int{}, Total: len(tasks)}
+	for _, t := range tasks {
+		sum.Counts[t.State]++
+		if gatePendingStates[t.State] {
+			sum.Pending = append(sum.Pending, t)
+		}
+	}
+	return sum
+}
+
+// Title reads the first line of a spec objective as a human-readable task
+// title for list/board rendering.
+func Title(s *spec.Spec) string {
+	if s == nil {
+		return ""
+	}
+	line, _, _ := strings.Cut(s.Objective, "\n")
+	const max = 60
+	if len(line) > max {
+		return line[:max-1] + "…"
+	}
+	return line
 }

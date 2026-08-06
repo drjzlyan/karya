@@ -62,6 +62,8 @@ func Run(args []string) int {
 		return cmdTask(rest)
 	case "tasks":
 		return cmdTask(append([]string{"list"}, rest...))
+	case "init":
+		return cmdInit(rest)
 	case "lang":
 		return cmdLang(rest)
 	case "profile":
@@ -534,9 +536,10 @@ Usage:
   karya dev [name] [path]   Explicit session launch (-a agent, -k kill, -q quit)
 
   karya agent <cmd>         status | switch | next | prev | reset | prefs | clear
-  karya task <cmd>          new "<prompt>" [--agent] [--plan] | list | switch | rm
-                            plan | approve-plan | review | merge | reject
-                            checkpoint | rewind | allow  (see: karya help task)
+  karya task <cmd>          new <slug> [--agent] | list | status | show <id>
+                            start <id> [--base <ref>] | abandon <id> [-y]
+                            (see: karya help task)
+  karya init [--force]      Scaffold .karya/ + a repo AGENTS.md for the task flow
   karya edit <file> [line]  Open a file in the editor pane (used as $EDITOR)
   karya run <cmd...>        Run a command in the build/test pane
   karya new <lang> <name>   Scaffold a project (python|java|typescript|go|cpp|rust)

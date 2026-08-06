@@ -86,7 +86,7 @@ func TestKeymapConsistency(t *testing.T) {
 	if globals["kn"] != "present" {
 		t.Errorf("<leader>kn (new task) should be bound (got %q)", globals["kn"])
 	}
-	if globals["kr"] != "present" {
-		t.Errorf("<leader>kr (review task) should be bound (got %q)", globals["kr"])
+	if globals["kt"] != "present" {
+		t.Errorf("<leader>kt (start task) should be bound (got %q)", globals["kt"])
 	}
 }
