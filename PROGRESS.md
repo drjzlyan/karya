@@ -13,10 +13,11 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 4 — verification & merge (next). Phase 0 (docs), Phase 1
-(TUI skeleton), Phase 2 (embed Neovim), and Phase 3 core (git panel, task board,
-review + gates) are shipped. Phase B (agent adapters) proceeds in parallel
-(headless).
+**Active phase:** Phase 5 — skills marketplace (next). Phase 0–4 core are shipped:
+docs pivot, TUI skeleton, embed Neovim, git panel/task board/review+gates, and
+verification/merge (verify+merge CLI, in-TUI approve/reject + gate inbox, agent
+PTY panes in worktrees). Phase B (agent adapters) proceeds in parallel (headless);
+tdd/cross-agent/regression-net/perf remain within Phase 4.
 **Architecture pivot (2026-08-06):** karya moves from an *orchestrator* (external
 tmux + standalone Neovim UI + lazygit, three keymaps) to a **single-process TUI**
 that owns the terminal and embeds Neovim as the editing engine over msgpack-RPC,
@@ -186,14 +187,27 @@ dashboard.
 - Deferred to Phase 4: in-TUI approve/reject keys + gate inbox view, and agent
   CLIs as PTY panes bound to task worktrees.
 
+### 2026-08-07 — Phase 4 core: verification & merge
+
+- `internal/verify`: runs a spec's Verification commands in the task worktree,
+  captures exit codes + output, writes `VERIFY-<n>.md` (empty run ≠ pass).
+- `karya verify <id>` (numbered evidence) + `karya merge <id>` (git merge or
+  `--pr`, post verify-gate only → done, worktree torn down); `git.Repo.Merge`.
+- In-TUI gate crossing: reviewview `a` approve / `x` reject-with-feedback via a
+  Crosser the Model satisfies; `internal/gateview` inbox (`Ctrl+Space a`, Enter →
+  review). Fixed `tree` mise pin + on-launch mise-config resync along the way.
+- Agent CLIs as PTY panes bound to a task's worktree from the task board (`a`);
+  deterministic agent selection (never the interactive resolver).
+
 ### Resume point (do this next)
 
-1. Phase 4 — verification & merge: executable `Verification` blocks →
-   `VERIFY-<n>.md`; `karya verify <id>` + `karya merge <id>`; in-TUI approve/
-   reject keys + `internal/gateview`; agent CLIs as PTY panes bound to task
-   worktrees. Older Phase 3 note below is superseded.
-
-2. (superseded) Phase 3 — panes/git/views: `internal/git` + `internal/gitui`,
+1. Phase 5 — skills marketplace: `internal/skills` (registry client, hash-verified
+   install into the karya prefix), per-agent materialization, `.karya/skills/`,
+   `karya skills search|install|remove|list` + a TUI browser.
+2. Finish remaining Phase 4: `tdd:true` acceptance-test-first flow, cross-agent
+   reviewer pre-gate filter, auto-detected regression net at the verify gate,
+   perf benchmarks vs the §8.4 budgets.
+3. (superseded) Phase 3 — panes/git/views: `internal/git` + `internal/gitui`,
    `internal/diffview`, `internal/taskview`/`gateview`/`reviewview` + `gate`;
    agent CLIs as PTY panes bound to task worktrees; `karya review`/`gate`.
 3. In parallel (Phase B, headless): finish `internal/agentrun` adapters + `Caps`

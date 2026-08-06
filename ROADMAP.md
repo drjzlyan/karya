@@ -153,21 +153,24 @@ human approvals, git is a native panel, and every crossing is recorded.
 
 ---
 
-## Phase 4 — Verification & merge
+## Phase 4 — Verification & merge ◐
 **Goal:** karya certifies; agents never self-certify.
 
-- ☐ Executable `Verification` blocks run in the task worktree → `VERIFY-<n>.md`
+- ☑ `internal/verify`: executable `Verification` blocks run in the task worktree,
+  captured to `VERIFY-<n>.md` evidence (karya certifies, complete evidence)
+- ☑ `karya verify <id>` (records evidence) + `karya merge <id>` (merge or `--pr`,
+  post verify-gate only; transitions to done, tears down the worktree)
+- ☑ In-TUI approve/reject keys + gate inbox view (`internal/gateview`,
+  `Ctrl+Space a`); review view crosses gates in place
+- ☑ Agent CLIs as PTY panes bound to task worktrees (task board `a`)
 - ☐ `tdd: true` acceptance-test-first flow with failure-signature check
 - ☐ Cross-agent reviewer step (implementer ≠ reviewer) as pre-gate filter
 - ☐ Regression net: auto-detected per-language fast suite at the verify gate
-- ☐ `karya verify <id>` + `karya merge <id>` (merge or PR mode, post-gate only)
-- ☐ In-TUI approve/reject keys + gate inbox view (`internal/gateview`) — carried
-  from Phase 3
-- ☐ Agent CLIs as PTY panes bound to task worktrees — carried from Phase 3
 - ☐ Performance benchmarks in CI with checked-in baselines (DESIGN.md §8.4)
 
 **Done when:** a task reaches DONE only through verify-gate evidence, and merge
 lands on the user's terms (direct merge or PR).
+**Core shipped 2026-08-07; tdd/cross-agent/regression-net/perf remain.**
 
 ---
 
