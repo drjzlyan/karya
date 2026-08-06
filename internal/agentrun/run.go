@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/prompts"
 	"github.com/drjzlyan/karya/internal/spec"
 )
@@ -56,14 +57,16 @@ func RunStep(ctx context.Context, req Request) (Outcome, error) {
 		return Outcome{}, err
 	}
 
-	repoCtx := prompts.RepoContext(req.RepoRoot)
+	// Layered agent context: global (user-wide) → project (repo docs) → task
+	// (MEMORY.md). See internal/prompts (DESIGN.md §5).
+	ctxDoc := prompts.Context(config.Resolve().GlobalInstructions(), req.RepoRoot, req.TaskDir)
 	var prompt string
 	switch req.Step {
 	case StepPlan:
-		prompt = prompts.Plan(prompts.PlanInput{Spec: req.Spec, RepoContext: repoCtx, Feedback: req.Feedback})
+		prompt = prompts.Plan(prompts.PlanInput{Spec: req.Spec, Context: ctxDoc, Feedback: req.Feedback})
 	case StepImplement:
 		prompt = prompts.Implement(prompts.ImplementInput{
-			Spec: req.Spec, Plan: req.Plan, RepoContext: repoCtx, Feedback: req.Feedback,
+			Spec: req.Spec, Plan: req.Plan, Context: ctxDoc, Feedback: req.Feedback,
 		})
 	default:
 		return Outcome{}, fmt.Errorf("agentrun: unsupported step %q", req.Step)

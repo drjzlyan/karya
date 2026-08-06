@@ -24,6 +24,11 @@ const maxRepoDocBytes = 16 << 10
 // the per-project karya context (DESIGN.md §10).
 var repoDocs = []string{"AGENTS.md", filepath.Join(".karya", "CONTEXT.md")}
 
+// overrideMarker in a layer means it overrides the layers outside (less
+// specific than) it: project overriding global, or task overriding both. Without
+// it, each layer merely enhances the outer ones (DESIGN.md §5).
+const overrideMarker = "<!-- karya:override -->"
+
 // RepoContext reads the agent-facing docs of the repository at root, returning
 // them as labeled Markdown sections, or "" when none exist. Best-effort: an
 // unreadable doc is skipped, never an error — a missing doc must not block a
@@ -47,11 +52,59 @@ func RepoContext(root string) string {
 	return strings.TrimSpace(b.String())
 }
 
+// readDoc reads and size-caps a single instruction file, or "" if absent.
+func readDoc(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	content := strings.TrimSpace(string(data))
+	if len(content) > maxRepoDocBytes {
+		content = content[:maxRepoDocBytes] + "\n\n(truncated)"
+	}
+	return content
+}
+
+// Context assembles the layered agent instructions — global → project → task —
+// each layer enhancing (not overriding) the next (DESIGN.md §5). globalPath is
+// the user-wide instructions file (may be ""); repoRoot supplies the project
+// docs (AGENTS.md + .karya/CONTEXT.md); taskDir supplies the task's MEMORY.md.
+// A layer that contains the override marker drops the layers outside it.
+func Context(globalPath, repoRoot, taskDir string) string {
+	type layer struct {
+		label string
+		text  string
+	}
+	layers := []layer{
+		{"Global instructions", readDoc(globalPath)},
+		{"Project instructions", RepoContext(repoRoot)},
+	}
+	if taskDir != "" {
+		layers = append(layers, layer{"Task memory (MEMORY.md)", readDoc(filepath.Join(taskDir, "MEMORY.md"))})
+	}
+	// Honor the innermost override: drop every layer outside it.
+	start := 0
+	for i := len(layers) - 1; i >= 0; i-- {
+		if strings.Contains(layers[i].text, overrideMarker) {
+			start = i
+			break
+		}
+	}
+	var b strings.Builder
+	for _, l := range layers[start:] {
+		if l.text == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "## %s\n\n%s\n\n", l.label, l.text)
+	}
+	return strings.TrimSpace(b.String())
+}
+
 // PlanInput carries everything a plan-step prompt needs.
 type PlanInput struct {
-	Spec        *spec.Spec // the task contract (required)
-	RepoContext string     // RepoContext output (may be "")
-	Feedback    string     // human feedback from a plan-gate rejection (revision)
+	Spec     *spec.Spec // the task contract (required)
+	Context  string     // layered Context output (may be "")
+	Feedback string     // human feedback from a plan-gate rejection (revision)
 }
 
 // Plan renders the plan-step prompt. The plan step is read-only by contract:
@@ -73,9 +126,9 @@ func Plan(in PlanInput) string {
 
 `)
 	b.WriteString(in.Spec.Render())
-	if in.RepoContext != "" {
-		b.WriteString("\n## Repository docs\n\n")
-		b.WriteString(in.RepoContext)
+	if in.Context != "" {
+		b.WriteString("\n")
+		b.WriteString(in.Context)
 		b.WriteString("\n")
 	}
 	writeFeedback(&b, in.Feedback, "Your previous plan for this task was REJECTED at the plan gate.")
@@ -84,10 +137,10 @@ func Plan(in PlanInput) string {
 
 // ImplementInput carries everything an implement-step prompt needs.
 type ImplementInput struct {
-	Spec        *spec.Spec // the task contract (required)
-	Plan        string     // the approved PLAN.md content
-	RepoContext string     // RepoContext output (may be "")
-	Feedback    string     // human feedback from a diff-gate rejection (revision)
+	Spec     *spec.Spec // the task contract (required)
+	Plan     string     // the approved PLAN.md content
+	Context  string     // layered Context output (may be "")
+	Feedback string     // human feedback from a diff-gate rejection (revision)
 }
 
 // Implement renders the implement-step prompt: the agent works in the task's
@@ -111,9 +164,9 @@ func Implement(in ImplementInput) string {
 	b.WriteString("\n## The approved plan (PLAN.md)\n\n")
 	b.WriteString(strings.TrimSpace(in.Plan))
 	b.WriteString("\n")
-	if in.RepoContext != "" {
-		b.WriteString("\n## Repository docs\n\n")
-		b.WriteString(in.RepoContext)
+	if in.Context != "" {
+		b.WriteString("\n")
+		b.WriteString(in.Context)
 		b.WriteString("\n")
 	}
 	writeFeedback(&b, in.Feedback, "Your previous implementation for this task was REJECTED at the diff gate.")

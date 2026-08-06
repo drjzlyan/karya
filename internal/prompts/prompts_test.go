@@ -134,3 +134,47 @@ func TestRepoContextTruncatesHugeDocs(t *testing.T) {
 		t.Errorf("RepoContext not capped: %d bytes", len(ctx))
 	}
 }
+
+func TestContextLayersGlobalProjectTask(t *testing.T) {
+	dir := t.TempDir()
+	global := filepath.Join(dir, "global.md")
+	os.WriteFile(global, []byte("GLOBAL RULES"), 0o644)
+	os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("PROJECT RULES"), 0o644)
+	taskDir := filepath.Join(dir, "task")
+	os.MkdirAll(taskDir, 0o755)
+	os.WriteFile(filepath.Join(taskDir, "MEMORY.md"), []byte("TASK MEMORY"), 0o644)
+
+	ctx := Context(global, dir, taskDir)
+	for _, want := range []string{"Global instructions", "GLOBAL RULES", "Project instructions", "PROJECT RULES", "Task memory", "TASK MEMORY"} {
+		if !strings.Contains(ctx, want) {
+			t.Fatalf("context missing %q:\n%s", want, ctx)
+		}
+	}
+	// Order: global before project before task.
+	gi, pi, ti := strings.Index(ctx, "GLOBAL"), strings.Index(ctx, "PROJECT"), strings.Index(ctx, "TASK MEMORY")
+	if gi >= pi || pi >= ti {
+		t.Fatalf("layers out of order (g=%d p=%d t=%d):\n%s", gi, pi, ti, ctx)
+	}
+}
+
+func TestContextOverrideDropsOuterLayers(t *testing.T) {
+	dir := t.TempDir()
+	global := filepath.Join(dir, "global.md")
+	os.WriteFile(global, []byte("GLOBAL RULES"), 0o644)
+	// Project marks override -> global is dropped.
+	os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("PROJECT RULES <!-- karya:override -->"), 0o644)
+
+	ctx := Context(global, dir, "")
+	if strings.Contains(ctx, "GLOBAL RULES") {
+		t.Fatalf("override should drop the global layer:\n%s", ctx)
+	}
+	if !strings.Contains(ctx, "PROJECT RULES") {
+		t.Fatalf("override layer should remain:\n%s", ctx)
+	}
+}
+
+func TestContextEmptyWhenNothing(t *testing.T) {
+	if ctx := Context("", t.TempDir(), ""); ctx != "" {
+		t.Fatalf("empty context expected, got %q", ctx)
+	}
+}

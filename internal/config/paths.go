@@ -130,6 +130,11 @@ func (p Paths) NvimEngineDir() string { return filepath.Join(p.Config, "nvim-eng
 // TmuxConf is the extracted karya tmux configuration used with `tmux -f`.
 func (p Paths) TmuxConf() string { return filepath.Join(p.Config, "tmux.conf") }
 
+// GlobalInstructions is the user-wide agent instructions file, prepended to
+// every agent step prompt before the project and task layers (DESIGN.md §5,
+// §11). Edited with `karya config edit`; absent by default.
+func (p Paths) GlobalInstructions() string { return filepath.Join(p.Config, "instructions.md") }
+
 // ShellInitDir holds karya's own shell startup files (a zsh .zshrc and a bash
 // rcfile). The pane shell (`karya shell`) points ZDOTDIR / --rcfile here so it can
 // source the user's real rc and then layer karya's starship prompt on top —
