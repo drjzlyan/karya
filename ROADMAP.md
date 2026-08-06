@@ -174,6 +174,27 @@ lands on the user's terms (direct merge or PR).
 
 ---
 
+## Phase 4.5 — Config & continuity ◐
+**Goal:** a ready-to-work default view, layered agent instructions, and
+agent-agnostic per-task memory so agents are swappable without losing work.
+
+- ☐ Default 3-pane layout on bare `karya`: editor (left) + agent pane (top-right,
+  first detected agent, in the repo) + build/test shell (bottom-right); graceful
+  fallbacks; overridable via config later (DESIGN.md §6.1)
+- ☐ Layered instructions global → project → task (enhance, not override; opt-in
+  `<!-- karya:override -->`): global `instructions.md` under the karya prefix,
+  prepended in `internal/prompts` before repo `AGENTS.md`/`.karya/CONTEXT.md`;
+  `karya config edit` opens it (DESIGN.md §5, §11)
+- ☐ Per-task `MEMORY.md` (agent-agnostic): read into every prompt, append API,
+  shown in review — so an agent working a task can be replaced mid-task
+- ☐ Agents run on karya's tools: assert (test) that agent panes + headless runs
+  inherit karya's managed `PATH` and the task worktree cwd (DESIGN.md §4, §5)
+
+**Done when:** karya opens into the 3-pane view; agent prompts layer global +
+project + task context; and swapping the agent on a task preserves continuity.
+
+---
+
 ## Phase 5 — Skills marketplace
 **Goal:** portable SKILL.md packages, installed once, visible to every agent.
 

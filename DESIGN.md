@@ -235,11 +235,26 @@ type Agent interface {
 - **Capability matrix, not lowest common denominator.** An agent without a plan
   mode gets plan emulation (prompt scaffold + "output PLAN.md only"). karya
   surfaces capability gaps instead of hiding them.
-- **Mix-and-match steps.** Task spec may pin per-step agents
-  (`plan: codex`, `implement: claude`, `review: gemini`). Cross-agent review
-  (implementer ≠ reviewer) is the default when ≥2 agents are installed.
-- **Prompt assembly** (`internal/prompts`) builds step prompts from the spec +
-  feedback + repo docs; agents never receive hand-assembled context.
+- **Mix-and-match steps, swap without loss.** A task spec may pin per-step
+  agents (`plan: codex`, `implement: claude`, `review: gemini`), and an agent
+  can be replaced mid-task without impacting the work: everything the agent
+  needs is on disk (spec, plan, diffs, evidence, transcripts, and the task's
+  `MEMORY.md`), agent-agnostic, so the next agent picks up where the last left
+  off. Cross-agent review (implementer ≠ reviewer) is the default when ≥2 agents
+  are installed.
+- **Agents run on karya's tools.** Every agent — headless step or interactive
+  pane — runs inside karya's managed environment (§4): karya's isolated `PATH`
+  (its mise runtimes, LSP servers, formatters) is active, and the process cwd is
+  the task worktree. Agents use the IDE's tools, not whatever happens to be on
+  the user's global `PATH`.
+- **Prompt assembly** (`internal/prompts`) builds every step prompt from a
+  layered context, outermost first, each layer *adding* to (not overriding) the
+  next: **global instructions** (user-wide, under the karya prefix) →
+  **project instructions** (repo `AGENTS.md` + `.karya/CONTEXT.md`) → **task
+  memory** (`.karya/tasks/<id>/MEMORY.md`) → the **spec** + gate feedback. A
+  layer overrides an outer one only when explicitly marked
+  (`<!-- karya:override -->`); otherwise project enhances global and task
+  enhances project. Agents never receive hand-assembled context.
 
 ---
 
@@ -285,6 +300,16 @@ component is a `tui.Model` whose `Update(Msg) (Model, Cmd)` is a pure state
 transition and whose `View(*cellbuf.Buffer)` is a pure render. All side effects
 are `Cmd`s executed off the render path. UI holds no workflow logic — that lives
 in the headless packages below it (§7.2).
+
+**Default layout.** Launching `karya` (no file argument) seeds a ready-to-work
+three-pane view rather than a bare shell: the **editor** on the left (~65%), a
+coding **agent** pane top-right (the first detected agent CLI, running in the
+repo), and a **build/test** shell bottom-right. Each pane degrades gracefully —
+a missing Neovim falls back to a placeholder, no detected agent falls back to a
+shell. The layout is the starting point, not a cage: every pane is splittable,
+closable, and zoomable, and karya views (git, tasks, review, gate inbox) open on
+demand from the leader. The default is overridable per project/user
+(`.karya/` or global config) in a later phase.
 
 ### 6.2 The unified keymap (single leader, consistent everywhere)
 
@@ -534,10 +559,26 @@ Docs are tooling, not prose. v1.0 formalizes three audiences, three paths:
 |---|---|---|
 | End users | `docs/` (embedded in the binary; synced by `make sync-docs`) | `karya help/docs/tutorial` |
 | Contributors (human + agent) | repo root: `DESIGN.md`, `ROADMAP.md`, `PROGRESS.md`, `AGENTS.md` | repo readers, coding agents |
-| Per-project agents | `.karya/` in user repos: specs, plans, `CONTEXT.md` | agents running tasks |
+| Per-project agents | `.karya/` in user repos: specs, plans, `CONTEXT.md`, per-task `MEMORY.md` | agents running tasks |
+| All agents (user-wide) | karya prefix: `instructions.md` (global) | every agent step, on every project |
 
 Rules:
 
+- **Layered agent instructions (enhance, don't override).** Agent context is
+  assembled outermost-first — global → project → task — each layer *adding* to
+  the next (§5). The **global** layer (`<karya-config>/instructions.md`, e.g.
+  `~/.config/karya/instructions.md`) is your user-wide guidance applied on every
+  project; the **project** layer is the repo `AGENTS.md` + `.karya/CONTEXT.md`;
+  the **task** layer is `.karya/tasks/<id>/MEMORY.md` + the spec. An inner layer
+  overrides an outer one only when explicitly marked (`<!-- karya:override -->`).
+  `karya config edit` opens the global file; `karya init` scaffolds the project
+  ones.
+- **Per-task memory (`MEMORY.md`) is agent-agnostic continuity.** Each task dir
+  holds a running `MEMORY.md` — decisions, gotchas, and state accumulated across
+  steps — that every prompt includes and any agent may append to. Because it (and
+  the plan/diffs/transcripts) live on disk and belong to the *task*, not the
+  agent, you can replace the agent working a task at any point without losing
+  context (§5).
 - **AGENTS.md is generated where useful.** `karya init` in a user repo scaffolds
   `.karya/CONTEXT.md` + repo `AGENTS.md` (build/test/lint commands, conventions)
   by auto-detecting the toolchain — because agent quality is capped by context
