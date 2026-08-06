@@ -42,21 +42,23 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 
--- Native LSP: register a server for any language whose server binary is on PATH.
--- Uses the nvim 0.11+ vim.lsp.config/enable API; no nvim-lspconfig required.
+-- Native LSP, plugin-free. Servers are started on FileType (not once at startup)
+-- with an executable guard, so a server that karya installs lazily in the
+-- background attaches as soon as karya re-fires FileType — no restart needed.
+-- vim.lsp.start de-duplicates by name+root, so re-firing is safe.
 local servers = {
   gopls = {
     cmd = { "gopls" },
     filetypes = { "go", "gomod", "gowork" },
     root_markers = { "go.mod", ".git" },
   },
-  lua_ls = {
+  ["lua-language-server"] = {
     cmd = { "lua-language-server" },
     filetypes = { "lua" },
     root_markers = { ".luarc.json", ".luarc.jsonc", ".git" },
   },
-  pyright = {
-    cmd = { "pyright-langserver", "--stdio" },
+  basedpyright = {
+    cmd = { "basedpyright-langserver", "--stdio" },
     filetypes = { "python" },
     root_markers = { "pyproject.toml", "setup.py", "requirements.txt", ".git" },
   },
@@ -77,14 +79,26 @@ local servers = {
   },
 }
 
-if vim.lsp.config and vim.lsp.enable then
-  for name, cfg in pairs(servers) do
-    if vim.fn.executable(cfg.cmd[1]) == 1 then
-      vim.lsp.config(name, cfg)
-      vim.lsp.enable(name)
-    end
+-- Index servers by filetype for quick lookup on FileType.
+local by_ft = {}
+for name, cfg in pairs(servers) do
+  for _, ft in ipairs(cfg.filetypes) do
+    by_ft[ft] = by_ft[ft] or {}
+    table.insert(by_ft[ft], { name = name, cmd = cfg.cmd, root_markers = cfg.root_markers })
   end
 end
+
+vim.api.nvim_create_autocmd("FileType", {
+  callback = function(args)
+    local ft = vim.bo[args.buf].filetype
+    for _, s in ipairs(by_ft[ft] or {}) do
+      if vim.fn.executable(s.cmd[1]) == 1 then
+        local root = vim.fs.root(args.buf, s.root_markers) or vim.fn.getcwd()
+        pcall(vim.lsp.start, { name = s.name, cmd = s.cmd, root_dir = root }, { bufnr = args.buf })
+      end
+    end
+  end,
+})
 
 -- On LSP attach: enable built-in autocompletion and editor-local maps. These are
 -- Neovim-internal (under Neovim's leader), distinct from karya's IDE keymap.

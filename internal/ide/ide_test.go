@@ -1,7 +1,9 @@
 package ide
 
 import (
+	"errors"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/drjzlyan/karya/internal/cellbuf"
@@ -171,6 +173,60 @@ func TestConfigurableLeaderViaEnv(t *testing.T) {
 	cmd := press(m, term.RuneKey('Q'))
 	if cmd == nil {
 		t.Fatalf("Ctrl+A then Q should quit")
+	}
+}
+
+func TestLangForFile(t *testing.T) {
+	cases := map[string]string{
+		"main.go": "go", "app.py": "python", "lib.rs": "rust",
+		"x.ts": "typescript", "x.tsx": "typescript", "x.js": "typescript",
+		"m.c": "cpp", "m.cpp": "cpp", "h.hpp": "cpp",
+		"README.md": "", "noext": "", "data.json": "",
+	}
+	for path, want := range cases {
+		if got := langForFile(path); got != want {
+			t.Fatalf("langForFile(%q) = %q want %q", path, got, want)
+		}
+	}
+}
+
+type fakeProvisioner struct {
+	mu     sync.Mutex
+	called []string
+	err    error
+}
+
+func (f *fakeProvisioner) EnsureLanguage(lang string) error {
+	f.mu.Lock()
+	f.called = append(f.called, lang)
+	f.mu.Unlock()
+	return f.err
+}
+
+func TestProvisionCmdCallsProvisioner(t *testing.T) {
+	fp := &fakeProvisioner{}
+	ep := &editorPane{lang: "go"}
+	msg := provisionCmd(fp, ep)()
+	done, ok := msg.(provisionDoneMsg)
+	if !ok || done.lang != "go" || done.pane != ep {
+		t.Fatalf("unexpected msg: %+v", msg)
+	}
+	if len(fp.called) != 1 || fp.called[0] != "go" {
+		t.Fatalf("provisioner not called for go: %v", fp.called)
+	}
+}
+
+func TestProvisionDoneUpdatesStatus(t *testing.T) {
+	m := testModel(40, 12)
+	// success (nil pane is fine — reattach is guarded)
+	m.Update(provisionDoneMsg{lang: "go", err: nil})
+	if !strings.Contains(m.status, "go language tools ready") {
+		t.Fatalf("success status = %q", m.status)
+	}
+	// failure
+	m.Update(provisionDoneMsg{lang: "rust", err: errors.New("boom")})
+	if !strings.Contains(m.status, "unavailable") {
+		t.Fatalf("failure status = %q", m.status)
 	}
 }
 

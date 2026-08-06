@@ -3,6 +3,7 @@ package ide
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -20,6 +21,8 @@ import (
 type editorPane struct {
 	client *nvimrpc.Client
 	cancel context.CancelFunc
+
+	lang string // detected language of the opened file (for auto-provisioning)
 
 	mu     sync.Mutex
 	grid   *nvimrpc.Grid
@@ -47,6 +50,7 @@ func newEditorPane(dir, file string, cols, rows int) (*editorPane, error) {
 	ep := &editorPane{
 		client: client,
 		cancel: cancel,
+		lang:   langForFile(file),
 		grid:   nvimrpc.NewGrid(cols, rows),
 		flush:  make(chan struct{}, 1),
 		closed: make(chan struct{}),
@@ -122,6 +126,16 @@ func (e *editorPane) write(k term.Key) {
 	}
 }
 
+// reattachLSP re-fires the FileType autocmd so the engine config starts a
+// language server that has just become available on PATH (after a background
+// install). vim.lsp.start de-dups, so this is safe if a server already runs.
+func (e *editorPane) reattachLSP() {
+	if e.dead {
+		return
+	}
+	_ = e.client.Command("silent! doautocmd FileType")
+}
+
 func (e *editorPane) close() {
 	e.mu.Lock()
 	if e.dead {
@@ -155,6 +169,25 @@ func engineArgs() (argv, env []string) {
 // escapeEx escapes a path for use in an Ex command argument.
 func escapeEx(s string) string {
 	return strings.ReplaceAll(s, " ", `\ `)
+}
+
+// langForFile maps a file path to a catalog language name (matching toolreg's
+// Lang() locations), or "" when karya has no per-language tooling for it. Used to
+// drive lazy auto-provisioning of LSP servers.
+func langForFile(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".go":
+		return "go"
+	case ".py", ".pyi":
+		return "python"
+	case ".rs":
+		return "rust"
+	case ".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs":
+		return "typescript"
+	case ".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx":
+		return "cpp"
+	}
+	return ""
 }
 
 // encodeNvimKey converts a Key into Neovim's input notation (for nvim_input).

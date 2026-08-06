@@ -19,6 +19,17 @@ import (
 // injected so tests can supply fake panes instead of spawning real shells.
 type spawnFunc func(cols, rows int) layout.PaneContent
 
+// Provisioner installs a language's editor tooling (LSP server, formatter, …)
+// on demand. karya calls EnsureLanguage in the background when a file of that
+// language is opened, so the editor gains language support with no user action.
+// It is an interface so the IDE stays decoupled from the tool installer (the CLI
+// supplies the implementation).
+type Provisioner interface {
+	// EnsureLanguage installs the tooling for langName, blocking until done. It
+	// must be safe to call from a goroutine and cheap when already installed.
+	EnsureLanguage(langName string) error
+}
+
 // Model is the root TUI model.
 type Model struct {
 	tree   *layout.Tree
@@ -34,6 +45,7 @@ type Model struct {
 	editors  []*editorPane
 	file     string
 	leader   term.Key
+	prov     Provisioner
 }
 
 // shellReadMsg carries a chunk of a shell pane's output back into the loop.
@@ -137,7 +149,9 @@ func (m *Model) treeRect() cellbuf.Rect {
 	return cellbuf.Rect{X: 0, Y: 0, W: m.cols, H: m.rows - 1}
 }
 
-// Init starts reading from every shell pane and waiting on every editor pane.
+// Init starts reading from every shell pane, waiting on every editor pane, and
+// kicks off background language provisioning for any editor whose file's
+// language is known.
 func (m *Model) Init() tui.Cmd {
 	var cmds []tui.Cmd
 	for _, sp := range m.shells {
@@ -145,8 +159,27 @@ func (m *Model) Init() tui.Cmd {
 	}
 	for _, ep := range m.editors {
 		cmds = append(cmds, editorWaitCmd(ep))
+		if m.prov != nil && ep.lang != "" {
+			m.status = "installing " + ep.lang + " language tools…"
+			cmds = append(cmds, provisionCmd(m.prov, ep))
+		}
 	}
 	return tui.Batch(cmds...)
+}
+
+// provisionCmd installs an editor pane's language tooling in the background.
+func provisionCmd(prov Provisioner, ep *editorPane) tui.Cmd {
+	return func() tui.Msg {
+		err := prov.EnsureLanguage(ep.lang)
+		return provisionDoneMsg{pane: ep, lang: ep.lang, err: err}
+	}
+}
+
+// provisionDoneMsg reports the result of a background language provision.
+type provisionDoneMsg struct {
+	pane *editorPane
+	lang string
+	err  error
 }
 
 // Update handles a message.
@@ -166,6 +199,17 @@ func (m *Model) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 		}
 		// A repaint happens after every Update; just keep waiting for the next flush.
 		return m, editorWaitCmd(v.pane)
+	case provisionDoneMsg:
+		if v.err != nil {
+			m.status = v.lang + " language tools unavailable (see log)"
+		} else {
+			m.status = v.lang + " language tools ready"
+			// The server is now on PATH; re-fire FileType so the LSP attaches.
+			if v.pane != nil && !v.pane.dead {
+				v.pane.reattachLSP()
+			}
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -445,8 +489,9 @@ func tabGotoIndex(a keymap.ActionID) int {
 
 // Run launches the IDE against the real terminal for working directory dir. If
 // file is non-empty, the first pane is the embedded editor opened on it;
-// otherwise it is a shell.
-func Run(dir, file string) error {
+// otherwise it is a shell. prov (may be nil) auto-installs language tooling for
+// opened files in the background.
+func Run(dir, file string, prov Provisioner) error {
 	cols, rows := 80, 24
 	fd := int(os.Stdout.Fd())
 	if c, r, err := term.Size(fd); err == nil && c > 0 && r > 0 {
@@ -459,6 +504,7 @@ func Run(dir, file string) error {
 	} else {
 		m = New(dir, cols, rows)
 	}
+	m.prov = prov
 	prog := tui.NewProgram(m, tui.WithCaps(caps))
 	_, err := prog.Run()
 	return err

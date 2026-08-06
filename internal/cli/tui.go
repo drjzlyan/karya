@@ -25,7 +25,15 @@ func cmdTUI(args []string) int {
 	if len(args) > 0 {
 		file = args[0]
 	}
-	if err := ide.Run(dir, file); err != nil {
+	// newApp activates karya's managed environment, so the embedded Neovim (and
+	// its language servers) resolve from karya's isolated prefix. The provisioner
+	// then auto-installs a file's language tooling in the background.
+	a, err := newApp()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "karya:", err)
+		return 1
+	}
+	if err := ide.Run(dir, file, newAutoProvisioner(a)); err != nil {
 		fmt.Fprintln(os.Stderr, "karya:", err)
 		return 1
 	}
