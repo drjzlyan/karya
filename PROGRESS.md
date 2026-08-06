@@ -199,6 +199,17 @@ dashboard.
 - Agent CLIs as PTY panes bound to a task's worktree from the task board (`a`);
   deterministic agent selection (never the interactive resolver).
 
+### 2026-08-07 — Phase 4.5 (config & continuity) + README refresh
+
+- Default 3-pane layout on bare `karya` (editor + agent + build); layered agent
+  instructions global → project → task (`prompts.Context`, opt-in override
+  marker) with a global `instructions.md`; per-task `MEMORY.md` (append/read,
+  in prompts + review) for agent-swap continuity; a test asserting agents inherit
+  karya's managed PATH (IDE tools). DESIGN §5/§6.1/§11 updated.
+- README rewritten for the single-process HITL IDE with mermaid diagrams (the
+  loop, the gate state machine, the architecture, layered instructions); tasks
+  framed as an OKR-shaped contract (Objective + acceptance criteria).
+
 ### Resume point (do this next)
 
 1. Phase 5 — skills marketplace: `internal/skills` (registry client, hash-verified
