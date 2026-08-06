@@ -24,6 +24,12 @@ const AppName = "karya"
 // deliberately matches NvimConfig() so Neovim reads exactly what karya extracts.
 const NvimAppName = AppName + "/nvim"
 
+// NvimEngineAppName is the NVIM_APPNAME for the embedded editing engine
+// (single-process TUI). Its own app-name keeps the slim, plugin-free engine
+// config and its state fully isolated from the legacy karya/nvim tree, so the
+// embed loads exactly what karya extracts to NvimEngineDir().
+const NvimEngineAppName = AppName + "/nvim-engine"
+
 // Paths is the set of karya-owned directories, all namespaced by AppName.
 type Paths struct {
 	// Config: ~/.config/karya (extracted nvim config, tmux.conf, …)
@@ -115,6 +121,11 @@ func (p Paths) EnsureDirs() error {
 // NVIM_APPNAME=karya/nvim, Neovim reads its config from ~/.config/karya/nvim, so
 // the extracted tree lives there, mirroring a standard ~/.config/nvim layout.
 func (p Paths) NvimConfig() string { return filepath.Join(p.Config, "nvim") }
+
+// NvimEngineDir is where the plugin-free engine config is extracted. With
+// NVIM_APPNAME=karya/nvim-engine, the embedded editor reads its config from
+// ~/.config/karya/nvim-engine, isolated from the legacy karya/nvim tree.
+func (p Paths) NvimEngineDir() string { return filepath.Join(p.Config, "nvim-engine") }
 
 // TmuxConf is the extracted karya tmux configuration used with `tmux -f`.
 func (p Paths) TmuxConf() string { return filepath.Join(p.Config, "tmux.conf") }

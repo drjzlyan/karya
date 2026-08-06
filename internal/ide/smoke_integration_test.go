@@ -12,8 +12,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/drjzlyan/karya/internal/assets"
 	"github.com/drjzlyan/karya/internal/pty"
 )
+
+// TestEngineConfigValid extracts the embedded engine config and confirms Neovim
+// loads it with no Lua error.
+func TestEngineConfigValid(t *testing.T) {
+	if _, err := exec.LookPath("nvim"); err != nil {
+		t.Skip("nvim not on PATH")
+	}
+	dir := t.TempDir()
+	if err := assets.ExtractNvimEngine(dir); err != nil {
+		t.Fatalf("extract engine config: %v", err)
+	}
+	init := filepath.Join(dir, "init.lua")
+	out, _ := exec.Command("nvim", "--headless", "-u", init, "-c", "qa!").CombinedOutput()
+	if bytes.Contains(out, []byte("E5")) || bytes.Contains(out, []byte("Error executing")) {
+		t.Fatalf("engine config produced an error:\n%s", out)
+	}
+}
 
 // quitAndWait sends Ctrl+Space Q, keeps draining the pty (so karya's teardown
 // output never blocks on a full buffer), and waits for the process to exit.

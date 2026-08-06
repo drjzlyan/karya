@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/drjzlyan/karya/internal/agent"
@@ -25,8 +24,8 @@ import (
 // Run dispatches a karya invocation and returns a process exit code.
 func Run(args []string) int {
 	if len(args) == 0 {
-		// Bare `karya` launches/attaches the IDE session for the cwd.
-		return cmdDev(nil)
+		// Bare `karya` launches the single-process TUI IDE for the cwd.
+		return cmdTUI(nil)
 	}
 
 	cmd, rest := args[0], args[1:]
@@ -200,26 +199,14 @@ func ensureRuntime(a *app) error {
 	return nil
 }
 
-// cmdEdit opens a file in the editor pane (also used as $EDITOR).
+// cmdEdit opens a file in the embedded editor of the single-process TUI (also
+// used as karya's $EDITOR). The optional line argument is currently ignored.
 func cmdEdit(args []string) int {
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: karya edit <file> [line]")
 		return 2
 	}
-	line := 1
-	if len(args) > 1 {
-		if n, err := strconv.Atoi(args[1]); err == nil {
-			line = n
-		}
-	}
-	a, err := newApp()
-	if err != nil {
-		return fail(err)
-	}
-	if err := editor.Edit(a.tmux, args[0], line); err != nil {
-		return fail(err)
-	}
-	return 0
+	return cmdTUI(args[:1])
 }
 
 // cmdRun sends a command to the build/test pane.

@@ -6,7 +6,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/drjzlyan/karya/internal/assets"
 	"github.com/drjzlyan/karya/internal/cellbuf"
+	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/layout"
 	"github.com/drjzlyan/karya/internal/nvimrpc"
 	"github.com/drjzlyan/karya/internal/term"
@@ -36,9 +38,8 @@ func newEditorPane(dir, file string, cols, rows int) (*editorPane, error) {
 		rows = 1
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	// --clean isolates from user config; NVIM_APPNAME keeps state under karya.
-	argv := []string{"nvim", "--embed", "--clean", "-n"}
-	client, err := nvimrpc.Start(ctx, argv, []string{"NVIM_APPNAME=karya/nvim"})
+	argv, env := engineArgs()
+	client, err := nvimrpc.Start(ctx, argv, env)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -136,6 +137,20 @@ func (e *editorPane) close() {
 
 // editorFlushMsg wakes the program to repaint after an editor redraw.
 type editorFlushMsg struct{ pane *editorPane }
+
+// engineArgs returns the argv and env to launch the embedded editor with karya's
+// slim engine config (options + syntax + treesitter + native LSP). It extracts
+// the config to an isolated app-name dir; if extraction fails it falls back to
+// --clean (editing still works, without LSP/treesitter).
+func engineArgs() (argv, env []string) {
+	p := config.Resolve()
+	if err := assets.ExtractNvimEngine(p.NvimEngineDir()); err != nil {
+		return []string{"nvim", "--embed", "--clean", "-n"},
+			[]string{"NVIM_APPNAME=" + config.NvimAppName}
+	}
+	return []string{"nvim", "--embed", "-n"},
+		[]string{"NVIM_APPNAME=" + config.NvimEngineAppName}
+}
 
 // escapeEx escapes a path for use in an Ex command argument.
 func escapeEx(s string) string {
