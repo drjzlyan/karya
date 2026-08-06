@@ -82,13 +82,77 @@ type shellReadMsg struct {
 	err  error
 }
 
-// New builds the root model for working directory dir at the given size. Its
-// first pane is a shell.
+// New builds the root model for working directory dir at the given size, seeding
+// the default three-pane view (editor + agent + build/test).
 func New(dir string, cols, rows int) *Model {
 	m := newModel(dir, cols, rows, nil)
 	m.spawn = m.spawnShell
-	m.seed()
+	m.seedDefault()
 	return m
+}
+
+// seedDefault lays out the ready-to-work default view: editor on the left, a
+// coding agent pane top-right, and a build/test shell bottom-right (DESIGN.md
+// §6.1). Each pane degrades gracefully when Neovim or an agent CLI is absent.
+func (m *Model) seedDefault() {
+	inner := m.treeRect()
+	right := inner.W / 3 // agent/build share the right third
+	left := inner.W - right
+
+	editor := m.spawnEditor("", left-2, inner.H-2)
+	agent := m.spawnAgentContent(right-2, inner.H/2-2)
+	build := m.spawnShell(right-2, inner.H/2-2)
+	m.seedLayout(editor, agent, build)
+}
+
+// seedLayout arranges three pane contents into the default view (editor left,
+// agent top-right, build bottom-right), adopts each, and focuses the editor. It
+// is separated from content creation so it is testable with fake panes.
+func (m *Model) seedLayout(editor, agent, build layout.PaneContent) {
+	editorID := m.tree.AddTab("dev", editor)
+	m.adopt(editor)
+
+	m.tree.SplitFocused(layout.SplitH, agent) // editor | agent (focus agent)
+	m.adopt(agent)
+
+	m.tree.SplitFocused(layout.SplitV, build) // agent / build (focus build)
+	m.adopt(build)
+
+	m.tree.FocusPane(editorID) // start on the editor
+	m.syncPaneSizes()
+}
+
+// spawnEditor returns an embedded-editor pane for file, or a placeholder when
+// Neovim is unavailable.
+func (m *Model) spawnEditor(file string, cols, rows int) layout.PaneContent {
+	ep, err := newEditorPane(m.dir, file, cols, rows)
+	if err != nil {
+		return &placeholderPane{title: "editor", body: "Neovim unavailable — Ctrl+Space ? for keys"}
+	}
+	return ep
+}
+
+// spawnAgentContent returns a pane running the first detected agent CLI in the
+// repo, or a shell when no agent is installed.
+func (m *Model) spawnAgentContent(cols, rows int) layout.PaneContent {
+	if name := detectAgentName(""); name != "" {
+		if sp, err := newShellPane(exec.Command(name), m.dir, cols, rows); err == nil {
+			return sp
+		}
+	}
+	return m.spawnShell(cols, rows)
+}
+
+// detectAgentName picks an agent CLI deterministically: the preferred one if
+// available, else the first detected (highest preference), else "" (none).
+func detectAgentName(preferred string) string {
+	if preferred != "" && agent.Available(preferred) {
+		return preferred
+	}
+	if d := agent.Detect(); len(d) > 0 {
+		return d[0]
+	}
+	return ""
 }
 
 // NewWithFile builds the root model whose first pane is the embedded editor
@@ -334,14 +398,8 @@ func (m *Model) openAgentPane(id string) tui.Cmd {
 		return nil
 	}
 	// Pick deterministically (never agent.Resolve — it can prompt on stdin, which
-	// would fight the TUI's own input reader): the task's preferred agent if
-	// available, else the first detected (highest preference), else a shell.
-	name := ""
-	if t.Agent != "" && agent.Available(t.Agent) {
-		name = t.Agent
-	} else if detected := agent.Detect(); len(detected) > 0 {
-		name = detected[0]
-	}
+	// would fight the TUI's own input reader).
+	name := detectAgentName(t.Agent)
 	inner := m.treeRect()
 	cols, rows := inner.W-2, inner.H-2
 

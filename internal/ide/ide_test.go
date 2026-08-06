@@ -58,6 +58,48 @@ func TestSeedHasOnePane(t *testing.T) {
 	}
 }
 
+func TestSeedLayoutThreePanesEditorFocused(t *testing.T) {
+	m := newModel(".", 60, 20, nil)
+	ed := &placeholderPane{title: "editor"}
+	ag := &placeholderPane{title: "agent"}
+	bd := &placeholderPane{title: "build"}
+	m.seedLayout(ed, ag, bd)
+
+	ps := m.tree.Compute(m.treeRect())
+	if len(ps) != 3 {
+		t.Fatalf("default layout should have 3 panes, got %d", len(ps))
+	}
+	// The editor starts focused and is the widest (left) pane.
+	var focused, editorRect cellbuf.Rect
+	for _, p := range ps {
+		if p.Content == ed {
+			editorRect = p.Rect
+		}
+		if p.Focused {
+			focused = p.Rect
+		}
+	}
+	if focused != editorRect {
+		t.Fatalf("editor should be focused: focused=%+v editor=%+v", focused, editorRect)
+	}
+	if editorRect.X != 0 {
+		t.Fatalf("editor should be the left pane, got X=%d", editorRect.X)
+	}
+	// Agent and build share the right column (same X, stacked).
+	var agRect, bdRect cellbuf.Rect
+	for _, p := range ps {
+		switch p.Content {
+		case ag:
+			agRect = p.Rect
+		case bd:
+			bdRect = p.Rect
+		}
+	}
+	if agRect.X != bdRect.X || agRect.X <= editorRect.X {
+		t.Fatalf("agent/build should stack in the right column: agent=%+v build=%+v", agRect, bdRect)
+	}
+}
+
 func TestLeaderSplitAddsPane(t *testing.T) {
 	m := testModel(40, 12)
 	press(m, leaderThen('|')...)
