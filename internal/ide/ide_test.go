@@ -70,7 +70,7 @@ func TestLeaderFocusNavigation(t *testing.T) {
 	rightX := focusedRect(m).X
 	press(m, leaderThen('h')...) // focus left
 	leftX := focusedRect(m).X
-	if !(leftX < rightX) {
+	if leftX >= rightX {
 		t.Fatalf("focus did not move left: leftX=%d rightX=%d", leftX, rightX)
 	}
 }
