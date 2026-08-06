@@ -13,9 +13,10 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 3 — panes/git/views (next). Phase 0 (docs), Phase 1 (TUI
-skeleton), and Phase 2 (embed Neovim) are shipped. Phase B (agent adapters)
-proceeds in parallel (headless).
+**Active phase:** Phase 4 — verification & merge (next). Phase 0 (docs), Phase 1
+(TUI skeleton), Phase 2 (embed Neovim), and Phase 3 core (git panel, task board,
+review + gates) are shipped. Phase B (agent adapters) proceeds in parallel
+(headless).
 **Architecture pivot (2026-08-06):** karya moves from an *orchestrator* (external
 tmux + standalone Neovim UI + lazygit, three keymaps) to a **single-process TUI**
 that owns the terminal and embeds Neovim as the editing engine over msgpack-RPC,
@@ -167,9 +168,32 @@ dashboard.
 - Deferred: `.karya/project.toml` LSP override (needs a stdlib TOML reader) —
   auto-detect covers the common case.
 
+### 2026-08-07 — Phase 3 core: git panel, task board, review + gates
+
+- `internal/git`: headless git service over a Runner (status/stage/unstage/
+  commit/diff/log/branch/push/DiffRange); fake-runner + real-git tests.
+- `internal/diffview`: unified-diff parser + cellbuf renderer (colors/scroll),
+  shared by the git panel and review.
+- `internal/gitui`: built-in git panel (replaces lazygit) — file list, live
+  diff, stage/unstage/commit/push; `Ctrl+Space g g/c/p`.
+- `internal/taskview`: task board (`Ctrl+Space t t`) over an injected loader.
+- `internal/gate` + `internal/review` + `internal/reviewview`: pending-gate
+  model, artifact assembly (spec/plan/diff/evidence), scrollable review
+  (`Ctrl+Space r`); `karya gate list|approve|reject|delegate` + `karya review`
+  record crossings (actor + feedback) in STATE.json.
+- IDE: `paneView` interface + `layout.FocusPane`; karya views open as tabs and
+  close on `q`/`Esc`.
+- Deferred to Phase 4: in-TUI approve/reject keys + gate inbox view, and agent
+  CLIs as PTY panes bound to task worktrees.
+
 ### Resume point (do this next)
 
-1. Phase 3 — panes/git/views: `internal/git` + `internal/gitui` (git panel),
+1. Phase 4 — verification & merge: executable `Verification` blocks →
+   `VERIFY-<n>.md`; `karya verify <id>` + `karya merge <id>`; in-TUI approve/
+   reject keys + `internal/gateview`; agent CLIs as PTY panes bound to task
+   worktrees. Older Phase 3 note below is superseded.
+
+2. (superseded) Phase 3 — panes/git/views: `internal/git` + `internal/gitui`,
    `internal/diffview`, `internal/taskview`/`gateview`/`reviewview` + `gate`;
    agent CLIs as PTY panes bound to task worktrees; `karya review`/`gate`.
 3. In parallel (Phase B, headless): finish `internal/agentrun` adapters + `Caps`

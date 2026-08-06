@@ -130,22 +130,26 @@ pane, forwarded by karya's keymap, with no Neovim keymap/UI surface of its own.
 
 ---
 
-## Phase 3 — Panes, git panel, and task/gate/review views
+## Phase 3 — Panes, git panel, and task/gate/review views ◐
 **Goal:** the full IDE surface, every part under the one keymap.
 
-- ☐ `internal/git` (headless) + `internal/gitui` — status/stage/commit/branch/
-  diff/log/push (replaces lazygit)
-- ☐ `internal/diffview` — unified/side-by-side diff renderer (shared)
-- ☐ `internal/taskview` (task board), `internal/gateview` (gate inbox),
-  `internal/reviewview` + `internal/review` (review layout)
-- ☐ `internal/gate` — gate model, approve/reject-with-feedback, delegation, audit
-- ☐ Agent CLIs as PTY panes bound to task worktrees (replaces tmux pane switching)
-- ☐ `karya review <id>`, `karya gate list|approve|reject|delegate`
-- ☐ Tests: git service (fake `Runner` + real-git integration), view model tests,
-  layout snapshots, e2e (task → board → review → approve via keys)
+- ☑ `internal/git` (headless) + `internal/gitui` — status/stage/commit/diff/log/
+  branch/push (replaces lazygit); `Ctrl+Space g g/c/p`
+- ☑ `internal/diffview` — unified diff parser + cellbuf renderer (shared)
+- ☑ `internal/taskview` (task board, `Ctrl+Space t t`) + `internal/reviewview`
+  (scrollable review, `Ctrl+Space r`) + `internal/review` (artifact assembly)
+- ☑ `internal/gate` — pending-gate model over the task state machine; crossings
+  record actor + feedback in STATE.json (the audit trail)
+- ☑ `karya review <id>`, `karya gate list|approve|reject|delegate`
+- ☑ Tests: git service (fake `Runner` + real-git integration), view model +
+  snapshot tests, gate crossing logic
+- ☐ In-TUI approve/reject keys + gate inbox view (`internal/gateview`) — Phase 4
+- ☐ Agent CLIs as PTY panes bound to task worktrees — Phase 4 (with agentrun
+  interactive runs)
 
 **Done when:** the full loop spec → plan → gate → implement → gate runs with
-human approvals in the TUI, git is a native panel, and every crossing is recorded.
+human approvals, git is a native panel, and every crossing is recorded.
+**Core shipped 2026-08-07; in-TUI approve + agent panes move to Phase 4.**
 
 ---
 
@@ -157,6 +161,9 @@ human approvals in the TUI, git is a native panel, and every crossing is recorde
 - ☐ Cross-agent reviewer step (implementer ≠ reviewer) as pre-gate filter
 - ☐ Regression net: auto-detected per-language fast suite at the verify gate
 - ☐ `karya verify <id>` + `karya merge <id>` (merge or PR mode, post-gate only)
+- ☐ In-TUI approve/reject keys + gate inbox view (`internal/gateview`) — carried
+  from Phase 3
+- ☐ Agent CLIs as PTY panes bound to task worktrees — carried from Phase 3
 - ☐ Performance benchmarks in CI with checked-in baselines (DESIGN.md §8.4)
 
 **Done when:** a task reaches DONE only through verify-gate evidence, and merge
