@@ -196,6 +196,23 @@ project + task context; and swapping the agent on a task preserves continuity.
 
 ---
 
+## Phase 4.6 — Human IDE features ◐
+**Goal:** karya is a full editor for humans (triage, close reading, manual
+fixes), not only an agent surface (DESIGN.md §6.4).
+
+- ☐ Editor LSP navigation (plugin-free, engine config): document/workspace
+  symbols, diagnostics list + next/prev, signature help, references → quickfix
+- ☐ Fuzzy file finder view (`internal/finder`, `Ctrl+Space f`): ripgrep file
+  list (walk fallback), fuzzy filter, Enter opens in the editor pane
+- ☐ Project search / live grep view (`internal/searchview`, `Ctrl+Space /`):
+  ripgrep matches (file:line), Enter opens at the location
+- ☐ `editorPane.OpenFile(path, line)` + focus-editor action (`Ctrl+Space e`)
+
+**Done when:** a human can find files, search the project, and use full LSP
+navigation without leaving karya.
+
+---
+
 ## Phase 5 — Skills marketplace
 **Goal:** portable SKILL.md packages, installed once, visible to every agent.
 

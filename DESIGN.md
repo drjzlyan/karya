@@ -53,6 +53,13 @@ Everything the agent produces — plan, diff, test evidence — is a **reviewabl
 artifact** stored on disk. Nothing merges without a human gate crossing. Any
 agent CLI can drive any step, through one adapter layer.
 
+Crucially, karya is **not only an agent surface**: when an agent gets stuck or a
+human needs to triage an issue, read code closely, or make a change by hand, the
+same TUI is a **full-featured editor** — fuzzy file navigation, project-wide
+search, and complete LSP navigation (definition, references, symbols,
+diagnostics, rename) are first-class, so the human is never forced out to another
+tool (§6.4).
+
 ### Design pillars
 
 1. **The Task is the unit of work.** Not a chat session, not a branch — a task:
@@ -381,6 +388,30 @@ owns only the UI surface and top-level input, not editing. What remains of
 The editor stays Neovim (reuse, don't rewrite). Everything *around* it — the
 window manager, git UI, keymaps, and review surfaces — is karya's own, so the IDE
 is consistent and testable end to end.
+
+### 6.4 karya for humans: the full editor
+
+The HITL loop is the headline, but a human working in karya must never hit a
+wall the moment an agent can't finish — triaging a bug, reading unfamiliar code,
+or fixing something by hand needs a real editor, not just a diff viewer. So the
+following are first-class, under the one keymap:
+
+- **File navigation.** A fuzzy file finder (`<leader> f`) over the repo's files
+  (via ripgrep's file list, or a walk fallback) opens the selection in the editor
+  pane. Neovim's own buffer/jumplist navigation works within the editor.
+- **Project search.** Live grep (`<leader> /`) over ripgrep — type a query, get
+  `file:line` matches, open one at its location in the editor. Both the finder
+  and search are karya-native views (like the git panel), so they obey the same
+  keymap and open results into the embedded editor.
+- **LSP navigation.** The embedded editor exposes the full language surface:
+  go-to definition/declaration/type/implementation, references and document/
+  workspace symbols, hover and signature help, diagnostics (list + next/prev),
+  rename, code action, and format. These are Neovim-native (built-in `vim.lsp`,
+  no plugins) under the editor's own `Space` leader; the language servers are the
+  ones karya auto-installs (§5).
+
+These are ordinary karya views and editor bindings, tested like everything else
+(§8.1); the point of the pillar is that the human path is never a dead end.
 
 ---
 
