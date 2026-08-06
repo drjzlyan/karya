@@ -135,6 +135,13 @@ func (p Paths) TmuxConf() string { return filepath.Join(p.Config, "tmux.conf") }
 // §11). Edited with `karya config edit`; absent by default.
 func (p Paths) GlobalInstructions() string { return filepath.Join(p.Config, "instructions.md") }
 
+// SkillsDir is where installed skill packages live in the karya prefix, never in
+// the user's global agent dirs (DESIGN.md §9).
+func (p Paths) SkillsDir() string { return filepath.Join(p.Data, "skills") }
+
+// RegistriesFile records the skill/MCP registry URLs the user has added.
+func (p Paths) RegistriesFile() string { return filepath.Join(p.Config, "registries") }
+
 // ShellInitDir holds karya's own shell startup files (a zsh .zshrc and a bash
 // rcfile). The pane shell (`karya shell`) points ZDOTDIR / --rcfile here so it can
 // source the user's real rc and then layer karya's starship prompt on top —
