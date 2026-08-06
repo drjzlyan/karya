@@ -17,7 +17,7 @@ import (
 // opens the interactive selector. Any mutation re-applies the selection:
 // languages.local is rewritten, the isolated mise config is regenerated, and
 // runtimes + LSP/formatter/adapter tools are installed into the karya prefix —
-// never touching Homebrew or the user's global mise (PLAN.md §6.4).
+// never touching Homebrew or the user's global mise (archive/v0/PLAN.md §6.4).
 func cmdLang(args []string) int {
 	a, err := newApp()
 	if err != nil {

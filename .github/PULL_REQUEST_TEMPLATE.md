@@ -23,7 +23,7 @@
 - [ ] `go test ./...` (unit) passes locally.
 - [ ] `go test -tags=integration ./...` passes locally (tmux installed).
 - [ ] `golangci-lint run` passes locally.
-- [ ] Code follows the SOLID / design guidelines in [AGENT.md](../AGENT.md).
+- [ ] Code follows the SOLID / design guidelines in [AGENTS.md](../AGENTS.md).
 - [ ] Public functions/packages have doc comments; user-facing behavior is documented in `docs/`.
 - [ ] **Isolation preserved**: no code reads or writes the user's `~/.zshrc`, `~/.tmux.conf`, `~/.config/nvim`, Homebrew, or global mise (all paths go through `internal/config`).
 - [ ] Updated `ROADMAP.md` / `PROGRESS.md` if this completes or advances a phase.

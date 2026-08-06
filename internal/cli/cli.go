@@ -1,5 +1,5 @@
 // Package cli is karya's command dispatcher. Phase 0 uses only the standard
-// library; the tree is intentionally simple and every command from PLAN.md
+// library; the tree is intentionally simple and every command from DESIGN.md
 // §4 exists as a stub so the shape is visible and the binary always builds.
 // When the tree grows (Phase 1+), migrate to github.com/spf13/cobra.
 package cli

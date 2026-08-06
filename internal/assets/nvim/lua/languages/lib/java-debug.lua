@@ -4,7 +4,7 @@ local karya = require("util.karya")
 
 -- Find the java-debug / java-test adapter jars in karya's isolated tool prefix
 -- (installed there from the VS Code extensions). No Homebrew/system paths — karya
--- never assumes a global install (PLAN.md §2).
+-- never assumes a global install (DESIGN.md §4).
 local function find_bundles()
   local bundles = {}
   local tools = karya.data_dir() .. "/tools"

@@ -15,7 +15,7 @@ package toolreg
 // changing one is a breaking change to state files that reference it.
 //
 // The data is expressed as Go literals rather than an embedded TOML/JSON catalog
-// so karya keeps its zero-external-dependency core (AGENT.md); the table stays
+// so karya keeps its zero-external-dependency core (AGENTS.md); the table stays
 // pure and is validated by table tests.
 var registry = []Tool{
 	// ── Core infra (was tools/bootstrap.go coreTools) ──────────────────────────

@@ -3,7 +3,7 @@
 // model: an agent works on a namespaced `karya/<task-id>` branch checked out
 // under a karya-owned root (config.Paths.WorktreesDir), never in the user's own
 // working tree, so its changes are contained and reviewable before they are
-// merged. This extends karya's environment-isolation guarantee (PLAN.md §2) to
+// merged. This extends karya's environment-isolation guarantee (DESIGN.md §4) to
 // the task level.
 package worktree
 

@@ -44,7 +44,7 @@ local function has_exec(name)
 end
 
 ---Find an installed JDK for the requested version, strictly within karya's
----isolated mise prefix (never Homebrew or system JVMs — see PLAN.md §2).
+---isolated mise prefix (never Homebrew or system JVMs — see DESIGN.md §4).
 ---@param version integer
 ---@return string?
 function M.find_jdk(version)

@@ -3,7 +3,7 @@
 // commit, and optionally push and open a pull request.
 //
 // The git plumbing here is deterministic and side-effect-isolated behind the
-// Runner interface (dependency inversion, per AGENT.md) so it is unit-testable
+// Runner interface (dependency inversion, per AGENTS.md) so it is unit-testable
 // with a fake. Agent involvement is confined to authoring the message string;
 // everything that mutates the repository is plain, reviewable git.
 package ship
