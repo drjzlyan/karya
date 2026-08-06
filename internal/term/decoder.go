@@ -31,6 +31,11 @@ func (d *Decoder) Feed(p []byte) []Event {
 // the Esc key). Call it after an input read times out with bytes still pending.
 func (d *Decoder) Flush() []Event { return d.drain(true) }
 
+// Buffered reports how many bytes are held awaiting more input. When it is
+// non-zero after Feed, the caller should arm a short timer and call Flush if no
+// further bytes arrive (this disambiguates a lone ESC from an escape sequence).
+func (d *Decoder) Buffered() int { return len(d.buf) }
+
 func (d *Decoder) drain(final bool) []Event {
 	var events []Event
 	for len(d.buf) > 0 {
