@@ -14,6 +14,11 @@ import (
 // adapter emits without spawning real CLIs.
 type execFunc func(ctx context.Context, dir string, argv, extraEnv []string) (string, error)
 
+// defaultExec is the execFunc adapters use in production. It is a package
+// variable (pointing at execAgent) so tests can swap it for a fake — see
+// swapExec in the tests.
+var defaultExec execFunc = execAgent
+
 // execAgent is the production execFunc. It verifies the binary resolves, runs
 // it in dir, and folds stderr into the error on failure so the CLI can explain
 // what the agent said before dying.
