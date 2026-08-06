@@ -248,7 +248,9 @@ var registry = []Tool{
 	{ID: "bat", Name: "bat", Category: CLIUtility, Method: MethodMise, Executable: "bat", Pkg: "bat", Update: UpdateMise, Location: Core()},
 	{ID: "eza", Name: "eza", Category: CLIUtility, Method: MethodMise, Executable: "eza", Pkg: "eza", Update: UpdateMise, Location: Core()},
 	{ID: "delta", Name: "delta", Category: CLIUtility, Method: MethodMise, Executable: "delta", Pkg: "delta", Update: UpdateMise, Location: Core()},
-	{ID: "tree", Name: "tree", Category: CLIUtility, Method: MethodMise, Executable: "tree", Pkg: "tree", Update: UpdateMise, Location: Core()},
+	// tree pins a prebuilt aqua backend: bare "tree" is not in the mise registry
+	// (mise warns "tree not found in mise tool registry"), unlike fd/ripgrep/etc.
+	{ID: "tree", Name: "tree", Category: CLIUtility, Method: MethodMise, Executable: "tree", Pkg: "aqua:peteretelej/tree", Update: UpdateMise, Location: Core()},
 	{ID: "zoxide", Name: "zoxide", Category: CLIUtility, Method: MethodMise, Executable: "zoxide", Pkg: "zoxide", Update: UpdateMise, Location: Core()},
 	{ID: "just", Name: "just", Category: BuildTool, Method: MethodMise, Executable: "just", Pkg: "just", Update: UpdateMise, Location: Core()},
 	{ID: "watchexec", Name: "watchexec", Category: CLIUtility, Method: MethodMise, Executable: "watchexec", Pkg: "watchexec", Update: UpdateMise, Location: Core()},
