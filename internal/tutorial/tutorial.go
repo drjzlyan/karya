@@ -22,7 +22,7 @@ import (
 	"github.com/drjzlyan/karya/internal/assets"
 	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/project"
-	"github.com/drjzlyan/karya/internal/ship"
+	"github.com/drjzlyan/karya/internal/agentrun"
 	"github.com/drjzlyan/karya/internal/spec"
 	"github.com/drjzlyan/karya/internal/task"
 	"github.com/drjzlyan/karya/internal/tmuxx"
@@ -277,7 +277,7 @@ func verifyTasks(sb *Sandbox) (Outcome, string) {
 	if _, err := exec.LookPath("git"); err != nil {
 		return Note, "git is not installed yet — install it to use task worktrees"
 	}
-	r := ship.ExecRunner{}
+	r := agentrun.ExecRunner{}
 	repo := filepath.Join(sb.Dir, "taskrepo")
 	if err := os.MkdirAll(repo, 0o755); err != nil {
 		return Fail, err.Error()

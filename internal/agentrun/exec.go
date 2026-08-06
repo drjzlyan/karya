@@ -1,4 +1,4 @@
-package ship
+package agentrun
 
 import (
 	"fmt"
@@ -6,6 +6,15 @@ import (
 	"os/exec"
 	"strings"
 )
+
+// Runner executes external commands in a working directory. Output captures
+// stdout for inspection (status, diff); Run inherits the caller's stdio for
+// interactive/streaming commands (commit, push). Defined here so callers can
+// substitute a fake in tests.
+type Runner interface {
+	Output(dir, name string, args ...string) (string, error)
+	Run(dir, name string, args ...string) error
+}
 
 // ExecRunner is the production Runner: it shells out to real commands. Output
 // captures stdout; Run streams stdio so interactive git hooks and gh prompts

@@ -1,4 +1,4 @@
-package ship
+package agentrun
 
 import (
 	"fmt"
@@ -214,7 +214,7 @@ func TestSubjectAndPrompt(t *testing.T) {
 	if got := Subject("only line"); got != "only line" {
 		t.Errorf("Subject single = %q", got)
 	}
-	if p := BuildPrompt("DIFFDATA"); !strings.Contains(p, "DIFFDATA") || !strings.Contains(p, "Conventional Commits") {
-		t.Errorf("BuildPrompt missing diff or instruction: %q", p)
+	if p := BuildCommitPrompt("DIFFDATA"); !strings.Contains(p, "DIFFDATA") || !strings.Contains(p, "Conventional Commits") {
+		t.Errorf("BuildCommitPrompt missing diff or instruction: %q", p)
 	}
 }

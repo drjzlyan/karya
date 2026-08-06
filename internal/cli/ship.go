@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/drjzlyan/karya/internal/agent"
-	"github.com/drjzlyan/karya/internal/ship"
+	"github.com/drjzlyan/karya/internal/agentrun"
 )
 
 // cmdShip runs karya's agent-driven git flow: stage the work tree, have the
@@ -36,7 +36,7 @@ func cmdShip(args []string) int {
 		dir, _ = os.Getwd()
 	}
 
-	g := ship.Git{Runner: ship.ExecRunner{}, Dir: dir}
+	g := agentrun.Git{Runner: agentrun.ExecRunner{}, Dir: dir}
 	if !g.InsideRepo() {
 		return fail(fmt.Errorf("%s is not a git repository", dir))
 	}
@@ -82,7 +82,7 @@ func cmdShip(args []string) int {
 		fmt.Println("Pushed.")
 	}
 	if *pr {
-		if err := g.CreatePR(ship.Subject(message), message); err != nil {
+		if err := g.CreatePR(agentrun.Subject(message), message); err != nil {
 			return fail(err)
 		}
 		fmt.Println("Pull request opened.")
@@ -113,14 +113,14 @@ func shipMessage(name, dir, diff string) string {
 		return ""
 	}
 	fmt.Printf("Asking %s to write a commit message…\n", name)
-	out, err := agent.NewRunner(name).Headless(context.Background(), dir, ship.BuildPrompt(diff))
+	out, err := agent.NewRunner(name).Headless(context.Background(), dir, agentrun.BuildCommitPrompt(diff))
 	if err != nil {
 		// Explain why we are falling back to the conversational pane instead of
 		// silently producing no message.
 		fmt.Fprintf(os.Stderr, "karya ship: %s could not draft a message: %v\n", name, err)
 		return ""
 	}
-	return ship.SanitizeMessage(out)
+	return agentrun.SanitizeMessage(out)
 }
 
 // shipFallback delegates the whole commit to the agent pane when no headless

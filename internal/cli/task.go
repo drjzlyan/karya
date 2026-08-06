@@ -8,7 +8,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/drjzlyan/karya/internal/ship"
+	"github.com/drjzlyan/karya/internal/agentrun"
 	"github.com/drjzlyan/karya/internal/spec"
 	"github.com/drjzlyan/karya/internal/task"
 	"github.com/drjzlyan/karya/internal/worktree"
@@ -58,7 +58,7 @@ func cmdTask(args []string) int {
 // dir is only the fallback (a pane cd'd outside the project must not scatter
 // tasks into the session's repo).
 func taskContext(a *app) (worktree.Manager, *task.Store, string, error) {
-	runner := ship.ExecRunner{}
+	runner := agentrun.ExecRunner{}
 	cwd, _ := os.Getwd()
 	top, err := runner.Output(cwd, "git", "rev-parse", "--show-toplevel")
 	if err != nil {
@@ -358,9 +358,9 @@ func parseIDYesArgs(args []string) (id string, yes bool) {
 	return id, yes
 }
 
-// gitAt returns a ship.Git bound to dir, backed by the real command runner.
-func gitAt(dir string) ship.Git {
-	return ship.Git{Runner: ship.ExecRunner{}, Dir: dir}
+// gitAt returns a agentrun.Git bound to dir, backed by the real command runner.
+func gitAt(dir string) agentrun.Git {
+	return agentrun.Git{Runner: agentrun.ExecRunner{}, Dir: dir}
 }
 
 // short truncates a commit SHA for display.

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/drjzlyan/karya/internal/ship"
+	"github.com/drjzlyan/karya/internal/agentrun"
 	"github.com/drjzlyan/karya/internal/task"
 )
 
@@ -27,7 +27,7 @@ func cmdInit(args []string) int {
 	// no karya-owned dirs or managed env — unlike session commands it skips
 	// newApp entirely.
 	dir, _ := os.Getwd()
-	top, err := ship.ExecRunner{}.Output(dir, "git", "rev-parse", "--show-toplevel")
+	top, err := agentrun.ExecRunner{}.Output(dir, "git", "rev-parse", "--show-toplevel")
 	if err != nil {
 		return fail(fmt.Errorf("karya init must run inside a git repository: %w", err))
 	}
