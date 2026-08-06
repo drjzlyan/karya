@@ -8,7 +8,7 @@
 //
 // It talks to POST /v1/messages directly over net/http rather than pulling in an
 // SDK, keeping karya's single-binary, minimal-dependency, no-CGO promise (see
-// AGENT.md). BYO-CLI stays the default engine; this is opt-in.
+// AGENTS.md). BYO-CLI stays the default engine; this is opt-in.
 package native
 
 import (

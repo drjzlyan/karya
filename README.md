@@ -114,15 +114,16 @@ make build                 # -> ./bin/karya
 
 **For contributors** (internal engineering docs, at the repo root):
 
-- [PLAN.md](PLAN.md) — architecture, isolation model, subsystems
-- [ROADMAP.md](ROADMAP.md) — phased build order
+- [DESIGN.md](DESIGN.md) — v1.0 design: human-in-the-loop agent IDE
+- [ROADMAP.md](ROADMAP.md) — phased build order to v1.0
 - [PROGRESS.md](PROGRESS.md) — current status / resume point
-- [AGENT.md](AGENT.md) — engineering guide (TDD, SOLID, CI, isolation)
+- [AGENTS.md](AGENTS.md) — engineering guide (TDD, SOLID, CI, isolation)
+- [archive/v0/](archive/v0/) — original v0 design docs (historical)
 
 ## Contributing
 
 Contributions are welcome! Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the
-engineering guide in [AGENT.md](AGENT.md). We use **test-driven development**,
+engineering guide in [AGENTS.md](AGENTS.md). We use **test-driven development**,
 SOLID design, and a green-CI-before-merge policy. Please also read our
 [Code of Conduct](CODE_OF_CONDUCT.md). Security issues: see [SECURITY.md](SECURITY.md).
 

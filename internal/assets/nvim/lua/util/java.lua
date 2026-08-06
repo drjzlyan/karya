@@ -31,7 +31,7 @@ end
 
 -- find_jdks discovers installed JDKs strictly within karya's isolated mise
 -- prefix. karya never installs into or reads from Homebrew, the system
--- JavaVirtualMachines, or the user's global mise (PLAN.md §2), so only karya's
+-- JavaVirtualMachines, or the user's global mise (DESIGN.md §4), so only karya's
 -- own installs are considered here.
 local function find_jdks()
   local jdks = {}

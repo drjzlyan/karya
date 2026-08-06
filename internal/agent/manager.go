@@ -9,7 +9,7 @@ import (
 // TmuxRunner is the narrow slice of tmux operations agent management needs. It
 // is defined here (by the consumer) so the Manager depends on an abstraction,
 // not on *tmuxx.Tmux — which keeps unit tests hermetic and satisfies the
-// dependency-inversion rule in AGENT.md. *tmuxx.Tmux implements it.
+// dependency-inversion rule in AGENTS.md. *tmuxx.Tmux implements it.
 type TmuxRunner interface {
 	Run(args ...string) error
 	Output(args ...string) (string, error)

@@ -3,7 +3,7 @@ return {
     "saghen/blink.cmp",
     -- No `build` step: building blink's native fuzzy matcher from source needs a
     -- Rust toolchain (cargo), which karya must never assume exists on the user's
-    -- machine (PLAN.md §2). We use the pure-Lua fuzzy matcher instead (see the
+    -- machine (DESIGN.md §4). We use the pure-Lua fuzzy matcher instead (see the
     -- `fuzzy` opt below), so completion works fully isolated and offline.
     event = { "InsertEnter", "CmdlineEnter" },
     dependencies = {

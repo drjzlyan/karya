@@ -1,6 +1,6 @@
 // Package tools installs the runtimes, language servers, formatters, linters,
 // debuggers, and CLI utilities karya manages — into karya's own isolated tool
-// prefix, never into Homebrew or the user's global environment (PLAN.md §2, §6.4).
+// prefix, never into Homebrew or the user's global environment (DESIGN.md §4, archive/v0/PLAN.md §6.4).
 //
 // What to install and in what order is decided by the pure internal/toolreg
 // registry; this package is the detect-first, best-effort side-effect layer: a

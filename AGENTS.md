@@ -1,4 +1,4 @@
-# AGENT.md — Engineering guide for karya
+# AGENTS.md — Engineering guide for karya
 
 This is the authoritative guide for anyone — human or AI — working on karya. Read
 it fully before writing code, then read [PROGRESS.md](PROGRESS.md) for the exact
@@ -9,7 +9,7 @@ maintainable, well-tested, well-documented, and welcoming to contributors.
 An **AI-first, terminal-based IDE** shipped as a **single Go binary**. It
 orchestrates Neovim (editor), tmux (multiplexer), and a coding agent into one
 cohesive IDE, and installs/updates/uninstalls itself **without touching any of
-the user's existing settings**. Full design: [PLAN.md](PLAN.md).
+the user's existing settings**. Full design: [DESIGN.md](DESIGN.md).
 
 karya has two internal layers, both shipped inside the one binary:
 - an embedded Neovim editor configuration (Lua), extracted to the isolated karya
@@ -19,7 +19,8 @@ karya has two internal layers, both shipped inside the one binary:
 
 ## Locked decisions (do not relitigate)
 - **Orchestrator, not a from-scratch editor.** Neovim + tmux are reused.
-- **Go**, single static binary, no CGO.
+- **Go**, single static binary, no CGO. `go.mod` currently has **zero external
+  dependencies** — stdlib only; keep the dependency graph that small.
 - **BYO agent CLIs** (`crush/claude/codex/gemini/aider/copilot`) as first-class.
   A native LLM agent is deferred to Phase 8 but the interface must allow it.
 
@@ -38,7 +39,29 @@ karya-owned dirs. The primitives:
 Every path goes through `internal/config` — never hardcode `~/.config/...`.
 `karya uninstall` must remove everything karya created and nothing else. Any PR
 that could violate isolation must include a test proving it does not. See
-[PLAN.md](PLAN.md) §2 before touching install/launch code.
+[DESIGN.md](DESIGN.md) §4 before touching install/launch code.
+
+---
+
+## Essential commands
+
+```bash
+make build                       # ./bin/karya (version injected via ldflags -X)
+make gate                        # full pre-PR gate, mirrors CI exactly — run this
+make test                        # go test ./...
+go test -race ./...              # unit tests with race detector (as CI runs them)
+go test -tags=integration ./...  # integration tests; needs tmux + nvim on PATH
+make lint                        # golangci-lint v2 via `go run ...@latest`
+make fmt / make vet / make tidy  # format, static analysis, module tidy
+make sync-docs                   # REQUIRED after editing docs/*.md (see docs section)
+make formula TAG=vX.Y.Z SUMS=dist/checksums.txt   # regenerate Homebrew formula
+```
+
+Gotchas:
+- Version info only appears when built with the ldflags in the Makefile or
+  GoReleaser; a bare `go build` reports `dev`/`none`.
+- Integration tests skip gracefully when `tmux`/`nvim` are missing, so a green
+  local run without them installed does **not** prove integration behavior.
 
 ---
 
@@ -59,6 +82,10 @@ Rules:
   binary on a **throwaway socket** (`tmuxx.New("karya-itest-…", …)`), asserting
   layout/env/state, then kill the server. They must never touch the user's tmux
   or the real karya dirs. Example: `internal/session/session_integration_test.go`.
+- **Keymap guardrail:** `internal/assets/keymaps_integration_test.go` drives
+  headless Neovim over the embedded config and asserts every supported language
+  exposes the identical `<leader>c` "Code" interface. Changing Lua keymaps can
+  break it; keep `docs/keymaps.md` in sync in the same change.
 - Design for testability: separate side effects from logic. (E.g. `session.Build`
   creates the layout with no `attach`, so it is testable; `session.Dev` composes
   `Build` + `Attach`.) When something is hard to test, that's a design signal —
@@ -91,7 +118,8 @@ Also:
 - **Errors are values**: wrap with `%w` and context; never `panic` for expected
   failures; surface actionable messages (point users at `karya doctor`).
 - **Stdlib first**: add `github.com/spf13/cobra` only when the command tree
-  justifies it; keep the dependency graph small. No CGO.
+  justifies it; keep the dependency graph small. No CGO. (The CLI dispatcher in
+  `internal/cli` is a hand-rolled stdlib `switch` — intentional.)
 - **DRY, but not prematurely**: extract shared helpers once duplication is real.
 - **Keep functions short and the public surface minimal** — unexport by default.
 
@@ -107,12 +135,18 @@ Good docs are part of "done":
   - **User-facing product docs** live in `docs/` (`tutorial.md`, `keymaps.md`,
     and the planned `commands.md`/`languages.md`/`isolation.md`). These are what
     ship embedded in the binary (Phase 7). Write them for a karya *user*.
-  - **Internal engineering docs** live at the repo root (`PLAN.md`, `ROADMAP.md`,
-    `PROGRESS.md`, `AGENT.md`). These are for contributors and are never shipped.
+  - **Internal engineering docs** live at the repo root (`DESIGN.md`,
+    `ROADMAP.md`,
+    `PROGRESS.md`, `AGENTS.md`). These are for contributors and are never shipped.
   - Never mix the two: user docs don't reference internal planning, and internal
     docs aren't embedded or surfaced to end users.
+- **Docs are vendored for embedding.** `docs/*.md` is the authoritative source;
+  `scripts/sync-docs.sh` (`make sync-docs`) copies them into
+  `internal/assets/docs/`, which is go:embed'd. A drift test in
+  `internal/assets` **fails CI** if you edit `docs/` without re-vendoring and
+  committing the result.
 - User-facing changes update `docs/` and the design record:
-  - new/changed commands → `PLAN.md` §4 and `README.md`;
+  - new/changed commands → `DESIGN.md` §12 and `README.md`;
   - new keymaps/workflows → `docs/tutorial.md` and `docs/keymaps.md`.
 - Update `ROADMAP.md` (tick boxes) and `PROGRESS.md` (status + resume point +
   changelog entry) whenever a phase advances.
@@ -126,32 +160,42 @@ main.go                 entrypoint → internal/cli
 internal/cli/           command dispatch + flags + app wiring
 internal/config/        XDG paths + karya prefix (isolation lives here)
 internal/version/       version/build info
-internal/assets/        go:embed payload (tmux.conf + vendored nvim config) + extract/version
+internal/assets/        go:embed payload (tmux.conf + vendored nvim config + shell
+                        init + user docs) + extract/version
 internal/tmuxx/         tmux wrapper (dedicated socket)
 internal/session/       `dev` layout: Build (testable) + Dev (Build+Attach), Quit
-internal/agent/         detect/select/switch/send + Runner interface (pluggable engine)
-internal/native/        built-in Claude-API agent (tool-use loop)  [Phase 13]
-internal/task/          Task model + per-project store         [Phase 10]
-internal/worktree/      git worktree-per-task isolation        [Phase 10]
+internal/agent/         agent detect/select/switch/cycle/reset
 internal/editor/        `edit` (editor pane) + `run` (build/test pane) routing
-internal/project/       `new` scaffolds                      [Phase 4]
-internal/lang/          language/version selection           [Phase 5]
-internal/tools/         tool detect/install                  [Phase 5]
-internal/prefs/         per-project preference store         [Phase 2]
-internal/doctor/        health checks                        [Phase 7]
-internal/update/        self-update                          [Phase 6]
+internal/project/       `new` scaffolds
+internal/lang/          language/version selection
+internal/tools/         tool detect/install + mise bootstrap
+internal/toolreg/       tool catalog/registry (aqua-pinned, see gotchas)
+internal/prefs/         per-project preference store
+internal/doctor/        health checks
+internal/update/        self-update
+internal/ship/          headless agent task runner
+internal/tutorial/      in-binary tutorial
 
 docs/                   USER-FACING product docs (embedded in binary, Phase 7)
-PLAN.md ROADMAP.md PROGRESS.md AGENT.md    INTERNAL docs (root; never shipped)
+DESIGN.md ROADMAP.md PROGRESS.md AGENTS.md  INTERNAL docs (root; never shipped)
 README.md CONTRIBUTING.md                  user landing + contributor entry
 ```
+
+Notes:
+- The embedded Neovim config is real code and lives in `internal/assets/nvim/`
+  (Lua, lazy.nvim, pinned by `lazy-lock.json`). The empty-looking root `nvim/`
+  dir is a runtime leftover, not the config — ignore it.
+- **Tool provisioning pins prebuilt backends.** In `internal/toolreg/catalog.go`,
+  tools must resolve to prebuilt **aqua** backends (e.g.
+  `aqua:neovim/neovim@0.11.7`) — bare mise names resolve to build-from-source
+  plugins and break fresh installs. `GenerateMiseConfig` quotes TOML keys so
+  backend-qualified keys stay valid.
 
 ## Command surface
 | karya command | What it does |
 |---|---|
 | `dev` (default) | Build/attach the isolated tmux IDE session for the cwd |
 | `agent` | Switch/cycle/reset the coding-agent pane in a session |
-| `task` | Create/list/switch/remove tasks, each in an isolated worktree (branch `karya/<id>`) |
 | `run` | Send a command to the build/test pane (or run it directly) |
 | `edit` | Open a file in the editor pane; also karya's `$EDITOR` |
 | `new` / `project` | Scaffold a new project for a supported language |
@@ -209,7 +253,7 @@ these before merge. Releases are automated by GoReleaser on `v*` tags.
 ## Definition of done (per change)
 1. Tests written first and passing (`-race` and, if tmux-related, `-tags=integration`).
 2. `gofmt`, `go vet`, `golangci-lint`, `go build` all clean.
-3. Exported symbols documented; user-facing docs updated.
+3. Exported symbols documented; user-facing docs updated (`make sync-docs` run).
 4. **Isolation preserved** (and tested where relevant).
 5. `ROADMAP.md` / `PROGRESS.md` updated if a phase advanced.
 6. Conventional-commit messages; PR template completed; CI green.

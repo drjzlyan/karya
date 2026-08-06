@@ -1,6 +1,6 @@
 // Package config resolves karya's isolated, XDG-based directories.
 //
-// Isolation is the defining constraint of karya (see PLAN.md §2): every
+// Isolation is the defining constraint of karya (see DESIGN.md §4): every
 // path karya touches lives under a karya-owned prefix, and Neovim/tmux are
 // launched with karya-specific env so the user's own configuration is never
 // read or written. All other packages MUST obtain paths from here rather than
@@ -284,7 +284,7 @@ func (p Paths) Env(karyaBin string) []string {
 	}
 	// Pin mise, and put karya's managed tool bin + mise shims ahead of the user's
 	// PATH so the isolated toolchain wins inside karya sessions — without ever
-	// mutating the user's own PATH, Homebrew, or global mise (see PLAN.md §2, §6.4).
+	// mutating the user's own PATH, Homebrew, or global mise (see DESIGN.md §4, archive/v0/PLAN.md §6.4).
 	env = append(env, p.MiseEnv()...)
 	path := strings.Join(p.managedPathDirs(), string(os.PathListSeparator))
 	if cur := os.Getenv("PATH"); cur != "" {

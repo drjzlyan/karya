@@ -21,7 +21,7 @@ var ErrNoHeadless = errors.New("agent has no headless mode")
 //
 // The interface is intentionally small and defined by its consumers (session/
 // agent management for the interactive mode, ship/task authoring for headless),
-// per the interface-segregation and dependency-inversion rules in AGENT.md.
+// per the interface-segregation and dependency-inversion rules in AGENTS.md.
 type Runner interface {
 	// Name is the agent identifier, e.g. "claude" or the None sentinel.
 	Name() string
