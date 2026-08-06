@@ -30,8 +30,34 @@ func sampleReview() *review.Review {
 	}
 }
 
+// fakeCrosser records approve/reject calls.
+type fakeCrosser struct {
+	approved []string
+	rejected map[string]string
+	failWith error
+}
+
+func (f *fakeCrosser) Approve(id string) error {
+	if f.failWith != nil {
+		return f.failWith
+	}
+	f.approved = append(f.approved, id)
+	return nil
+}
+
+func (f *fakeCrosser) Reject(id, feedback string) error {
+	if f.failWith != nil {
+		return f.failWith
+	}
+	if f.rejected == nil {
+		f.rejected = map[string]string{}
+	}
+	f.rejected[id] = feedback
+	return nil
+}
+
 func TestReviewViewRenders(t *testing.T) {
-	p := New(sampleReview())
+	p := New(sampleReview(), nil)
 	buf := cellbuf.New(80, 30)
 	p.View(buf, cellbuf.Rect{X: 0, Y: 0, W: 80, H: 30}, true)
 	out := buf.String()
@@ -56,7 +82,7 @@ func TestReviewViewRenders(t *testing.T) {
 }
 
 func TestReviewViewScrollAndClose(t *testing.T) {
-	p := New(sampleReview())
+	p := New(sampleReview(), nil)
 	if p.Done() {
 		t.Fatal("should start open")
 	}
@@ -75,8 +101,64 @@ func TestReviewViewScrollAndClose(t *testing.T) {
 	}
 }
 
+func TestReviewApprove(t *testing.T) {
+	fc := &fakeCrosser{}
+	p := New(sampleReview(), fc)
+	p.HandleKey(term.RuneKey('a'))
+	if len(fc.approved) != 1 || fc.approved[0] != "2026-08-06-retry" {
+		t.Fatalf("approve not called: %v", fc.approved)
+	}
+	if !p.Done() {
+		t.Fatal("approving should close the stale review")
+	}
+}
+
+func TestReviewRejectWithFeedback(t *testing.T) {
+	fc := &fakeCrosser{}
+	p := New(sampleReview(), fc)
+	p.HandleKey(term.RuneKey('x')) // enter reject mode
+	if p.mode != modeReject {
+		t.Fatal("x should enter reject mode")
+	}
+	for _, r := range "redo" {
+		p.HandleKey(term.RuneKey(r))
+	}
+	p.HandleKey(term.Named(term.SymEnter))
+	if fc.rejected["2026-08-06-retry"] != "redo" {
+		t.Fatalf("reject feedback not passed: %v", fc.rejected)
+	}
+	if !p.Done() {
+		t.Fatal("rejecting should close the review")
+	}
+}
+
+func TestReviewRejectNeedsFeedback(t *testing.T) {
+	fc := &fakeCrosser{}
+	p := New(sampleReview(), fc)
+	p.HandleKey(term.RuneKey('x'))
+	p.HandleKey(term.Named(term.SymEnter)) // empty feedback
+	if len(fc.rejected) != 0 {
+		t.Fatal("empty feedback should not reject")
+	}
+	if p.Done() {
+		t.Fatal("should stay open awaiting feedback")
+	}
+	p.HandleKey(term.Named(term.SymEsc)) // cancel
+	if p.mode != modeNormal {
+		t.Fatal("esc should cancel reject mode")
+	}
+}
+
+func TestReviewReadOnlyWithoutCrosser(t *testing.T) {
+	p := New(sampleReview(), nil)
+	p.HandleKey(term.RuneKey('a')) // no crosser -> no-op
+	if p.Done() {
+		t.Fatal("read-only review should not act on approve")
+	}
+}
+
 func TestReviewViewDiffColored(t *testing.T) {
-	p := New(sampleReview())
+	p := New(sampleReview(), nil)
 	buf := cellbuf.New(80, 40)
 	p.View(buf, cellbuf.Rect{X: 0, Y: 0, W: 80, H: 40}, true)
 	// Find the "+new" line and confirm it's green.

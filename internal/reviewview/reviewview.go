@@ -19,17 +19,37 @@ type line struct {
 	style cellbuf.Style
 }
 
-// Panel is the scrollable review view.
-type Panel struct {
-	id     string
-	lines  []line
-	scroll int
-	closed bool
+// Crosser crosses the review's gate. The Model supplies it so the human can
+// approve/reject without leaving the review (nil makes the view read-only).
+type Crosser interface {
+	Approve(id string) error
+	Reject(id, feedback string) error
 }
 
-// New builds a review panel from an assembled review.
-func New(r *review.Review) *Panel {
-	p := &Panel{id: r.Task.ID}
+type mode uint8
+
+const (
+	modeNormal mode = iota
+	modeReject
+)
+
+// Panel is the scrollable review view.
+type Panel struct {
+	id       string
+	hasGate  bool
+	lines    []line
+	scroll   int
+	crosser  Crosser
+	mode     mode
+	feedback string
+	status   string
+	closed   bool
+}
+
+// New builds a review panel from an assembled review. crosser may be nil, which
+// makes the view read-only (approve/reject disabled).
+func New(r *review.Review, crosser Crosser) *Panel {
+	p := &Panel{id: r.Task.ID, hasGate: r.HasGate, crosser: crosser}
 	p.build(r)
 	return p
 }
@@ -93,8 +113,12 @@ func (p *Panel) text(s string, st cellbuf.Style) {
 	}
 }
 
-// HandleKey scrolls or closes the panel.
+// HandleKey scrolls, crosses the gate, or closes the panel.
 func (p *Panel) HandleKey(k term.Key) {
+	if p.mode == modeReject {
+		p.handleRejectKey(k)
+		return
+	}
 	switch {
 	case k == term.RuneKey('j') || k == term.Named(term.SymDown):
 		p.scrollBy(1)
@@ -104,8 +128,50 @@ func (p *Panel) HandleKey(k term.Key) {
 		p.scrollBy(10)
 	case k == term.Ctrl('u') || k == term.Named(term.SymPageUp):
 		p.scrollBy(-10)
+	case k == term.RuneKey('a') && p.canCross():
+		p.approve()
+	case k == term.RuneKey('x') && p.canCross():
+		p.mode = modeReject
+		p.feedback = ""
 	case k == term.RuneKey('q') || k == term.Named(term.SymEsc):
 		p.closed = true
+	}
+}
+
+func (p *Panel) canCross() bool { return p.crosser != nil && p.hasGate }
+
+func (p *Panel) approve() {
+	if err := p.crosser.Approve(p.id); err != nil {
+		p.status = "approve failed: " + err.Error()
+		return
+	}
+	p.status = "approved " + p.id
+	p.closed = true // the review is now stale
+}
+
+func (p *Panel) handleRejectKey(k term.Key) {
+	switch {
+	case k == term.Named(term.SymEsc):
+		p.mode = modeNormal
+		p.feedback = ""
+	case k == term.Named(term.SymEnter):
+		if strings.TrimSpace(p.feedback) == "" {
+			p.status = "reject needs feedback (Esc to cancel)"
+			return
+		}
+		if err := p.crosser.Reject(p.id, p.feedback); err != nil {
+			p.status = "reject failed: " + err.Error()
+			p.mode = modeNormal
+			return
+		}
+		p.status = "rejected " + p.id
+		p.closed = true
+	case k == term.Named(term.SymBackspace):
+		if n := len(p.feedback); n > 0 {
+			p.feedback = p.feedback[:n-1]
+		}
+	case k.Sym == term.SymRune && k.Mod == 0:
+		p.feedback += string(k.Rune)
 	}
 }
 
@@ -135,7 +201,20 @@ func (p *Panel) View(buf *cellbuf.Buffer, r cellbuf.Rect, focused bool) {
 	}
 	st := cellbuf.Style{Attrs: cellbuf.AttrReverse}
 	buf.Fill(cellbuf.Rect{X: r.X, Y: bottomY, W: r.W, H: 1}, cellbuf.Cell{Rune: ' ', Width: 1, Style: st})
-	buf.SetString(r.X, bottomY, fit("review "+p.id+" · j/k scroll · q close", r.W), st)
+	buf.SetString(r.X, bottomY, fit(p.bottomText(), r.W), st)
+}
+
+func (p *Panel) bottomText() string {
+	if p.mode == modeReject {
+		return "reject feedback: " + p.feedback + "_"
+	}
+	if p.status != "" {
+		return p.status
+	}
+	if p.canCross() {
+		return "review " + p.id + " · j/k scroll · a approve · x reject · q close"
+	}
+	return "review " + p.id + " · j/k scroll · q close"
 }
 
 func diffStyle(k diffview.LineKind) cellbuf.Style {

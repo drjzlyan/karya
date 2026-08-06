@@ -6,10 +6,12 @@
 package ide
 
 import (
+	"errors"
 	"os"
 
 	"github.com/drjzlyan/karya/internal/cellbuf"
 	"github.com/drjzlyan/karya/internal/gate"
+	"github.com/drjzlyan/karya/internal/gateview"
 	"github.com/drjzlyan/karya/internal/git"
 	"github.com/drjzlyan/karya/internal/gitui"
 	"github.com/drjzlyan/karya/internal/keymap"
@@ -21,6 +23,10 @@ import (
 	"github.com/drjzlyan/karya/internal/term"
 	"github.com/drjzlyan/karya/internal/tui"
 )
+
+// errNotPending is returned when a gate crossing is attempted on a task that is
+// not awaiting a human gate.
+var errNotPending = errors.New("task is not awaiting a gate")
 
 // paneView is a karya-native, interactive view pane (git panel, task board, …):
 // it renders itself and handles forwarded keys, and can ask to be closed.
@@ -64,6 +70,7 @@ type Model struct {
 	gitPaneID    layout.PaneID
 	taskPaneID   layout.PaneID
 	reviewPaneID layout.PaneID
+	inboxPaneID  layout.PaneID
 }
 
 // shellReadMsg carries a chunk of a shell pane's output back into the loop.
@@ -274,6 +281,13 @@ func (m *Model) forward(k term.Key) {
 	case paneView:
 		id := m.tree.FocusedID()
 		p.HandleKey(k)
+		// The gate inbox can request opening a task's review.
+		if inbox, ok := p.(*gateview.Inbox); ok {
+			if openID := inbox.OpenRequest(); openID != "" {
+				m.openReviewFor(openID)
+				return
+			}
+		}
 		if p.Done() {
 			switch id {
 			case m.gitPaneID:
@@ -282,6 +296,8 @@ func (m *Model) forward(k term.Key) {
 				m.taskPaneID = 0
 			case m.reviewPaneID:
 				m.reviewPaneID = 0
+			case m.inboxPaneID:
+				m.inboxPaneID = 0
 			}
 			m.tree.CloseFocused()
 			m.syncPaneSizes()
@@ -315,9 +331,7 @@ func (m *Model) openTaskBoard() *taskview.Board {
 	return board
 }
 
-// openReview assembles and opens the review for the first task awaiting a gate,
-// replacing any stale review tab. Approve/reject remain explicit `karya gate`
-// crossings for now.
+// openReview opens the review for the first task awaiting a gate.
 func (m *Model) openReview() {
 	store := task.NewStore(m.dir)
 	tasks, err := store.List()
@@ -330,7 +344,14 @@ func (m *Model) openReview() {
 		m.status = "no task awaiting review"
 		return
 	}
-	rev, err := review.Assemble(store, git.New(m.dir, nil), pending[0].ID)
+	m.openReviewFor(pending[0].ID)
+}
+
+// openReviewFor assembles and opens the review for task id, replacing any stale
+// review tab. The human can approve/reject from within the review.
+func (m *Model) openReviewFor(id string) {
+	store := task.NewStore(m.dir)
+	rev, err := review.Assemble(store, git.New(m.dir, nil), id)
 	if err != nil {
 		m.status = "review: " + err.Error()
 		return
@@ -338,8 +359,66 @@ func (m *Model) openReview() {
 	if m.reviewPaneID != 0 && m.tree.FocusPane(m.reviewPaneID) {
 		m.tree.CloseFocused() // drop the stale review before opening a fresh one
 	}
-	m.reviewPaneID = m.tree.AddTab("review", reviewview.New(rev))
+	m.reviewPaneID = m.tree.AddTab("review", reviewview.New(rev, m))
 	m.syncPaneSizes()
+}
+
+// openInbox focuses the gate inbox if open, else opens it in a new tab.
+func (m *Model) openInbox() {
+	if m.inboxPaneID != 0 && m.tree.FocusPane(m.inboxPaneID) {
+		if _, ok := m.tree.FocusedContent().(*gateview.Inbox); ok {
+			return
+		}
+	}
+	m.inboxPaneID = m.tree.AddTab("gates", gateview.New(m.loadGateItems))
+	m.syncPaneSizes()
+}
+
+// loadGateItems reads the tasks awaiting a gate for the inbox.
+func (m *Model) loadGateItems() []gateview.Item {
+	store := task.NewStore(m.dir)
+	tasks, err := store.List()
+	if err != nil {
+		return nil
+	}
+	var items []gateview.Item
+	for _, t := range gate.PendingTasks(tasks) {
+		p, _ := gate.For(t.State)
+		title := t.ID
+		if sp, err := store.Spec(t.ID); err == nil {
+			title = task.Title(sp)
+		}
+		items = append(items, gateview.Item{ID: t.ID, State: string(t.State), Gate: string(p.Gate), Title: title})
+	}
+	return items
+}
+
+// Approve crosses the pending gate of task id forward as the human. It satisfies
+// reviewview.Crosser so the human can approve from within the review.
+func (m *Model) Approve(id string) error { return m.crossGate(id, false, "") }
+
+// Reject sends task id back through its gate with feedback (reviewview.Crosser).
+func (m *Model) Reject(id, feedback string) error { return m.crossGate(id, true, feedback) }
+
+// crossGate performs a human gate crossing over the repo's task store.
+func (m *Model) crossGate(id string, reject bool, feedback string) error {
+	store := task.NewStore(m.dir)
+	t, err := store.Get(id)
+	if err != nil {
+		return err
+	}
+	p, ok := gate.For(t.State)
+	if !ok {
+		return errNotPending
+	}
+	target := p.Approve
+	if reject {
+		target = p.Reject
+	}
+	if err := t.Transition(target, "human", feedback); err != nil {
+		return err
+	}
+	return store.Save(t)
 }
 
 // loadTasks reads the repo's tasks for the board (decoupling taskview from the
@@ -413,6 +492,8 @@ func (m *Model) dispatch(a keymap.ActionID) tui.Cmd {
 		m.openGitPanel().Push()
 	case keymap.ActionReview:
 		m.openReview()
+	case keymap.ActionAgentInbox:
+		m.openInbox()
 	case keymap.ActionSendLeader:
 		m.forward(m.leader)
 	case keymap.ActionQuit:
@@ -583,6 +664,8 @@ func paneTitle(c layout.PaneContent) string {
 		return "tasks"
 	case *reviewview.Panel:
 		return "review"
+	case *gateview.Inbox:
+		return "gates"
 	case *placeholderPane:
 		return v.title
 	}

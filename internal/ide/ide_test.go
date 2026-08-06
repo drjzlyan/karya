@@ -135,7 +135,7 @@ func TestWhichKeyPopulatesOnLeader(t *testing.T) {
 
 func TestUnknownActionSetsStatus(t *testing.T) {
 	m := testModel(40, 12)
-	press(m, leaderThen('a')...) // agent inbox — later phase
+	press(m, leaderThen('z')...) // zoom pane — later phase
 	if !strings.Contains(m.status, "later phase") {
 		t.Fatalf("expected not-implemented status, got %q", m.status)
 	}
