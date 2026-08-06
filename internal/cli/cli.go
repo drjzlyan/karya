@@ -71,6 +71,8 @@ func Run(args []string) int {
 		return cmdVerify(rest)
 	case "merge":
 		return cmdMerge(rest)
+	case "skills":
+		return cmdSkills(rest)
 	case "init":
 		return cmdInit(rest)
 	case "lang":
