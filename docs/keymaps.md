@@ -107,9 +107,18 @@ cross panes (e.g. running tests routes output to the build/test pane). The full,
 current editor action list is shown by `<L> ?`.
 
 Common LSP editing keys (in the editor pane): `gd` definition, `gr` references,
-`gi` implementation, `K` hover, `<Space>la` code action, `<Space>lr` rename,
-`<Space>lf` format. Language actions (build/run/test) are consistent across every
+`gi` implementation, `K` hover, `<Space>ca` code action, `<Space>rn` rename,
+`<Space>f` format. Language actions (build/run/test) are consistent across every
 supported language — the same keys work whatever the file is.
+
+**Zero-setup language servers.** When you open a file, karya auto-installs that
+language's server (and formatter/linter) into its own isolated prefix in the
+background — no `:Mason`, no manual install. The status line shows
+`installing go language tools…`, then the LSP attaches on its own when ready.
+Nothing is installed globally; only the languages you actually open get tooling.
+Supported today: Go, Python, Rust, TypeScript/JavaScript, C/C++ (plus the
+always-on Lua/JSON/YAML/Bash/Markdown/TOML servers). More via the marketplace
+later.
 
 ## 5. Modes
 

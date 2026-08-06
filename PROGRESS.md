@@ -153,6 +153,20 @@ dashboard.
 - Bare `karya` and `karya edit <file>` now launch the single-process TUI; `karya
   dev` stays the explicit legacy tmux launcher until the Phase 7 removal.
 
+### 2026-08-06 — Zero-setup LSP auto-provisioning
+
+- Opening a file now auto-installs its language server (+ formatter/linter) into
+  karya's isolated prefix in the background — no user action, no plugin manager.
+  Reuses the existing mise + `toolreg` catalog (hybrid approach; a marketplace
+  comes in Phase E/F). `cli.autoProvisioner` (implements `ide.Provisioner`) maps
+  language → catalog tool IDs, installs via `Registry.Plan` + `Dispatcher` with
+  all output to a log file (never the TUI), deduped/serialized.
+- Engine config starts LSP on `FileType` with an executable guard so a lazily-
+  installed server attaches via `editorPane.reattachLSP` (`doautocmd FileType`).
+- `cmdTUI` builds the app first so the embed inherits karya's managed PATH.
+- Deferred: `.karya/project.toml` LSP override (needs a stdlib TOML reader) —
+  auto-detect covers the common case.
+
 ### Resume point (do this next)
 
 1. Phase 3 — panes/git/views: `internal/git` + `internal/gitui` (git panel),

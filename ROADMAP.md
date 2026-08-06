@@ -118,6 +118,11 @@ with working shell panes, all under one keymap. **Shipped 2026-08-06.**
 - ☑ Configurable leader (`KARYA_LEADER`) — Ctrl+Space is unreliable on macOS
 - ☑ Flip bare `karya` and `karya edit` to the TUI (`karya dev` stays the explicit
   legacy tmux launcher until the Phase 7 removal)
+- ☑ Zero-setup LSP: opening a file auto-installs its server/formatter/linter into
+  karya's isolated prefix in the background (reuses the mise + tool catalog),
+  attaches on ready; managed PATH threaded into the embed
+- ☐ `.karya/project.toml` LSP override (needs a stdlib TOML reader) — deferred to
+  the marketplace phases; auto-detect covers the common case now
 
 **Done when:** editing (with LSP/treesitter) works inside the embedded editor
 pane, forwarded by karya's keymap, with no Neovim keymap/UI surface of its own.
