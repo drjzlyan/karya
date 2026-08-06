@@ -13,8 +13,9 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 0 — Design pivot (docs), then Phase 1 — TUI walking
-skeleton. Phase B (agent adapters) proceeds in parallel (headless, unaffected).
+**Active phase:** Phase 2 — Embed Neovim (next). Phase 0 (design pivot docs) and
+Phase 1 (TUI walking skeleton) are shipped. Phase B (agent adapters) proceeds in
+parallel (headless, unaffected).
 **Architecture pivot (2026-08-06):** karya moves from an *orchestrator* (external
 tmux + standalone Neovim UI + lazygit, three keymaps) to a **single-process TUI**
 that owns the terminal and embeds Neovim as the editing engine over msgpack-RPC,
@@ -107,16 +108,34 @@ dashboard.
   work was carried over and preserved in a `wip` commit (does not yet build —
   `defaultExec` seam pending).
 
+### 2026-08-06 — Phase 1: TUI walking skeleton (shipped)
+
+- New stdlib-only TUI stack, bottom-up, each layer unit-tested:
+  `internal/cellbuf` (styled grid + minimal diff + RuneWidth), `internal/term`
+  (raw mode via syscall ioctls, ANSI Output, capability detection, pure input
+  Decoder), `internal/keymap` (one Ctrl-Space engine, always-intercepted leader,
+  which-key), `internal/layout` (tab/pane tree, adjacency focus, resize),
+  `internal/tui` (Elm Model/Update/View + Program loop, tested over pipes),
+  `internal/pty` + `pty/vt` (PTY host + minimal VT emulator, real-pty tests).
+- `internal/ide` composes them into the root model (framed panes, status line,
+  which-key popup, shell PTY panes); `karya tui` launches it. Pane creation is
+  injectable so the model is unit-tested with fakes; an integration PTY smoke
+  test runs the real binary, confirms it renders, and quits on Ctrl-Space Q.
+- Completed the carried-over Phase B WIP enough to build: `defaultExec` seam
+  restored in `internal/agentrun` (module builds, all tests pass).
+- Everything on `feat/single-process-tui-ide`; golangci-lint clean on new pkgs.
+
 ### Resume point (do this next)
 
-1. Finish Phase 0 docs: AGENTS.md (single-process rules, drop tmux socket, keep
-   `NVIM_APPNAME`, stdlib-only), `docs/keymaps.md` (one unified `Ctrl-Space`
-   table), `docs/tutorial.md` (new UX), ADR 0001; `make sync-docs`; drift test.
-2. Phase 1 — TUI walking skeleton: `internal/term`, `internal/cellbuf`,
-   `internal/tui`, `internal/keymap`, `internal/layout`, `internal/pty` (+`vt`).
-   Bare `karya` launches the TUI with splits/focus/resize + a shell pane, all
-   under `Ctrl-Space`. TDD: decoder/diff/keymap/geometry tests + one PTY smoke.
-3. In parallel (Phase B, headless): complete `internal/agentrun` — the
-   `defaultExec` seam, adapters, `Caps` matrix, prompt assembly; `karya plan
-   <id>` / `karya implement <id>`; adapter contract tests via a scripted
-   fake-agent binary.
+1. Phase 2 — Embed Neovim: `internal/nvimrpc` (spawn `nvim --embed`, minimal
+   stdlib msgpack codec, RPC, `nvim_ui_attach`, `redraw` → Grid → cellbuf, input
+   via `nvim_input`, resize). Slim `internal/assets/nvim` to options + LSP +
+   treesitter + completion (strip UI/keymap/which-key/terminal/task plugins).
+   Add an editor pane to `internal/layout`/`internal/ide`; `karya edit` opens it.
+   Tests: msgpack round-trip, Grid reducer snapshots from recorded batches,
+   fake-nvim input forwarding; `-tags=integration` real-nvim open-file + LSP smoke.
+2. Flip bare `karya`/`dev` to launch the TUI (currently `karya tui`) once the
+   editor pane lands.
+3. In parallel (Phase B, headless): finish `internal/agentrun` adapters + `Caps`
+   matrix + prompt assembly; `karya plan <id>` / `karya implement <id>`; adapter
+   contract tests via a scripted fake-agent binary.

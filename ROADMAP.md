@@ -71,29 +71,30 @@ runtime code is written.
 
 ---
 
-## Phase 1 — TUI walking skeleton
+## Phase 1 — TUI walking skeleton ☑
 **Goal:** karya renders its own screen and routes input under one leader — no
 editor yet, but splittable, focusable, resizable panes with a live shell.
 
-- ☐ `internal/term` — raw mode (build-tagged darwin/linux termios), ANSI output,
-  terminfo-lite capability table, size/SIGWINCH, input `Decoder` (Key/Resize/
-  Mouse/Paste; CSI/SS3/UTF-8, lone-Esc timeout)
-- ☐ `internal/cellbuf` — styled cell grid, `Sub`/`Clone`, wide-rune width,
-  minimal `Diff` renderer
-- ☐ `internal/tui` — Elm-style `Model/Update/View`, `Program` loop, frame
-  coalescing, panic-safe restore
-- ☐ `internal/keymap` — unified engine: data-driven bindings, modal resolution,
-  which-key candidates (single leader `Ctrl-Space`)
-- ☐ `internal/layout` — tab/pane tree: splits, focus-by-adjacency, resize, rects
-- ☐ `internal/pty` (+ `pty/vt`) — PTY host + VT parser; one shell pane
-- ☐ Bare `karya` launches the TUI (not tmux)
+- ☑ `internal/term` — raw mode (build-tagged darwin/linux termios), ANSI output,
+  terminfo-lite capability table, size, input `Decoder` (Key/Resize/Mouse/Paste;
+  CSI/SS3/UTF-8, lone-Esc timeout)
+- ☑ `internal/cellbuf` — styled cell grid, wide-rune width, minimal `Diff` renderer
+- ☑ `internal/tui` — Elm-style `Model/Update/View`, `Program` loop, frame
+  coalescing, SIGWINCH, panic-safe restore
+- ☑ `internal/keymap` — unified engine: data-driven bindings, modal resolution,
+  which-key candidates (single leader `Ctrl-Space`, always intercepted)
+- ☑ `internal/layout` — tab/pane tree: splits, focus-by-adjacency, resize, rects
+- ☑ `internal/pty` (+ `pty/vt`) — PTY host + VT parser; live shell panes
+- ☑ `internal/ide` + `karya tui` launches the TUI (bare `karya` flips in Phase 3,
+  once the editor is embedded)
 
-- ☐ Tests: decoder tables, cellbuf diff, keymap resolution, layout geometry
-  snapshots, one PTY smoke test (split + focus, screen-scrape)
+- ☑ Tests: decoder tables, cellbuf diff, keymap resolution, layout geometry,
+  tui loop over pipes, vt snapshots, ide model tests, and an integration PTY
+  smoke test (real binary renders + quits on Ctrl-Space Q)
 
-**Done when:** `karya` opens its own multi-pane TUI; `Ctrl-Space |/-` split,
+**Done when:** `karya tui` opens its own multi-pane TUI; `Ctrl-Space |/-` split,
 `Ctrl-Space h/j/k/l` focus, `Ctrl-Space H/J/K/L` resize, which-key discovery —
-with a working shell pane, all under one keymap.
+with working shell panes, all under one keymap. **Shipped 2026-08-06.**
 
 ---
 
