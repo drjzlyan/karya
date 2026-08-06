@@ -25,6 +25,7 @@ type Review struct {
 	Task     task.Task
 	Spec     *spec.Spec
 	Plan     string   // PLAN.md contents ("" if none yet)
+	Memory   string   // MEMORY.md contents ("" if none) — agent-agnostic notes
 	Diff     string   // base...branch diff ("" if not started/none)
 	Evidence []string // VERIFY-*.md contents, in order
 	Pending  gate.Pending
@@ -43,6 +44,7 @@ func Assemble(store *task.Store, differ Differ, id string) (*Review, error) {
 		r.Spec = sp
 	}
 	r.Plan = readFile(filepath.Join(store.Dir(id), "PLAN.md"))
+	r.Memory = store.Memory(id)
 	r.Evidence = readEvidence(store.Dir(id))
 	if differ != nil && t.Base != "" && t.Branch != "" {
 		if d, err := differ.DiffRange(t.Base, t.Branch); err == nil {

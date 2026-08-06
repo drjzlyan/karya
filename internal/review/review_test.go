@@ -3,6 +3,7 @@ package review
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,6 +33,9 @@ func TestAssembleBasics(t *testing.T) {
 	dir := store.Dir(id)
 	os.WriteFile(filepath.Join(dir, "PLAN.md"), []byte("# Plan\nstep 1\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "VERIFY-1.md"), []byte("all green\n"), 0o644)
+	if err := store.AppendMemory(id, "agent:claude", "picked backoff"); err != nil {
+		t.Fatal(err)
+	}
 
 	r, err := Assemble(store, fakeDiffer{diff: "diff --git a b"}, id)
 	if err != nil {
@@ -45,6 +49,9 @@ func TestAssembleBasics(t *testing.T) {
 	}
 	if len(r.Evidence) != 1 || r.Evidence[0] != "all green\n" {
 		t.Fatalf("evidence = %v", r.Evidence)
+	}
+	if !strings.Contains(r.Memory, "picked backoff") {
+		t.Fatalf("memory not assembled into review: %q", r.Memory)
 	}
 	// Draft task has no branch, so no diff even though a differ is provided.
 	if r.Diff != "" {

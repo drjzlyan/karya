@@ -84,6 +84,10 @@ func (p *Panel) build(r *review.Review) {
 		p.section("Plan")
 		p.text(r.Plan, cellbuf.Style{})
 	}
+	if strings.TrimSpace(r.Memory) != "" {
+		p.section("Task memory")
+		p.text(r.Memory, cellbuf.Style{})
+	}
 	if strings.TrimSpace(r.Diff) != "" {
 		p.section("Diff")
 		for _, dl := range diffview.Parse(r.Diff) {
