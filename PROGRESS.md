@@ -210,17 +210,28 @@ dashboard.
   loop, the gate state machine, the architecture, layered instructions); tasks
   framed as an OKR-shaped contract (Objective + acceptance criteria).
 
+### 2026-08-07 — Phase 5 (skills, partial) + Phase 4.6 (human IDE features)
+
+- Skills marketplace: `internal/skills` (registry Index + HTTP/dir/fake Source,
+  hash-verified atomic install, Store list/remove) + `karya skills
+  search|install|remove|list|registry`. Per-agent materialization + project
+  `.karya/skills/` still pending.
+- Human IDE (DESIGN §6.4): full editor LSP navigation (symbols/diagnostics/
+  signature help added to the engine config); `internal/finder` fuzzy file
+  finder (`Ctrl+Space f`) and `internal/searchview` project live-grep
+  (`Ctrl+Space /`), both opening results in the editor via `editorPane.OpenFile`;
+  `Ctrl+Space e` focuses the editor. docs/keymaps.md updated + re-vendored.
+
 ### Resume point (do this next)
 
-1. Phase 5 — skills marketplace: `internal/skills` (registry client, hash-verified
-   install into the karya prefix), per-agent materialization, `.karya/skills/`,
-   `karya skills search|install|remove|list` + a TUI browser.
-2. Finish remaining Phase 4: `tdd:true` acceptance-test-first flow, cross-agent
-   reviewer pre-gate filter, auto-detected regression net at the verify gate,
-   perf benchmarks vs the §8.4 budgets.
-3. (superseded) Phase 3 — panes/git/views: `internal/git` + `internal/gitui`,
-   `internal/diffview`, `internal/taskview`/`gateview`/`reviewview` + `gate`;
-   agent CLIs as PTY panes bound to task worktrees; `karya review`/`gate`.
-3. In parallel (Phase B, headless): finish `internal/agentrun` adapters + `Caps`
-   matrix + prompt assembly; `karya plan <id>` / `karya implement <id>`; adapter
-   contract tests via a scripted fake-agent binary.
+1. Finish Phase 5 — per-agent materialization (symlink/copy installed skills into
+   opted-in agents' native dirs; remove on uninstall) + project `.karya/skills/`
+   auto-visibility; `karya doctor` reports installed skills.
+2. Phase 6 — MCP marketplace: `internal/mcp` (registry client, per-agent native
+   config generation from one source of truth), `karya mcp search|install|sync`.
+3. Remaining Phase 4: `tdd:true` acceptance-test-first flow, cross-agent reviewer
+   pre-gate filter, auto-detected regression net at the verify gate, perf
+   benchmarks vs the §8.4 budgets.
+4. In parallel (Phase B, headless): finish `internal/agentrun` adapters + `Caps`
+   matrix; `karya plan <id>` / `karya implement <id>`; adapter contract tests via
+   a scripted fake-agent binary.

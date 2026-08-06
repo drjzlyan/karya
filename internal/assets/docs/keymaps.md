@@ -57,6 +57,8 @@ The one set of bindings for the whole IDE — no separate multiplexer.
 | `<L> n` / `<L> p` | Next / previous tab |
 | `<L> 1`–`9` | Jump to tab by number |
 | `<L> e` | Focus the editor pane |
+| `<L> f` | Find file (fuzzy) — opens the selection in the editor |
+| `<L> /` | Search the project (live grep) — opens a match at its line |
 | `<L> b` | Focus the build/test pane; run the last command |
 | `<L> ?` | Full keymap & command reference |
 | `<L> Q` | Quit karya (confirm) |
@@ -106,10 +108,14 @@ the editor, and are also reachable as IDE actions from `Ctrl-Space` where they
 cross panes (e.g. running tests routes output to the build/test pane). The full,
 current editor action list is shown by `<L> ?`.
 
-Common LSP editing keys (in the editor pane): `gd` definition, `gr` references,
-`gi` implementation, `K` hover, `<Space>ca` code action, `<Space>rn` rename,
-`<Space>f` format. Language actions (build/run/test) are consistent across every
-supported language — the same keys work whatever the file is.
+Common LSP keys (in the editor pane, under Neovim's own `Space` leader): `gd`
+definition, `gD` declaration, `gr` references, `gi` implementation, `gy` type
+definition, `K` hover, `<C-k>` signature help, `<Space>ds`/`<Space>ws` document/
+workspace symbols, `<Space>e` show diagnostic, `[d`/`]d` prev/next diagnostic,
+`<Space>q` diagnostics list, `<Space>rn` rename, `<Space>ca` code action,
+`<Space>f` format. The servers are the ones karya auto-installs. For fuzzy file
+navigation and project-wide search across the whole repo, use the karya views
+`<L> f` and `<L> /` above (they open results back in the editor).
 
 **Zero-setup language servers.** When you open a file, karya auto-installs that
 language's server (and formatter/linter) into its own isolated prefix in the
