@@ -13,9 +13,9 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 2 — Embed Neovim (core shipped; slim-config + bare-launch
-flip remain), then Phase 3 — panes/git/views. Phase 0 (docs) and Phase 1 (TUI
-skeleton) shipped. Phase B (agent adapters) proceeds in parallel (headless).
+**Active phase:** Phase 3 — panes/git/views (next). Phase 0 (docs), Phase 1 (TUI
+skeleton), and Phase 2 (embed Neovim) are shipped. Phase B (agent adapters)
+proceeds in parallel (headless).
 **Architecture pivot (2026-08-06):** karya moves from an *orchestrator* (external
 tmux + standalone Neovim UI + lazygit, three keymaps) to a **single-process TUI**
 that owns the terminal and embeds Neovim as the editing engine over msgpack-RPC,
@@ -140,14 +140,22 @@ dashboard.
   file in the embedded editor. PTY smoke: opens a file, content renders through
   RPC+Grid, quits on Ctrl+Space Q.
 
+### 2026-08-06 — Phase 2 completed: engine config + default flip
+
+- `internal/assets/nvimengine/init.lua`: a plugin-free Neovim engine config
+  (options, syntax + treesitter, native `vim.lsp.config/enable` for servers on
+  PATH, built-in completion on LspAttach). Extracted via `assets.ExtractNvimEngine`
+  under the isolated `karya/nvim-engine` app-name (`config.NvimEngineAppName/
+  NvimEngineDir`); `editorPane` launches `nvim --embed` with it (falls back to
+  `--clean` if extraction fails). Validated by `TestEngineConfigValid`.
+- Configurable leader via `KARYA_LEADER` (Ctrl+Space is grabbed by macOS's
+  input-source shortcut); `keymap.ParseLeader` + `DefaultBindingsFor`.
+- Bare `karya` and `karya edit <file>` now launch the single-process TUI; `karya
+  dev` stays the explicit legacy tmux launcher until the Phase 7 removal.
+
 ### Resume point (do this next)
 
-1. Finish Phase 2: slim `internal/assets/nvim` to an engine config (options +
-   LSP + treesitter + completion; strip which-key/UI/keymap/terminal/task
-   plugins) and load it via `NVIM_APPNAME` instead of `--clean`, so LSP/
-   treesitter work in the embed. Then flip bare `karya`/`dev` and `karya edit`
-   to the TUI editor (currently `karya tui`).
-2. Phase 3 — panes/git/views: `internal/git` + `internal/gitui` (git panel),
+1. Phase 3 — panes/git/views: `internal/git` + `internal/gitui` (git panel),
    `internal/diffview`, `internal/taskview`/`gateview`/`reviewview` + `gate`;
    agent CLIs as PTY panes bound to task worktrees; `karya review`/`gate`.
 3. In parallel (Phase B, headless): finish `internal/agentrun` adapters + `Caps`

@@ -98,7 +98,7 @@ with working shell panes, all under one keymap. **Shipped 2026-08-06.**
 
 ---
 
-## Phase 2 — Embed Neovim as the editing engine ◐
+## Phase 2 — Embed Neovim as the editing engine ☑
 **Goal:** real editing inside a karya pane via msgpack-RPC.
 
 - ☑ `internal/nvimrpc/msgpack` — minimal stdlib msgpack codec (Marshal + streaming
@@ -111,14 +111,17 @@ with working shell panes, all under one keymap. **Shipped 2026-08-06.**
 - ☑ Tests: msgpack round-trip, `Grid` reducer snapshots from synthetic batches,
   fake-peer client tests (-race); `-tags=integration` real-nvim (typing renders
   to Grid) + PTY smoke (open file, quit)
-- ☐ Slim `internal/assets/nvim` to an engine config (options + LSP + treesitter +
-  completion; strip which-key/UI/keymap/terminal/task plugins) and load it under
-  `NVIM_APPNAME` instead of `--clean`, so LSP/treesitter work in the embed
-- ☐ Flip bare `karya`/`dev` and `karya edit` to the TUI editor
+- ☑ Slim, plugin-free engine config (`internal/assets/nvimengine/init.lua`:
+  options + syntax + treesitter + native LSP + completion) loaded under an
+  isolated `karya/nvim-engine` app-name instead of `--clean`, so LSP/treesitter
+  work in the embed with no plugin/network bootstrap
+- ☑ Configurable leader (`KARYA_LEADER`) — Ctrl+Space is unreliable on macOS
+- ☑ Flip bare `karya` and `karya edit` to the TUI (`karya dev` stays the explicit
+  legacy tmux launcher until the Phase 7 removal)
 
 **Done when:** editing (with LSP/treesitter) works inside the embedded editor
 pane, forwarded by karya's keymap, with no Neovim keymap/UI surface of its own.
-**Core embed shipped 2026-08-06; slim-config + bare-launch flip remain.**
+**Shipped 2026-08-06.**
 
 ---
 
