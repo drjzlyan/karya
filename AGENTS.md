@@ -174,6 +174,11 @@ internal/prefs/         per-project preference store
 internal/doctor/        health checks
 internal/update/        self-update
 internal/ship/          headless agent task runner
+internal/spec/          task spec contract: parse/validate/render (DESIGN.md §3)
+internal/task/          task engine: gate state machine + .karya/tasks/<id>/ store
+internal/worktree/      per-task git worktrees on task/<id> branches
+internal/agent/         (also) pluggable Runner seam (BYO-CLI + native engine)
+internal/native/        built-in Claude-API agent engine (per-tool-call permit)
 internal/tutorial/      in-binary tutorial
 
 docs/                   USER-FACING product docs (embedded in binary, Phase 7)

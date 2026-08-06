@@ -33,27 +33,26 @@ Every `karya` command, grouped by what it does. Read this offline any time with
 | `karya agent native [prompt]` | Run karya's **built-in** Claude-API agent — approves each file write / command. Needs `ANTHROPIC_API_KEY` (model via `KARYA_AGENT_MODEL`) |
 | `karya agent prefs` / `clear` | Show / forget the per-project agent preference |
 
-## Tasks (human-in-the-loop, agents-first)
+## Tasks (human-in-the-loop)
 
-Each task runs in an isolated git worktree on a `karya/<id>` branch; your real
-branch is untouched until you merge. Inside a task's session the `<id>` is
-optional — it defaults to the current task.
+A task is a **spec contract** (`.karya/tasks/<id>/SPEC.md` in your repo — the
+one karya artifact meant to be committed) executed in an isolated git worktree
+on a `task/<id>` branch; your real branch is untouched until a human gate lets
+work merge. State and gate history live in `STATE.json` next to the spec.
 
 | Command | What it does |
 |---|---|
-| `karya task new "<prompt>" [--agent <name>] [--plan]` | Start a task (isolated worktree + branch + agent). `--plan` drafts a plan and holds for approval |
-| `karya task list` (or `karya tasks`) | List the project's tasks and their status |
-| `karya task dashboard` | Fleet view — pick a task to switch to (also `Ctrl-a T`) |
-| `karya task switch <id>` | Attach to a task's session (rooted at its worktree) |
-| `karya task plan <id>` | Show the drafted plan |
-| `karya task approve-plan <id>` | Approve the plan → the task starts work |
-| `karya task review [<id>]` | Show the task's diff vs. its base — the pre-apply review |
-| `karya task merge [<id>] [--push]` | Commit + merge the task branch into your branch (permission-gated) |
-| `karya task reject [<id>]` | Mark the task rejected (worktree kept for inspection) |
-| `karya task checkpoint [<id>] [label]` | Record a restorable snapshot of the worktree |
-| `karya task rewind [<id>] [index\|sha]` | Reset the worktree to a checkpoint |
-| `karya task allow <merge\|push\|rewind>` | Pre-authorize a karya action so it stops prompting |
-| `karya task rm <id> [-y]` | Remove the task: its worktree, branch, and record |
+| `karya init [--force]` | Scaffold `.karya/` + a repo `AGENTS.md` (build/test/lint contract) from detected toolchains |
+| `karya task new <slug> [--agent <name>]` | Scaffold a task spec at `.karya/tasks/<date>-<slug>/SPEC.md` (opens in the editor pane inside a session) |
+| `karya task list` (or `karya tasks`) | The task board: every task with state, agent, and title (also `Ctrl-a T`) |
+| `karya task status` | Per-state counts plus the gate inbox (tasks waiting on a human) |
+| `karya task show <id>` | State, workspace, spec summary, and the full gate history |
+| `karya task start <id> [--base <ref>]` | Create the task's worktree on branch `task/<id>` forked from the base ref (default `HEAD`) |
+| `karya task abandon <id> [-y]` | Teardown: remove the worktree, the branch, and the task's artifacts |
+
+Tasks advance through mandatory human gates — plan, diff, verification —
+recorded in `STATE.json`. The agent-driven steps (`karya plan`, `implement`,
+`verify`, `merge`) arrive with the upcoming adapter layer.
 
 ## Projects & languages
 

@@ -84,8 +84,8 @@ func (g Git) Commit(message string, noVerify bool) error {
 }
 
 // RevParse resolves a revision (e.g. "HEAD", a branch, a tag) to its commit SHA.
-// karya records a task's base commit at creation so a review can diff the whole
-// task branch against exactly where it started.
+// karya records a task's base commit at `task start` so the diff gate can later
+// diff the task branch against exactly where it started.
 func (g Git) RevParse(rev string) (string, error) {
 	out, err := g.Runner.Output(g.Dir, "git", "rev-parse", rev)
 	return strings.TrimSpace(out), err
@@ -93,8 +93,8 @@ func (g Git) RevParse(rev string) (string, error) {
 
 // CommitAll stages every change in Dir and commits it with message, returning
 // whether a commit was made (false when there was nothing to commit). It is how
-// karya turns an agent's in-progress worktree edits into a reviewable commit —
-// for a checkpoint or just before a merge.
+// karya turns an agent's in-progress worktree edits into a reviewable commit
+// ahead of the diff gate.
 func (g Git) CommitAll(message string, noVerify bool) (bool, error) {
 	if err := g.StageAll(); err != nil {
 		return false, err
@@ -119,15 +119,15 @@ func (g Git) DiffCachedAgainst(base string) (string, error) {
 	return g.Runner.Output(g.Dir, "git", "diff", "--cached", base)
 }
 
-// ResetHard resets Dir's working tree and index to ref, discarding changes after
-// it. It backs `karya task rewind`, restoring a worktree to an earlier checkpoint.
+// ResetHard resets Dir's working tree and index to ref, discarding changes
+// after it. Reserved for the task verify/merge flow (Phase D).
 func (g Git) ResetHard(ref string) error {
 	return g.Runner.Run(g.Dir, "git", "reset", "--hard", ref)
 }
 
 // Merge merges branch into Dir's current branch. noFF forces a merge commit
 // (--no-ff) so a task's history stays a distinct, revertible unit; otherwise git
-// may fast-forward. It backs the diff-review "apply" step (`karya task merge`).
+// may fast-forward. Reserved for the post-verify-gate merge (Phase D).
 func (g Git) Merge(branch string, noFF bool) error {
 	args := []string{"merge"}
 	if noFF {

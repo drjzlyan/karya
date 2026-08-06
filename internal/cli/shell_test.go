@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,6 +12,22 @@ import (
 
 // envHas reports whether env contains an exact "NAME=VALUE" entry.
 func envHas(env []string, kv string) bool { return slices.Contains(env, kv) }
+
+// unsetEnv removes name from the process environment for the duration of the
+// test, restoring it afterwards. buildShellInvocation starts from os.Environ,
+// so a karya-managed developer shell (which exports STARSHIP_CONFIG) would
+// otherwise leak into the assertions.
+func unsetEnv(t *testing.T, name string) {
+	t.Helper()
+	v, ok := os.LookupEnv(name)
+	if !ok {
+		return
+	}
+	if err := os.Unsetenv(name); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Setenv(name, v) })
+}
 
 func TestBuildShellInvocationWiresStarship(t *testing.T) {
 	p := config.Paths{Config: "/k/config"}
@@ -43,6 +60,7 @@ func TestBuildShellInvocationWiresStarship(t *testing.T) {
 }
 
 func TestBuildShellInvocationFallsBackToPlainShell(t *testing.T) {
+	unsetEnv(t, "STARSHIP_CONFIG")
 	p := config.Paths{Config: "/k/config"}
 
 	// starship unavailable (wire=false): plain shell, no karya env injected.

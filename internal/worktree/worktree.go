@@ -1,10 +1,10 @@
 // Package worktree gives each karya task an isolated git worktree. Task-level
-// isolation is the new primitive behind karya's human-in-the-loop, agents-first
-// model: an agent works on a namespaced `karya/<task-id>` branch checked out
+// isolation is the primitive behind karya's human-in-the-loop IDE (DESIGN.md
+// §4): an agent works on a namespaced `task/<task-id>` branch checked out
 // under a karya-owned root (config.Paths.WorktreesDir), never in the user's own
-// working tree, so its changes are contained and reviewable before they are
-// merged. This extends karya's environment-isolation guarantee (DESIGN.md §4) to
-// the task level.
+// working tree, so its changes are physically incapable of landing on the
+// user's tree until a human merges them. This extends karya's
+// environment-isolation guarantee (DESIGN.md §4) to the task level.
 package worktree
 
 import (
@@ -26,7 +26,7 @@ type Runner interface {
 
 // BranchPrefix namespaces every karya task branch so they never collide with a
 // user's own branches and are trivially identifiable for cleanup.
-const BranchPrefix = "karya/"
+const BranchPrefix = "task/"
 
 // Branch returns the namespaced branch name for a task id.
 func Branch(id string) string { return BranchPrefix + id }
@@ -44,11 +44,20 @@ func (m Manager) Path(repoDir, id string) string {
 	return filepath.Join(m.Root, ProjectSlug(repoDir), id)
 }
 
-// Add creates an isolated worktree for task id: a new branch karya/<id> off the
-// repository's current HEAD, checked out under the karya-owned root. It returns
-// the checkout path. The repository must have at least one commit (HEAD must
-// resolve) — git worktree cannot branch from an unborn HEAD.
+// Add creates an isolated worktree for task id off the repository's current
+// HEAD; see AddFrom.
 func (m Manager) Add(repoDir, id string) (string, error) {
+	return m.AddFrom(repoDir, id, "HEAD")
+}
+
+// AddFrom creates an isolated worktree for task id: a new branch task/<id> off
+// baseRef (a branch, tag, or commit — typically HEAD), checked out under the
+// karya-owned root. It returns the checkout path. The repository must have at
+// least one commit (the base ref must resolve) — git worktree cannot branch
+// from an unborn HEAD. Branching from a ref (not the working tree) is the
+// dirty-tree safety: uncommitted changes in the user's tree never leak into a
+// task (DESIGN.md §4).
+func (m Manager) AddFrom(repoDir, id, baseRef string) (string, error) {
 	top, err := m.topLevel(repoDir)
 	if err != nil {
 		return "", err
@@ -57,7 +66,7 @@ func (m Manager) Add(repoDir, id string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return "", fmt.Errorf("worktree: create root: %w", err)
 	}
-	if err := m.Runner.Run(top, "git", "worktree", "add", "-b", Branch(id), dst); err != nil {
+	if err := m.Runner.Run(top, "git", "worktree", "add", "-b", Branch(id), dst, baseRef); err != nil {
 		return "", fmt.Errorf("worktree add %s: %w", id, err)
 	}
 	return dst, nil
@@ -82,6 +91,9 @@ func (m Manager) Remove(repoDir, id string) error {
 	if err := os.RemoveAll(dst); err != nil {
 		return fmt.Errorf("worktree: remove dir %s: %w", dst, err)
 	}
+	// Prune the per-project parent when this was its last task (fails harmlessly
+	// when non-empty).
+	_ = os.Remove(filepath.Dir(dst))
 	return nil
 }
 

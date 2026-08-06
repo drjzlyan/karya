@@ -48,6 +48,28 @@ var helpByCommand = map[string]commandHelp{
 		syntax:  "karya edit <file> [line]",
 		summary: "Open a file in the session's editor pane; used as $EDITOR.",
 	},
+	"task": {
+		syntax:  "karya task new <slug> | list | status | show <id> | start <id> | abandon <id>",
+		summary: "Create and run spec-contract tasks in isolated git worktrees.",
+		details: []string{
+			"new <slug> [--agent]     scaffold a spec at .karya/tasks/<date>-<slug>/SPEC.md",
+			"list / status           the task board; status adds per-state counts + gate inbox",
+			"show <id>               state, workspace, spec summary, full gate history",
+			"start <id> [--base ref] create the task worktree on branch task/<id>",
+			"abandon <id> [-y]       remove worktree + branch + artifacts",
+			"Tasks move through human gates (plan/diff/verify); the agent-driven",
+			"steps arrive with the adapter layer (see ROADMAP Phase B).",
+		},
+	},
+	"init": {
+		syntax:  "karya init [--force]",
+		summary: "Scaffold .karya/ and a repo AGENTS.md for the task workflow.",
+		details: []string{
+			"Detects the repo's toolchains (go.mod, package.json, Cargo.toml, …) and",
+			"writes AGENTS.md with the build/test/lint contract agents should follow.",
+			"Never overwrites an existing AGENTS.md unless --force is given.",
+		},
+	},
 	"run": {
 		syntax:  "karya run [-d dir] <command> | karya run --focus",
 		summary: "Run a command in the build/test pane (or just focus it).",

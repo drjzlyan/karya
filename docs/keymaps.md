@@ -33,18 +33,13 @@ reference. For a guided, hands-on path through it, see
 | `karya run --focus` | Focus the build/test pane |
 | `karya new <lang> <name>` | Scaffold a project (python/java/typescript/go/cpp/rust) |
 | `karya ship [--push --pr --no-verify]` | Stage, let the agent write the commit message, commit (& push / open PR) |
-| `karya task new "<prompt>" [--agent n] [--plan]` | Start a task in an isolated worktree (branch `karya/<id>`) |
-| `karya task list` / `tasks` | List the project's tasks and their status |
-| `karya task dashboard` | Fleet view — pick a task to switch to (also `Ctrl-a T`) |
-| `karya task switch <id>` | Attach to a task's session (rooted at its worktree) |
-| `karya task plan <id>` / `approve-plan <id>` | Show the drafted plan / approve it (→ working) |
-| `karya task review [id]` | Show the task's diff vs its base — the pre-apply review |
-| `karya task merge [id] [--push]` | Commit & merge the task branch into your branch |
-| `karya task reject [id]` | Mark the task rejected (worktree kept for inspection) |
-| `karya task checkpoint [id] [label]` | Record a restorable snapshot of the worktree |
-| `karya task rewind [id] [index/sha]` | Reset the worktree to a checkpoint |
-| `karya task allow <merge/push/rewind>` | Pre-authorize a karya action (skip its prompt) |
-| `karya task rm <id> [-y]` | Remove a task: its worktree, branch, and record |
+| `karya init [--force]` | Scaffold `.karya/` + a repo `AGENTS.md` for the task workflow |
+| `karya task new <slug> [--agent n]` | Scaffold a task spec (`.karya/tasks/<date>-<slug>/SPEC.md`) |
+| `karya task list` / `tasks` | The task board (also `Ctrl-a T`) |
+| `karya task status` | Per-state counts + the gate inbox |
+| `karya task show <id>` | Task detail: state, workspace, spec summary, gate history |
+| `karya task start <id> [--base <ref>]` | Create the task worktree (branch `task/<id>`) |
+| `karya task abandon <id> [-y]` | Remove the task: worktree, branch, and artifacts |
 | `karya lang` | Interactive language + runtime-version selector |
 | `karya lang list` | Show the selected languages and versions |
 | `karya lang add <lang> [versions]` | Add/change a language (installs its tooling) |
@@ -95,7 +90,7 @@ Bindings marked *(default)* are standard tmux built-ins.
 | `Ctrl-a D` | Reset layout → `karya agent reset` |
 | `Ctrl-a P` | New project (`language:name`) → `karya new` |
 | `Ctrl-a G` | Ship: agent writes the commit message, then commit & push → `karya ship --push` |
-| `Ctrl-a T` | Tasks dashboard: pick a task from the fleet to switch to → `karya task dashboard` |
+| `Ctrl-a T` | Task board popup → `karya task list` |
 | `Ctrl-a S` | Toggle synchronize-panes |
 | `Ctrl-a g` | Open lazygit (reuse or create the `git` window) |
 | `Ctrl-a ?` | Pop up this key map & command reference → `karya docs keymaps` |
@@ -215,22 +210,20 @@ the editor, not a separate CLI. Text is pasted unsubmitted so you stay in contro
 | `<leader>ad` | n | Send the diagnostic on this line |
 | `<leader>af` | n | Send a reference to the current file |
 
-### Karya Tasks — `<leader>k` (human-in-the-loop, agents-first)
+### Karya Tasks — `<leader>k` (human-in-the-loop)
 
-Drive `karya task` from the editor. Each task runs in its own isolated git
-worktree (branch `karya/<id>`); you review the diff before it merges. Inside a
-task session these default to the current task, and they run in the build/test
-pane so you see the diff, list, and prompts there.
+Drive `karya task` from the editor. Each task is a spec contract
+(`.karya/tasks/<id>/SPEC.md`) that runs in its own isolated git worktree
+(branch `task/<id>`) and advances through human gates. These run in the
+build/test pane so you see the board and gate history there.
 
 | Key | Mode | Action |
 |---|---|---|
-| `<leader>kn` | n | New task (prompts for a description) |
-| `<leader>kl` | n | List tasks |
-| `<leader>kr` | n | Review the current task's diff |
-| `<leader>km` | n | Merge the current task |
-| `<leader>kj` | n | Reject the current task |
-| `<leader>kc` | n | Checkpoint the current task |
-| `<leader>kw` | n | Rewind the current task to a checkpoint |
+| `<leader>kn` | n | New task (prompts for a slug; scaffolds the spec) |
+| `<leader>kl` | n | List tasks (the task board) |
+| `<leader>ks` | n | Show a task (state, spec summary, gate history) |
+| `<leader>kt` | n | Start a task (create its isolated worktree) |
+| `<leader>ka` | n | Abandon a task (remove worktree, branch, artifacts) |
 
 ### Git
 

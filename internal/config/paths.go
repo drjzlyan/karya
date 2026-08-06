@@ -140,14 +140,9 @@ func (p Paths) ToolsStateFile() string { return filepath.Join(p.State, "tools.st
 // WorktreesDir is the karya-owned root under which per-task git worktree
 // checkouts live (namespaced by project). Keeping task workspaces here — never in
 // the user's own tree — is what extends karya's isolation to the task level:
-// agent changes are contained on a `karya/<task-id>` branch checked out inside
+// agent changes are contained on a `task/<task-id>` branch checked out inside
 // the karya prefix until the human reviews and merges them.
 func (p Paths) WorktreesDir() string { return filepath.Join(p.State, "worktrees") }
-
-// TasksDir holds the per-project task stores (one JSON file per project) that
-// record each task's prompt, agent, status, branch, and worktree. Like every
-// piece of karya state it lives inside the karya prefix.
-func (p Paths) TasksDir() string { return filepath.Join(p.State, "tasks") }
 
 // ToolsBin is karya's private tool prefix; managed LSPs/formatters live here so
 // karya never mutates Homebrew or the user's global environment.
