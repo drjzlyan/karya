@@ -13,9 +13,9 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 2 — Embed Neovim (next). Phase 0 (design pivot docs) and
-Phase 1 (TUI walking skeleton) are shipped. Phase B (agent adapters) proceeds in
-parallel (headless, unaffected).
+**Active phase:** Phase 2 — Embed Neovim (core shipped; slim-config + bare-launch
+flip remain), then Phase 3 — panes/git/views. Phase 0 (docs) and Phase 1 (TUI
+skeleton) shipped. Phase B (agent adapters) proceeds in parallel (headless).
 **Architecture pivot (2026-08-06):** karya moves from an *orchestrator* (external
 tmux + standalone Neovim UI + lazygit, three keymaps) to a **single-process TUI**
 that owns the terminal and embeds Neovim as the editing engine over msgpack-RPC,
@@ -125,17 +125,31 @@ dashboard.
   restored in `internal/agentrun` (module builds, all tests pass).
 - Everything on `feat/single-process-tui-ide`; golangci-lint clean on new pkgs.
 
+### 2026-08-06 — Phase 2: embed Neovim (core)
+
+- `internal/nvimrpc/msgpack`: stdlib MessagePack codec (Marshal + streaming
+  Decoder) for the nvim RPC subset (incl. ext handles). Round-trip + fixture tests.
+- `internal/nvimrpc`: msgpack-RPC client over `nvim --embed` stdio — request/
+  response by msgid, notification dispatch, background reader, concurrent Call,
+  Notify, graceful shutdown; UI wrappers (UIAttach/TryResize/Input/Command/
+  SetOption). Pure `redraw` → `Grid` reducer (grid_line/scroll/clear/cursor,
+  hl_attr_define, default_colors_set, mode_change; wide runes, cell repeat).
+  Fake-peer unit tests (-race) + real-nvim integration (typing renders to Grid).
+- `internal/ide`: `editorPane` embeds Neovim (grid blit, key forwarding in nvim
+  notation, chrome-off, panic-safe redraw signaling); `karya tui <file>` opens a
+  file in the embedded editor. PTY smoke: opens a file, content renders through
+  RPC+Grid, quits on Ctrl+Space Q.
+
 ### Resume point (do this next)
 
-1. Phase 2 — Embed Neovim: `internal/nvimrpc` (spawn `nvim --embed`, minimal
-   stdlib msgpack codec, RPC, `nvim_ui_attach`, `redraw` → Grid → cellbuf, input
-   via `nvim_input`, resize). Slim `internal/assets/nvim` to options + LSP +
-   treesitter + completion (strip UI/keymap/which-key/terminal/task plugins).
-   Add an editor pane to `internal/layout`/`internal/ide`; `karya edit` opens it.
-   Tests: msgpack round-trip, Grid reducer snapshots from recorded batches,
-   fake-nvim input forwarding; `-tags=integration` real-nvim open-file + LSP smoke.
-2. Flip bare `karya`/`dev` to launch the TUI (currently `karya tui`) once the
-   editor pane lands.
+1. Finish Phase 2: slim `internal/assets/nvim` to an engine config (options +
+   LSP + treesitter + completion; strip which-key/UI/keymap/terminal/task
+   plugins) and load it via `NVIM_APPNAME` instead of `--clean`, so LSP/
+   treesitter work in the embed. Then flip bare `karya`/`dev` and `karya edit`
+   to the TUI editor (currently `karya tui`).
+2. Phase 3 — panes/git/views: `internal/git` + `internal/gitui` (git panel),
+   `internal/diffview`, `internal/taskview`/`gateview`/`reviewview` + `gate`;
+   agent CLIs as PTY panes bound to task worktrees; `karya review`/`gate`.
 3. In parallel (Phase B, headless): finish `internal/agentrun` adapters + `Caps`
    matrix + prompt assembly; `karya plan <id>` / `karya implement <id>`; adapter
    contract tests via a scripted fake-agent binary.

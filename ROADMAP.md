@@ -98,20 +98,27 @@ with working shell panes, all under one keymap. **Shipped 2026-08-06.**
 
 ---
 
-## Phase 2 — Embed Neovim as the editing engine
+## Phase 2 — Embed Neovim as the editing engine ◐
 **Goal:** real editing inside a karya pane via msgpack-RPC.
 
-- ☐ `internal/nvimrpc` — spawn `nvim --embed`, minimal stdlib msgpack codec,
-  RPC request/notify, `nvim_ui_attach`, `redraw` → `Grid` model → `cellbuf`,
-  input via `nvim_input`; resize via `nvim_ui_try_resize`
-- ☐ Slim `internal/assets/nvim` — options + LSP + treesitter + completion only;
-  remove which-key/UI/keymap/terminal/task plugins; set chrome-off options via RPC
-- ☐ Editor pane wired into `internal/layout`; `karya edit <file>` opens there
-- ☐ Tests: msgpack round-trip, `Grid` reducer snapshots from recorded batches,
-  fake-nvim input forwarding; `-tags=integration` real-nvim open-file + LSP smoke
+- ☑ `internal/nvimrpc/msgpack` — minimal stdlib msgpack codec (Marshal + streaming
+  Decoder) for the nvim RPC subset
+- ☑ `internal/nvimrpc` — spawn `nvim --embed`, RPC request/notify + reader,
+  `nvim_ui_attach`, `redraw` → `Grid` reducer → `cellbuf`, `nvim_input`,
+  `nvim_ui_try_resize`, chrome-off options
+- ☑ Editor pane wired into `internal/layout`/`internal/ide`; `karya tui <file>`
+  opens the file in the embedded editor
+- ☑ Tests: msgpack round-trip, `Grid` reducer snapshots from synthetic batches,
+  fake-peer client tests (-race); `-tags=integration` real-nvim (typing renders
+  to Grid) + PTY smoke (open file, quit)
+- ☐ Slim `internal/assets/nvim` to an engine config (options + LSP + treesitter +
+  completion; strip which-key/UI/keymap/terminal/task plugins) and load it under
+  `NVIM_APPNAME` instead of `--clean`, so LSP/treesitter work in the embed
+- ☐ Flip bare `karya`/`dev` and `karya edit` to the TUI editor
 
 **Done when:** editing (with LSP/treesitter) works inside the embedded editor
 pane, forwarded by karya's keymap, with no Neovim keymap/UI surface of its own.
+**Core embed shipped 2026-08-06; slim-config + bare-launch flip remain.**
 
 ---
 
