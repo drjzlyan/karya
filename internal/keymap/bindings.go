@@ -35,6 +35,9 @@ const (
 	ActionFocusEditor  ActionID = "focus.editor"
 	ActionFocusBuild   ActionID = "focus.build"
 
+	ActionFindFile ActionID = "find.file"
+	ActionSearch   ActionID = "search.project"
+
 	ActionTaskBoard ActionID = "task.board"
 	ActionTaskNew   ActionID = "task.new"
 	ActionTaskStart ActionID = "task.start"
@@ -125,6 +128,9 @@ func DefaultBindingsFor(leader term.Key) []Binding {
 		{Keys: lead('w'), Action: ActionPaneSwitcher, Desc: "Pane/window switcher", Group: gPanes},
 		{Keys: lead('e'), Action: ActionFocusEditor, Desc: "Focus editor", Group: gPanes},
 		{Keys: lead('b'), Action: ActionFocusBuild, Desc: "Build/test pane", Group: gPanes},
+		// Find & search (human IDE features)
+		{Keys: lead('f'), Action: ActionFindFile, Desc: "Find file", Group: gApp},
+		{Keys: lead('/'), Action: ActionSearch, Desc: "Search project", Group: gApp},
 		// Tabs
 		{Keys: lead('c'), Action: ActionTabNew, Desc: "New tab", Group: gTabs},
 		{Keys: lead('n'), Action: ActionTabNext, Desc: "Next tab", Group: gTabs},

@@ -12,6 +12,7 @@ import (
 
 	"github.com/drjzlyan/karya/internal/agent"
 	"github.com/drjzlyan/karya/internal/cellbuf"
+	"github.com/drjzlyan/karya/internal/finder"
 	"github.com/drjzlyan/karya/internal/gate"
 	"github.com/drjzlyan/karya/internal/gateview"
 	"github.com/drjzlyan/karya/internal/git"
@@ -73,6 +74,8 @@ type Model struct {
 	taskPaneID   layout.PaneID
 	reviewPaneID layout.PaneID
 	inboxPaneID  layout.PaneID
+	finderPaneID layout.PaneID
+	editorPaneID layout.PaneID
 }
 
 // shellReadMsg carries a chunk of a shell pane's output back into the loop.
@@ -110,6 +113,9 @@ func (m *Model) seedDefault() {
 // is separated from content creation so it is testable with fake panes.
 func (m *Model) seedLayout(editor, agent, build layout.PaneContent) {
 	editorID := m.tree.AddTab("dev", editor)
+	if _, ok := editor.(*editorPane); ok {
+		m.editorPaneID = editorID
+	}
 	m.adopt(editor)
 
 	m.tree.SplitFocused(layout.SplitH, agent) // editor | agent (focus agent)
@@ -166,7 +172,7 @@ func NewWithFile(dir, file string, cols, rows int) *Model {
 	if err != nil {
 		return New(dir, cols, rows) // fall back to a shell if nvim is unavailable
 	}
-	m.tree.AddTab("editor", ep)
+	m.editorPaneID = m.tree.AddTab("editor", ep)
 	m.adopt(ep)
 	m.syncPaneSizes()
 	return m
@@ -355,6 +361,18 @@ func (m *Model) forward(k term.Key) tui.Cmd {
 				return nil
 			}
 		}
+		// The file finder can request opening a file in the editor.
+		if fv, ok := p.(*finder.Finder); ok {
+			if path := fv.OpenRequest(); path != "" {
+				if m.finderPaneID != 0 && m.tree.FocusPane(m.finderPaneID) {
+					m.tree.CloseFocused()
+					m.finderPaneID = 0
+				}
+				cmd := m.openFile(path, 0)
+				m.syncPaneSizes()
+				return cmd
+			}
+		}
 		// The task board can request a review or an agent pane for a task.
 		if board, ok := p.(*taskview.Board); ok {
 			if rid := board.ReviewRequest(); rid != "" {
@@ -375,6 +393,8 @@ func (m *Model) forward(k term.Key) tui.Cmd {
 				m.reviewPaneID = 0
 			case m.inboxPaneID:
 				m.inboxPaneID = 0
+			case m.finderPaneID:
+				m.finderPaneID = 0
 			}
 			m.tree.CloseFocused()
 			m.syncPaneSizes()
@@ -477,6 +497,51 @@ func (m *Model) openReviewFor(id string) {
 	}
 	m.reviewPaneID = m.tree.AddTab("review", reviewview.New(rev, m))
 	m.syncPaneSizes()
+}
+
+// openFinder opens (or focuses) the fuzzy file finder.
+func (m *Model) openFinder() {
+	if m.finderPaneID != 0 && m.tree.FocusPane(m.finderPaneID) {
+		if _, ok := m.tree.FocusedContent().(*finder.Finder); ok {
+			return
+		}
+	}
+	m.finderPaneID = m.tree.AddTab("find", finder.New(finder.ListFiles(m.dir)))
+	m.syncPaneSizes()
+}
+
+// firstEditor returns the first live editor pane, or nil.
+func (m *Model) firstEditor() *editorPane {
+	for _, ep := range m.editors {
+		if !ep.dead {
+			return ep
+		}
+	}
+	return nil
+}
+
+// focusEditor moves focus to the editor pane, if one exists.
+func (m *Model) focusEditor() {
+	if m.editorPaneID != 0 {
+		m.tree.FocusPane(m.editorPaneID)
+	}
+}
+
+// openFile opens path (at line; 0 = no jump) in the editor pane, creating one if
+// none exists.
+func (m *Model) openFile(path string, line int) tui.Cmd {
+	if ep := m.firstEditor(); ep != nil {
+		m.focusEditor()
+		ep.OpenFile(path, line)
+		return nil
+	}
+	// No editor pane yet — open one on the file.
+	inner := m.treeRect()
+	ed := m.spawnEditor(path, inner.W-2, inner.H-2)
+	m.editorPaneID = m.tree.AddTab("editor", ed)
+	cmd := m.adopt(ed)
+	m.syncPaneSizes()
+	return cmd
 }
 
 // openInbox focuses the gate inbox if open, else opens it in a new tab.
@@ -610,6 +675,10 @@ func (m *Model) dispatch(a keymap.ActionID) tui.Cmd {
 		m.openReview()
 	case keymap.ActionAgentInbox:
 		m.openInbox()
+	case keymap.ActionFindFile:
+		m.openFinder()
+	case keymap.ActionFocusEditor:
+		m.focusEditor()
 	case keymap.ActionSendLeader:
 		m.forward(m.leader)
 	case keymap.ActionQuit:
@@ -782,6 +851,8 @@ func paneTitle(c layout.PaneContent) string {
 		return "review"
 	case *gateview.Inbox:
 		return "gates"
+	case *finder.Finder:
+		return "find"
 	case *placeholderPane:
 		return v.title
 	}

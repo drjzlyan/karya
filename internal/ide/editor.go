@@ -126,6 +126,18 @@ func (e *editorPane) write(k term.Key) {
 	}
 }
 
+// OpenFile opens path in the editor at the given line (1-based; 0 = don't jump).
+func (e *editorPane) OpenFile(path string, line int) {
+	if e.dead {
+		return
+	}
+	cmd := "edit "
+	if line > 0 {
+		cmd += fmt.Sprintf("+%d ", line)
+	}
+	_ = e.client.Command(cmd + escapeEx(path))
+}
+
 // reattachLSP re-fires the FileType autocmd so the engine config starts a
 // language server that has just become available on PATH (after a background
 // install). vim.lsp.start de-dups, so this is safe if a server already runs.
