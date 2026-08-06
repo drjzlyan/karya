@@ -5,19 +5,26 @@ will have installed karya, learned the core movements, managed coding agents, an
 edited, built, tested, debugged, and committed code in Python, Java, TypeScript,
 Go, C/C++, and Rust — all inside one terminal IDE.
 
-> **Status:** karya is under active development. The CLI + tmux session are
-> available now; the editor experience (LSP, debugging, per-language keymaps) is
-> delivered by karya's embedded Neovim config, extracted on `karya install`.
-> Sections describing editor features document the target behavior — some may
-> not yet be present in your installed build. Run `karya version` and
-> `karya doctor` to see what's available.
+> **Status:** karya is being rebuilt as a **single-process TUI IDE**: one program
+> that draws its own screen (window/pane manager, git panel, task/review views)
+> and embeds Neovim as the editing engine — all under **one leader key**,
+> `Ctrl-Space`. This changes the IDE surface described later in this page. The
+> authoritative, up-to-date key reference is [keymaps.md](keymaps.md); this
+> walkthrough's per-language editor lessons still describe the target editor
+> behavior and are being migrated to the new UI. The `karya task` workflow (specs,
+> worktrees, gates) is stable. Run `karya version` and `karya doctor` to see
+> what's available in your build.
 
 Conventions:
 
-- `<leader>` is the `Space` key.
+- **`<L>` is the leader — `Ctrl-Space`.** It drives every IDE action (panes,
+  tabs, git, tasks, gates), whatever pane has focus. There is no separate tmux
+  prefix or Neovim leader for IDE actions anymore — one grammar (see
+  [keymaps.md](keymaps.md)).
+- Inside the editor pane, normal Vim editing works; Neovim keeps its own `Space`
+  leader for editor-local text actions. Press `<Esc>` to return to Normal mode.
 - `n` / `i` / `v` after a key means Normal / Insert / Visual mode.
 - `:Foo` means type the command then press `Enter`.
-- The tmux prefix is `Ctrl-a`. Press `<Esc>` to return to Normal mode in Neovim.
 - **Now try it** boxes mean *you* type the command or press the keys — that's how
   this walkthrough teaches. Don't just read them.
 

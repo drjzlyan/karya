@@ -13,14 +13,21 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase B — Agent adapter layer (not started).
-**Phase A (task engine foundation) shipped** 2026-08-06: spec contracts, the
-gate state machine with `STATE.json` audit trail, `task/<id>` worktrees, the
-`karya task` CLI, and `karya init`.
+**Active phase:** Phase 0 — Design pivot (docs), then Phase 1 — TUI walking
+skeleton. Phase B (agent adapters) proceeds in parallel (headless, unaffected).
+**Architecture pivot (2026-08-06):** karya moves from an *orchestrator* (external
+tmux + standalone Neovim UI + lazygit, three keymaps) to a **single-process TUI**
+that owns the terminal and embeds Neovim as the editing engine over msgpack-RPC,
+under one unified keymap. Locked with the user: embed Neovim via RPC; stdlib-only.
+See [ADR 0001](docs/adr/0001-single-process-tui-embed-neovim.md).
+**Phase A (task engine foundation) shipped** 2026-08-06 (on `main` via #58): spec
+contracts, the gate state machine with `STATE.json` audit trail, `task/<id>`
+worktrees, the `karya task` CLI, and `karya init`. Reused unchanged by the pivot.
 **v0 (Phases 0–8) shipped** through v0.6.0: isolated tmux IDE session, embedded
 Neovim config, agent pane management, six-language scaffolding + toolchains,
-self-update, install/uninstall. That work is the foundation v1.0 builds on; its
-planning docs are archived in `archive/v0/`.
+self-update, install/uninstall. The isolation model + task engine are the
+foundation the pivot builds on; the tmux/nvim-UI/lazygit presentation layer is
+being replaced. v0 planning docs are archived in `archive/v0/`.
 
 **Already on main from the earlier 9–14 arc (superseded direction; code kept
 and adapted into the phases below):** pluggable `agent.Runner` (becomes Phase
@@ -77,13 +84,39 @@ dashboard.
 - **Drive-by fix:** `shell_test.go` unset `STARSHIP_CONFIG` so the plain-shell
   assertion is hermetic on machines where karya itself is installed.
 
+### 2026-08-06 — Architecture pivot: single-process TUI IDE
+
+- **Direction change (user-approved):** karya stops orchestrating tmux + a
+  standalone Neovim UI + lazygit (each with its own keymap) and becomes a
+  **single process** that draws its own screen: its own window/pane/tab manager,
+  git panel, task/gate/review views, and PTY-hosted shells/agents — with Neovim
+  **embedded as the editing engine** over msgpack-RPC (karya renders Neovim's
+  grid into its own cell buffer and owns all input). One leader (`Ctrl-Space`),
+  one keymap grammar for pane nav/resize/splits/tabs/git/tasks/gates.
+- **Two locked decisions:** (1) embed Neovim via `nvim --embed` RPC rather than
+  building an editor from scratch; (2) stdlib-only — build the cell buffer +
+  diff renderer, ANSI/terminfo terminal I/O, PTY host, and msgpack-RPC client
+  ourselves. No bubbletea, no pty/msgpack libraries.
+- **Docs (Phase 0) rewritten:** DESIGN.md (single-process runtime, unified keymap,
+  embedded-Neovim engine, new package map, removed packages, four-level TUI
+  testing), ROADMAP.md (new Phases 0–7; Phase B reframed as parallel/headless),
+  this PROGRESS.md, and (in progress) AGENTS.md + docs/keymaps.md + docs/tutorial.md
+  + ADR 0001.
+- **Branch:** work continues on `feat/single-process-tui-ide` (from `main`); a
+  single PR is raised when the phases complete. In-progress Phase B `agentrun`
+  work was carried over and preserved in a `wip` commit (does not yet build —
+  `defaultExec` seam pending).
+
 ### Resume point (do this next)
 
-1. Phase B: `internal/agentrun` — the `Agent` interface + `Caps` matrix
-   (DESIGN.md §5), reusing the 9–14 `agent.Runner` seam; transcripts into the
-   task dir.
-2. Adapters for the detected CLIs + generic shell adapter; plan-mode mapping
-   (native where available, prompt-scaffold emulation otherwise).
-3. `karya plan <id>` / `karya implement <id>` driving an agent headlessly in
-   the task worktree, capturing PLAN.md; adapter contract tests via a scripted
+1. Finish Phase 0 docs: AGENTS.md (single-process rules, drop tmux socket, keep
+   `NVIM_APPNAME`, stdlib-only), `docs/keymaps.md` (one unified `Ctrl-Space`
+   table), `docs/tutorial.md` (new UX), ADR 0001; `make sync-docs`; drift test.
+2. Phase 1 — TUI walking skeleton: `internal/term`, `internal/cellbuf`,
+   `internal/tui`, `internal/keymap`, `internal/layout`, `internal/pty` (+`vt`).
+   Bare `karya` launches the TUI with splits/focus/resize + a shell pane, all
+   under `Ctrl-Space`. TDD: decoder/diff/keymap/geometry tests + one PTY smoke.
+3. In parallel (Phase B, headless): complete `internal/agentrun` — the
+   `defaultExec` seam, adapters, `Caps` matrix, prompt assembly; `karya plan
+   <id>` / `karya implement <id>`; adapter contract tests via a scripted
    fake-agent binary.

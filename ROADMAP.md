@@ -1,92 +1,161 @@
 # karya — Roadmap to v1.0
 
-Phased build order for the human-in-the-loop agent IDE. Each phase is shippable
-and leaves the binary working. Full design: [DESIGN.md](DESIGN.md). Live
+Phased build order for the human-in-the-loop agent IDE. karya is a **single
+self-contained process** that owns the terminal (its own window/pane manager,
+git UI, and review surfaces) and embeds Neovim as the text-editing engine over
+msgpack-RPC — everything under one unified keymap. Each phase is shippable and
+leaves the binary working. Full design: [DESIGN.md](DESIGN.md). Founding
+decision: [ADR 0001](docs/adr/0001-single-process-tui-embed-neovim.md). Live
 status: [PROGRESS.md](PROGRESS.md). The v0 roadmap (Phases 0–8, shipped) is in
 [archive/v0/ROADMAP.md](archive/v0/ROADMAP.md).
 
 Legend: ☐ not started · ◐ in progress · ☑ done
 
+> **The pivot.** The task engine (Phase A, shipped) and the agent adapter layer
+> (Phase B, headless) are reused unchanged. What changed is the presentation
+> layer: instead of orchestrating an external tmux + a standalone Neovim UI +
+> lazygit — three tools with three keymaps — karya now draws its own screen.
+> Phases 1–3 build that single-process TUI; the workflow phases (verification,
+> marketplaces, hardening) follow.
+
 ---
 
-## Phase A — Task engine foundation
+## Phase A — Task engine foundation ☑
 **Goal:** the task is a real, persistent, isolated unit of work.
 
-- ☑ `internal/task` — task lifecycle, `STATE.json`, artifact store
-  (`.karya/tasks/<id>/`); reworks the 9–14-era prefix-based store
+- ☑ `internal/task` — lifecycle, `STATE.json`, artifact store (`.karya/tasks/<id>/`)
 - ☑ `internal/spec` — spec parse/validate/render (front-matter + Objective /
   Acceptance criteria / Context / Constraints / Verification)
 - ☑ `internal/worktree` — git worktree create/lock/teardown per task, branch
-  `task/<id>`, base-ref selection, dirty-tree safety; reworks the 9–14-era
-  `karya/<id>` manager
-- ☑ `karya task new|list|status|show|start|abandon` (CLI only; TUI in Phase C)
+  `task/<id>`, base-ref selection, dirty-tree safety
+- ☑ `karya task new|list|status|show|start|abandon`; `karya init`
 - ☑ Integration tests: real `git worktree` in `t.TempDir()` repos
-- ☑ `karya init` — scaffold `.karya/` + repo `AGENTS.md` by toolchain detection
 
-**Done when:** a task can be created from a spec, gets an isolated worktree,
-and its state survives restarts — with zero effect on the user's working tree.
+**Done:** a task is created from a spec, gets an isolated worktree, and its state
+survives restarts — with zero effect on the user's working tree.
 
 ---
 
-## Phase B — Agent adapter layer
-**Goal:** one interface drives every coding-agent CLI, headless-first.
+## Phase B — Agent adapter layer ◐
+**Goal:** one interface drives every coding-agent CLI, headless-first. Headless
+and unaffected by the UI pivot; proceeds in parallel with Phase 1+.
 
-- ☐ `internal/agentrun` — `Agent` interface, `Caps` matrix, transcripts to task dir
-- ☐ Adapters: claude, codex, crush, gemini, aider, copilot + generic shell adapter
+- ◐ `internal/agentrun` — `Agent` interface, `Caps` matrix, transcripts to task dir
+  (WIP carried over; complete the `defaultExec` seam + adapters)
+- ◐ Adapters: claude, codex, crush, gemini, aider, copilot + generic shell adapter
 - ☐ Plan-mode mapping: native where available, prompt-scaffold emulation otherwise
-- ☐ `internal/prompts` — step prompt assembly (spec + feedback + repo context)
+- ◐ `internal/prompts` — step prompt assembly (spec + feedback + repo context)
 - ☐ Adapter contract tests via scripted fake-agent binary; opt-in `-tags=e2e`
   real-CLI smoke suite
-- ☐ Fold v0 `internal/ship` into `agentrun`; pane switching stays in `internal/agent`
+- ☑ Fold v0 `internal/ship` into `agentrun` (rename done)
 
 **Done when:** `karya plan <id>` and `karya implement <id>` run any detected
 agent headlessly in the task worktree, capturing PLAN.md and transcripts.
 
 ---
 
-## Phase C — Gates, review UX, and the karya TUI
-**Goal:** mandatory human gates with a fast, modal, keyboard-first review flow.
+## Phase 0 — Design pivot (docs first) ◐
+**Goal:** the design of record describes the single-process TUI IDE before any
+runtime code is written.
 
-- ☐ `internal/gate` — gate model, approve/reject-with-feedback, delegation,
-  audit trail; state machine enforcement (DESIGN.md §2)
-- ☐ `internal/review` — plan / diff / verification-evidence rendering
-- ☐ `internal/tui` — TUI core (cell buffer, input parser, modal keymap engine,
-  which-key popups) with pure update/view split
-- ☐ Views: task board, review layout, gate inbox; Neovim-matching keymaps
-- ☐ `karya review <id>`, `karya gate list|approve|reject|delegate`
-- ☐ TUI tests: model unit tests, golden snapshots, PTY integration tests
-  (DESIGN.md §7.1)
-- ☐ tmux sidebar: live task/gate status inside `karya dev` sessions
+- ☑ Rewrite DESIGN.md: orchestrator → single process; embedded-Neovim engine;
+  unified keymap; new package map; removed packages; TUI testing strategy
+- ◐ Rewrite ROADMAP.md + PROGRESS.md for the new phases
+- ☐ Update AGENTS.md: single-process architecture; drop tmux socket, keep
+  `NVIM_APPNAME`; stdlib-only reaffirmed; where-things-live
+- ☐ Rewrite `docs/keymaps.md` (one unified leader table) + `docs/tutorial.md`
+- ☐ Add `docs/adr/0001-single-process-tui-embed-neovim.md`
+- ☐ `make sync-docs`; docs-drift test green
 
-**Done when:** the full loop spec → plan → gate → implement → gate runs with
-human approvals in the TUI, and every crossing is recorded.
+**Done when:** docs describe the target architecture and the drift test passes.
 
 ---
 
-## Phase D — Verification & merge
+## Phase 1 — TUI walking skeleton
+**Goal:** karya renders its own screen and routes input under one leader — no
+editor yet, but splittable, focusable, resizable panes with a live shell.
+
+- ☐ `internal/term` — raw mode (build-tagged darwin/linux termios), ANSI output,
+  terminfo-lite capability table, size/SIGWINCH, input `Decoder` (Key/Resize/
+  Mouse/Paste; CSI/SS3/UTF-8, lone-Esc timeout)
+- ☐ `internal/cellbuf` — styled cell grid, `Sub`/`Clone`, wide-rune width,
+  minimal `Diff` renderer
+- ☐ `internal/tui` — Elm-style `Model/Update/View`, `Program` loop, frame
+  coalescing, panic-safe restore
+- ☐ `internal/keymap` — unified engine: data-driven bindings, modal resolution,
+  which-key candidates (single leader `Ctrl-Space`)
+- ☐ `internal/layout` — tab/pane tree: splits, focus-by-adjacency, resize, rects
+- ☐ `internal/pty` (+ `pty/vt`) — PTY host + VT parser; one shell pane
+- ☐ Bare `karya` launches the TUI (not tmux)
+
+- ☐ Tests: decoder tables, cellbuf diff, keymap resolution, layout geometry
+  snapshots, one PTY smoke test (split + focus, screen-scrape)
+
+**Done when:** `karya` opens its own multi-pane TUI; `Ctrl-Space |/-` split,
+`Ctrl-Space h/j/k/l` focus, `Ctrl-Space H/J/K/L` resize, which-key discovery —
+with a working shell pane, all under one keymap.
+
+---
+
+## Phase 2 — Embed Neovim as the editing engine
+**Goal:** real editing inside a karya pane via msgpack-RPC.
+
+- ☐ `internal/nvimrpc` — spawn `nvim --embed`, minimal stdlib msgpack codec,
+  RPC request/notify, `nvim_ui_attach`, `redraw` → `Grid` model → `cellbuf`,
+  input via `nvim_input`; resize via `nvim_ui_try_resize`
+- ☐ Slim `internal/assets/nvim` — options + LSP + treesitter + completion only;
+  remove which-key/UI/keymap/terminal/task plugins; set chrome-off options via RPC
+- ☐ Editor pane wired into `internal/layout`; `karya edit <file>` opens there
+- ☐ Tests: msgpack round-trip, `Grid` reducer snapshots from recorded batches,
+  fake-nvim input forwarding; `-tags=integration` real-nvim open-file + LSP smoke
+
+**Done when:** editing (with LSP/treesitter) works inside the embedded editor
+pane, forwarded by karya's keymap, with no Neovim keymap/UI surface of its own.
+
+---
+
+## Phase 3 — Panes, git panel, and task/gate/review views
+**Goal:** the full IDE surface, every part under the one keymap.
+
+- ☐ `internal/git` (headless) + `internal/gitui` — status/stage/commit/branch/
+  diff/log/push (replaces lazygit)
+- ☐ `internal/diffview` — unified/side-by-side diff renderer (shared)
+- ☐ `internal/taskview` (task board), `internal/gateview` (gate inbox),
+  `internal/reviewview` + `internal/review` (review layout)
+- ☐ `internal/gate` — gate model, approve/reject-with-feedback, delegation, audit
+- ☐ Agent CLIs as PTY panes bound to task worktrees (replaces tmux pane switching)
+- ☐ `karya review <id>`, `karya gate list|approve|reject|delegate`
+- ☐ Tests: git service (fake `Runner` + real-git integration), view model tests,
+  layout snapshots, e2e (task → board → review → approve via keys)
+
+**Done when:** the full loop spec → plan → gate → implement → gate runs with
+human approvals in the TUI, git is a native panel, and every crossing is recorded.
+
+---
+
+## Phase 4 — Verification & merge
 **Goal:** karya certifies; agents never self-certify.
 
-- ☐ Executable `Verification` blocks: karya runs them in the task worktree,
-  records `VERIFY-<n>.md` evidence (exit codes + excerpts)
+- ☐ Executable `Verification` blocks run in the task worktree → `VERIFY-<n>.md`
 - ☐ `tdd: true` acceptance-test-first flow with failure-signature check
 - ☐ Cross-agent reviewer step (implementer ≠ reviewer) as pre-gate filter
 - ☐ Regression net: auto-detected per-language fast suite at the verify gate
 - ☐ `karya verify <id>` + `karya merge <id>` (merge or PR mode, post-gate only)
-- ☐ Performance benchmarks in CI with checked-in baselines (DESIGN.md §7.4)
+- ☐ Performance benchmarks in CI with checked-in baselines (DESIGN.md §8.4)
 
 **Done when:** a task reaches DONE only through verify-gate evidence, and merge
 lands on the user's terms (direct merge or PR).
 
 ---
 
-## Phase E — Skills marketplace
+## Phase 5 — Skills marketplace
 **Goal:** portable SKILL.md packages, installed once, visible to every agent.
 
 - ☐ `internal/skills` — registry client, hash-verified install into karya prefix
-- ☐ Default registry (git-backed index) + `karya skills registry add <url>`
-- ☐ Per-agent materialization (opt-in per agent CLI) + removal on uninstall
+- ☐ Default registry + `karya skills registry add <url>`
+- ☐ Per-agent materialization (opt-in) + removal on uninstall
 - ☐ Project-local `.karya/skills/` auto-visible to task agents
-- ☐ `karya skills search|install|remove|list` + TUI browser
+- ☐ `karya skills search|install|remove|list` + `internal/skillsview` TUI browser
 - ☐ `karya doctor` reports installed skills per agent
 
 **Done when:** a skill installs from the registry and is usable by every opted-in
@@ -94,7 +163,7 @@ agent in task runs, fully inside karya-owned paths.
 
 ---
 
-## Phase F — MCP marketplace
+## Phase 6 — MCP marketplace
 **Goal:** one MCP install → every agent's native config.
 
 - ☐ `internal/mcp` — registry client, runtime provisioning via isolated mise
@@ -102,24 +171,25 @@ agent in task runs, fully inside karya-owned paths.
 - ☐ Native config renderers: claude `.mcp.json`, crush `crush.json`, gemini
   `settings.json`, …; regenerate on agent add/remove
 - ☐ Permission scoping per project; secrets by env-var reference only
-- ☐ `karya mcp search|install|remove|list|sync` + TUI browser
+- ☐ `karya mcp search|install|remove|list|sync` + `internal/mcpview` TUI browser
 
-**Done when:** installing an MCP server makes it available to all detected
-agents without the user editing any agent config by hand.
+**Done when:** installing an MCP server makes it available to all detected agents
+without the user editing any agent config by hand.
 
 ---
 
-## Phase G — Hardening, sandbox, v1.0
+## Phase 7 — Hardening, sandbox, v1.0
 **Goal:** production-trustworthy HITL IDE.
 
 - ☐ `internal/sandbox` — seatbelt (macOS) / bubblewrap (Linux) confinement of
   agent processes to the task worktree
 - ☐ Registry signing verification (cosign) for skills + MCP
 - ☐ `karya task audit` — full gate/delegation history report
+- ☐ Perf benchmarks green against the budgets (DESIGN.md §8.4)
+- ☐ Remove every remaining tmux/lazygit reference; `doctor` checks nvim-embed + PTY
 - ☐ Dogfood: karya developed through karya tasks for one full cycle
-- ☐ Docs completion: tutorial chapter on the task workflow, keymaps, ADRs
-  (`docs/adr/`) for Phase A–F decisions
+- ☐ Docs completion: tutorial + keymaps + ADRs for all phases
 - ☐ Tag v1.0
 
-**Done when:** sandboxed task execution, signed marketplace content, audit
-trail, and docs that match behavior. Ship v1.0.
+**Done when:** sandboxed task execution, signed marketplace content, audit trail,
+and docs that match behavior. Ship v1.0.

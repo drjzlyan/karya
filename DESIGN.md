@@ -3,16 +3,22 @@
 > **karya** (कार्य — "work/task") is a **human-in-the-loop, agent-based IDE**
 > delivered as a single self-contained Go binary. Humans set intent and review
 > at explicit gates; coding agents plan, implement, and verify inside isolated
-> task environments. karya orchestrates Neovim, tmux, and every major coding
-> agent CLI behind one consistent workflow — **without touching any of the
-> user's existing settings**.
+> task environments. karya is **one process**: it owns the terminal — its own
+> window/pane manager, git UI, and task/review surfaces — and embeds Neovim as
+> the text-editing engine over msgpack-RPC. One consistent, keyboard-first
+> workflow under a single leader key — **without touching any of the user's
+> existing settings**.
 
-This document supersedes the v0 design (`archive/v0/PLAN.md`). v0 shipped the
-foundation: system-level isolation, embedded Neovim/tmux configs, agent
-detection/switching, language tooling, and self-update. v1.0 builds the
-**workflow layer** on top of that foundation — it is an evolution of the current
-codebase, not a rewrite. Track execution in [ROADMAP.md](ROADMAP.md) and
-[PROGRESS.md](PROGRESS.md); engineering rules in [AGENTS.md](AGENTS.md).
+This document supersedes the v0 design (`archive/v0/PLAN.md`) and the earlier
+orchestrator-era v1.0 design. v0 shipped system-level isolation, embedded
+Neovim/tmux configs, agent detection, language tooling, and self-update. v1.0
+keeps the **headless workflow engine** (tasks, specs, worktrees, agent adapters)
+and **replaces the presentation layer**: instead of orchestrating an external
+tmux + a standalone Neovim UI + lazygit — each with its own keymaps — karya is
+now a single-process TUI that owns everything the user sees. Track execution in
+[ROADMAP.md](ROADMAP.md) and [PROGRESS.md](PROGRESS.md); engineering rules in
+[AGENTS.md](AGENTS.md); the founding decision in
+[docs/adr/0001-single-process-tui-embed-neovim.md](docs/adr/0001-single-process-tui-embed-neovim.md).
 
 ---
 
@@ -21,9 +27,11 @@ codebase, not a rewrite. Track execution in [ROADMAP.md](ROADMAP.md) and
 Coding agents today are chat panes bolted onto editors. The human copy-pastes
 intent in, eyeballs a wall of diff, and hopes the tests that ran were the right
 ones. The loop is implicit, the artifacts (plan, diff, test evidence) are
-ephemeral, and every agent CLI speaks a different dialect.
+ephemeral, and every agent CLI speaks a different dialect. And the IDE itself is
+a bundle of separate tools — a multiplexer, an editor, a git UI — each with its
+own leader key and keymap grammar, so muscle memory never transfers.
 
-karya v1.0 makes the loop explicit and first-class:
+karya v1.0 makes the loop explicit and first-class, inside one coherent program:
 
 ```
 HUMAN                    karya                       AGENT
@@ -55,25 +63,33 @@ agent CLI can drive any step, through one adapter layer.
 3. **Agent-agnostic.** claude, codex, crush, gemini, aider, copilot, and future
    agents are interchangeable behind one adapter interface — including mixing
    agents across steps (plan with one, implement with another).
-4. **Isolation at two levels.** System-level (v0: never touch user dotfiles,
+4. **Isolation at two levels.** System-level (never touch user dotfiles,
    Homebrew, global mise) and task-level (git worktree + branch per task;
    agent changes are physically incapable of landing on your working tree
    until you merge them).
 5. **Artifacts over chat logs.** Specs, plans, diffs, and verification reports
    are Markdown/JSON files in the repo, diffable and greppable by humans *and*
    re-ingestible by agents.
-6. **Terminal-native and fast.** Everything is a TUI: Neovim is the editor
-   engine, tmux is the window manager, and karya's own surfaces (task board,
-   review layouts, gate inbox) are karya-native TUI views in tmux panes. No
-   Electron, no browser, no GUI. Startup and gate operations feel instant
+6. **One process owns the terminal.** karya is a single binary that draws its
+   own screen: its own window/pane/tab manager (no tmux), its own git panel (no
+   lazygit), its own task/gate/review views, and PTY-hosted shells and agent
+   CLIs. The editor is **Neovim embedded as a headless engine** over msgpack-RPC
+   — karya renders Neovim's grid into its own cell buffer. No Electron, no
+   browser, no external multiplexer. Startup and gate operations feel instant
    (§7.4 performance budget).
-7. **Modal and keyboard-first, inspired by Neovim.** karya's TUI views borrow
-   Neovim's grammar: modes (normal/leader/feedback-insert), a leader key,
-   which-key-style discoverability, and the *same* keymap scheme as the
-   embedded editor config — muscle memory transfers between editor and karya
-   views (§6.1).
-8. **Reuse, don't rewrite.** Neovim, tmux, git worktrees, and agent CLIs do the
-   heavy lifting; karya orchestrates. Single static binary, no CGO.
+7. **One leader, one keymap grammar.** karya intercepts every keystroke and
+   dispatches it through a single unified keymap engine: one leader key
+   (`Ctrl-Space`) drives pane focus/nav, resize, splits, tabs, git, tasks, and
+   gates — the *same* chords whether the focus is the editor, a shell, or an
+   agent pane. Which-key discovery is built in. Keys karya does not claim are
+   forwarded to the focused pane (into embedded Neovim, or a PTY). There is no
+   longer a separate tmux prefix, a separate Neovim leader, and a separate
+   lazygit keymap — there is one grammar (§6.1, §6.2).
+8. **Reuse the right amount, build the rest from scratch.** Neovim (as an
+   embedded engine), git, and agent CLIs do work that is genuinely hard to
+   redo — reuse them. Everything the user *interacts with* — windowing, the git
+   UI, keymaps, review surfaces — karya builds itself so it is consistent and
+   testable. Single static binary, **stdlib only**, no CGO (§6.3, AGENTS.md).
 
 ---
 
@@ -88,6 +104,7 @@ agent CLI can drive any step, through one adapter layer.
 | **Artifact** | Any reviewable output: plan, diff snapshot, verification report | `.karya/tasks/<id>/` |
 | **Gate** | A human (or delegated) approval point between states | recorded in `.karya/tasks/<id>/STATE.json` |
 | **Agent adapter** | Normalized driver for one agent CLI | `internal/agentrun/` |
+| **Pane** | A rectangle in the karya UI hosting the editor, a PTY (shell/agent), or a karya view | `internal/layout/` |
 | **Skill** | A portable capability package (`SKILL.md` + assets) for agents | installed under karya prefix |
 | **MCP server** | A tool/context server usable by agents | installed + configured by karya |
 
@@ -104,7 +121,7 @@ VERIFYING ──gate:verify──▶ MERGING ──▶ DONE
 - Rejection at any gate loops the task back to the agent **with the human's
   feedback appended to the task context** — the agent revises, the human
   re-reviews. This is the core HITL loop.
-- `karya task list` shows every task and its state; the tmux sidebar shows it
+- `karya task list` shows every task and its state; the task board view shows it
   live inside the IDE.
 
 ---
@@ -162,15 +179,19 @@ approves.
 
 ## 4. Task-level isolation
 
-System-level isolation (v0, unchanged): everything under karya-owned XDG dirs,
-`NVIM_APPNAME=karya/nvim`, dedicated tmux socket, opt-in shellenv, vendored
-mise. See `archive/v0/PLAN.md` §2 — it still governs.
+System-level isolation (unchanged in spirit): everything under karya-owned XDG
+dirs, `NVIM_APPNAME=karya/nvim`, opt-in shellenv, vendored mise. See
+`archive/v0/PLAN.md` §2 — it still governs, **with one change from the pivot**:
+karya no longer runs a dedicated tmux server. It hosts shells and agent CLIs in
+its own PTY panes (`internal/pty`), each spawned through the `karya shell`
+wrapper so the isolated environment and prompt are preserved without touching the
+user's rc files.
 
-Task-level isolation (new in v1.0):
+Task-level isolation (v1.0):
 
 - **One git worktree per task.** `karya task start` creates
   `git worktree add <karya-prefix>/worktrees/<project>/<id> -b task/<id>`.
-  The agent's tmux pane(s) and any headless runs are locked to that worktree
+  The agent's PTY pane(s) and any headless runs are locked to that worktree
   (cwd + `GIT_DIR`/`GIT_WORK_TREE` set). The user's working tree is never the
   agent's working tree.
 - **Agents cannot merge.** Only the verify gate crossing runs `git merge` (or
@@ -209,8 +230,8 @@ type Agent interface {
   unsupported agents still work in degraded mode.
 - **Headless-first.** Adapters drive agents non-interactively
   (`claude -p`, `codex exec`, `crush run`, …) with transcripts captured to the
-  task dir. Interactive pane sessions remain available (v0 behavior) and are
-  attached to the same task.
+  task dir. Interactive sessions remain available and run in a karya PTY pane
+  bound to the same task worktree.
 - **Capability matrix, not lowest common denominator.** An agent without a plan
   mode gets plan emulation (prompt scaffold + "output PLAN.md only"). karya
   surfaces capability gaps instead of hiding them.
@@ -222,62 +243,151 @@ type Agent interface {
 
 ---
 
-## 6. Human review UX
+## 6. The karya program: one process, one UI, one keymap
+
+karya renders its own screen and owns every keystroke. This section defines the
+runtime, the unified keymap, and how Neovim is embedded as the editing engine.
+
+### 6.1 The single-process TUI runtime
+
+karya is a single Go program built on a small, stdlib-only TUI stack. Layers,
+bottom-up, each depending only on the layers below and unit-testable in
+isolation:
+
+```
+internal/term      raw-mode terminal I/O: termios enter/exit, ANSI output,
+                   terminfo-lite capability table (keyed on $TERM + truecolor
+                   probe), SIGWINCH/size, and an input Decoder ([]byte → Event:
+                   Key/Resize/Mouse/Paste; CSI/SS3/UTF-8, lone-Esc timeout)
+internal/cellbuf   the screen model: a grid of styled Cells; Set/SetString/Fill/
+                   Sub(rect)/Clone; wide-rune width; Diff(prev,next) → minimal
+                   cursor-move+write spans. Pure in-memory; the snapshot substrate
+internal/tui       the Elm-style runtime: Model{Init/Update/View}, Msg, Cmd; the
+                   Program loop (read events → Update → render View to a cellbuf →
+                   Diff → flush), frame coalescing (~16 ms), panic-safe restore
+internal/pty       PTY host: spawn a child on a pty, resize, reap; sub-package
+                   pty/vt is a minimal VT parser ([]byte → screen) so shell/agent
+                   panes blit into a cellbuf
+internal/nvimrpc   spawn `nvim --embed`, msgpack-RPC over stdio, nvim_ui_attach,
+                   reduce redraw events into a Grid model → cellbuf, forward input
+                   via nvim_input; includes a minimal stdlib msgpack codec
+internal/keymap    the ONE keymap engine: data-driven bindings, modal resolution
+                   (Passthrough/Leader/Command/Search), which-key candidates
+internal/layout    window/pane/tab tree: splits, focus-by-adjacency, resize, rect
+                   computation; PaneContent = editor | terminal | karya view
+internal/gitui     the built-in git panel (replaces lazygit) over internal/git
+internal/taskview  task board · internal/reviewview + internal/review · gate inbox
+internal/diffview  shared unified/side-by-side diff renderer
+```
+
+The **update/view split is the load-bearing testing decision**: every UI
+component is a `tui.Model` whose `Update(Msg) (Model, Cmd)` is a pure state
+transition and whose `View(*cellbuf.Buffer)` is a pure render. All side effects
+are `Cmd`s executed off the render path. UI holds no workflow logic — that lives
+in the headless packages below it (§7.2).
+
+### 6.2 The unified keymap (single leader, consistent everywhere)
+
+**Leader: `Ctrl-Space`.** It leads uniformly regardless of what has focus —
+editor, shell, or agent CLI — which `Space` alone cannot do when a PTY holds
+focus. Neovim keeps its *internal* `Space` leader for editor-local text actions,
+but every **IDE-level** action is a `Ctrl-Space` chord intercepted by karya
+before Neovim ever sees it.
+
+**Modes** (always shown in the status line): `Passthrough` (keys flow to the
+focused pane; only the leader and a tiny always-on set are intercepted) →
+`Leader` (entered by `Ctrl-Space`; a which-key popup lists continuations after a
+short delay; `Esc` cancels) → `Command`/`Search` for karya views.
+
+The one binding table (`<L>` = `Ctrl-Space`), replacing the former three layers
+(tmux prefix, Neovim leader, lazygit):
+
+| Chord | Action | | Chord | Action |
+|---|---|---|---|---|
+| `<L> h/j/k/l` | Focus pane left/down/up/right | | `<L> 1`–`9` | Go to tab N |
+| `<L> H/J/K/L` | Resize focused pane (repeatable) | | `<L> n` / `<L> p` | Next / previous tab |
+| `<L> \|` / `<L> -` | Split right / split down | | `<L> c` | New tab |
+| `<L> =` | Equalize splits | | `<L> w` | Pane/window switcher |
+| `<L> x` | Close focused pane (confirm) | | `<L> t t/n/s` | Task board / new / start |
+| `<L> z` | Zoom / unzoom pane | | `<L> g g/c/p` | Git panel / commit / push |
+| `<L> e` | Focus editor | | `<L> r` | Review pending gate |
+| `<L> b` | Build/test pane; run last | | `<L> a` | Agent inbox / delegate gate |
+| `<L> ?` | Full keymap reference | | `<L> Q` | Quit karya (confirm) |
+| `Ctrl-Space Ctrl-Space` | Send a literal `Ctrl-Space` to the focused pane | | | |
+
+**Input routing (the crux — karya owns all input).** The `Program` loop hands
+every key to `keymap.Engine.Feed(key, Context{Focus, Mode})`:
+
+- full match → dispatch the karya `Action` (handled by `layout`/`gitui`/
+  `taskview`/…);
+- partial match → `Pending` (arm the which-key popup);
+- otherwise → `Forward` to the focused pane: the editor pane forwards to
+  `nvimrpc.Client.Input(encodeKey(k))`; a terminal/agent pane writes the raw key
+  bytes to its PTY master.
+
+Because the leader is intercepted before forwarding, Neovim only ever receives
+unclaimed (text-editing) keys — there is no competing keymap surface. One
+reference documents the whole thing: [docs/keymaps.md](docs/keymaps.md).
+
+### 6.3 Neovim embedded as the editing engine
+
+karya spawns `nvim --embed` with `NVIM_APPNAME=karya/nvim` (isolation preserved)
+and a **slim, UI-less config**, connects a `nvimrpc.Client` to its stdio, and
+calls `nvim_ui_attach(cols, rows, {ext_linegrid=true, rgb=true})` sized to the
+editor pane (single global grid to start; `ext_multigrid` deferred until karya
+needs to place Neovim windows/floats as independent panes). `redraw`
+notifications are reduced into a `Grid` model and blitted into the editor pane's
+sub-buffer; the grid cursor is drawn only when the editor pane is focused.
+Resizing a pane calls `nvim_ui_try_resize`.
+
+LSP, treesitter, and completion still work — they are Neovim-internal; karya
+owns only the UI surface and top-level input, not editing. What remains of
+`internal/assets/nvim` is a slim config:
+
+- **Keep:** `core/options.lua`, LSP setup, treesitter, completion, per-language
+  servers/tooling, and optional buffer-local `Space` maps for pure text actions.
+- **Remove:** everything that is UI or IDE-level keymaps — which-key,
+  window/split/leader maps, statusline/tabline/UI plugins, terminal/session/task
+  plugins, gitsigns-as-UI, the in-editor tutorial. karya draws all chrome and
+  owns all IDE actions.
+- **Set at runtime via RPC:** `laststatus=0`, disable Neovim's tabline/
+  statusline, `mouse`, `cmdheight` — since karya renders the chrome.
+
+The editor stays Neovim (reuse, don't rewrite). Everything *around* it — the
+window manager, git UI, keymaps, and review surfaces — is karya's own, so the IDE
+is consistent and testable end to end.
+
+---
+
+## 7. Human review UX
 
 Reviewing must be faster than doing the work by hand, or HITL collapses. The
-review surface lives in the tmux IDE (Neovim) and the CLI:
+review surface is a native karya view (`internal/reviewview`), rendered in a pane
+like everything else:
 
-- **`karya review <task>`** opens the review layout: spec on the left, the
-  artifact under review (plan / diff / verification report) on the right,
-  feedback buffer below. Keys: `approve` / `reject-with-feedback` / `edit
+- **`karya review <task>`** (or `<L> r`) opens the review layout: spec on the
+  left, the artifact under review (plan / diff / verification report) on the
+  right, feedback buffer below. Keys: `approve` / `reject-with-feedback` / `edit
   artifact` / `delegate to agent`.
-- **Plan review:** rendered `PLAN.md` with step list; human can edit the plan
-  directly (agent treats human edits as binding) or reject with feedback.
-- **Diff review:** `git diff base...task/<id>` in delta with per-hunk context
-  back to acceptance criteria; `karya review --stat` for a quick gate summary
-  (files changed, criteria touched, test delta).
+- **Plan review:** rendered `PLAN.md` with step list; the human can open the plan
+  in the embedded editor (agent treats human edits as binding) or reject with
+  feedback.
+- **Diff review:** `git diff base...task/<id>` rendered by `internal/diffview`,
+  with per-hunk context back to acceptance criteria; `karya review --stat` for a
+  quick gate summary (files changed, criteria touched, test delta).
 - **Verification review:** the evidence report — which verification commands
   ran, exit codes, failing output excerpts, coverage delta where available —
   not a raw terminal scrollback.
-- **Gate inbox:** `karya gate list` (and the tmux status segment) shows tasks
+- **Gate inbox:** `karya gate list` (and the status bar segment) shows tasks
   waiting on the human, so multi-task parallelism doesn't bury approvals.
 - **Delegation with a paper trail:** any gate can be delegated
   (`karya gate delegate <task> --to gemini`); `STATE.json` records that the
   approval was agent-made, and `karya task audit` shows delegated vs human
   crossings.
 
-### 6.1 The karya TUI: modal, keyboard-first, Neovim-inspired
-
-karya's own surfaces — the task board, review layout, gate inbox, marketplace
-browsers — are **native TUI programs** (`internal/tui/`), rendered in tmux
-panes and fully operable from the keyboard. They adopt the interaction grammar
-of the embedded Neovim config so the whole IDE feels like one program:
-
-- **Modes, not menus.** Views have a normal mode (navigation/actions), a leader
-  layer (`<Space>` …, matching the editor's leader), and an insert/feedback
-  mode for typing rejection feedback or spec edits. `Esc` always returns to
-  normal. No modal trap states; the mode is always visible in the status line.
-- **The same keymap scheme as the editor.** Pane/window movement uses the same
-  keys as the tmux+nvim config; which-key-style popup discovery (press leader,
-  wait, see options) is built into the TUI, mirroring the editor's which-key.
-  One keymap reference (`docs/keymaps.md`) documents editor, tmux, and TUI.
-- **Vim motions where they fit.** `j/k/g/G//`/`n`/`q` in lists and readers;
-  `dd`-style verbs in the task board (e.g. abandon) with confirm.
-- **Mouse optional, never required.**
-- **Technique:** a small, stdlib-flavored TUI core over raw ANSI/terminfo,
-  kept dependency-free per the locked zero-external-deps rule (a thin internal
-  cell-buffer + input-parser; the v0 codebase already shells out to tmux for
-  all windowing, so the TUI core only handles its own pane). If this proves
-  limiting, adopting a single well-vetted TUI library is a locked-decision
-  change requiring an ADR — it is not made casually.
-
-The editor itself stays Neovim (reuse, don't rewrite). The TUI covers only
-what Neovim/tmux don't already do well: task state, gates, diffs-as-artifacts,
-marketplaces.
-
 ---
 
-## 7. Verification & testing strategy
+## 8. Verification & testing strategy
 
 Two layers: how karya tests *tasks*, and how karya tests *itself*.
 
@@ -297,74 +407,83 @@ Two layers: how karya tests *tasks*, and how karya tests *itself*.
 
 ### karya self-testing (the repo's own discipline)
 
-Unchanged from v0 engineering rules (see AGENTS.md): hermetic unit tests,
-`//go:build integration` tests on throwaway tmux sockets/nvim instances, race
-detector, `make gate` before every PR. New in v1.0:
+Hermetic unit tests, `//go:build integration` tests, race detector, `make gate`
+before every PR. Specific to the single-process architecture:
 
 - **Worktree/task engine integration tests** drive real `git worktree` in
   `t.TempDir()` repos.
 - **Adapter contract tests:** a fake-agent binary (scripted stdin/stdout) runs
   the full `Agent` interface against every adapter's prompt/parsing logic; real
-  CLI smoke tests run only in an opt-in `-tags=e2e` suite (needs the actual
-  agent installed, skipped by default, run in CI on a schedule).
+  CLI smoke tests run only in an opt-in `-tags=e2e` suite.
 
-### 7.1 Testing the TUI (the IDE's own UI is tested like a backend)
+### 8.1 Testing the TUI (the IDE's own UI is tested like a backend)
 
-A UI that isn't tested rots. karya's TUI is tested at four levels:
+Every UI component is a `tui.Model` (§6.1). karya's TUI is tested at four levels:
 
-1. **Model unit tests (pure).** The TUI follows an update/view split (model in,
-  render out — Elm-style, no framework). State transitions are pure functions:
-  feed key events as data, assert model + emitted commands. No terminal needed.
-  This is where modal/leader/which-key behavior gets exhaustive table-driven
-  coverage.
-2. **Snapshot tests (render).** Views render to an in-memory cell buffer;
-  golden-file snapshots pin layout, status lines, and which-key popups. Golden
-  updates are an explicit `go test -update` action reviewed in the diff.
-3. **PTY integration tests.** The real TUI binary runs on a pseudo-terminal;
-  scripted keystrokes go in, screen contents are scraped and asserted
-  (teatest-style, hand-rolled to stay dependency-free). Catches what pure model
-  tests can't: ANSI parsing, resize, focus loss, tmux pane interactions.
+1. **Model unit tests (pure).** Feed `Msg`s (`term.KeyEvent`, custom messages,
+   `Cmd` results) to `Update`; assert the resulting model + emitted `Cmd`. This
+   is where modal/leader/which-key resolution, focus/resize math, git-panel and
+   task-board logic get exhaustive table-driven coverage. No terminal.
+2. **Snapshot tests (render).** `View` renders into a `cellbuf.Buffer`; golden
+   snapshots pin layouts, status lines, which-key popups, diff rendering, and the
+   embedded-Neovim grid blit (from recorded redraw batches). `go test -update`
+   regenerates goldens, reviewed in the diff.
+3. **PTY integration tests** (`-tags=integration`). The real `karya` binary runs
+   on a pseudo-terminal; scripted keystrokes go in, screen contents are scraped
+   and asserted. Catches ANSI parsing, resize, and focus behavior.
 4. **End-to-end IDE tests** (`-tags=e2e`): full `karya` session in a
-  `t.TempDir()` HOME — task created, fake agent plans/implements, gates
-  crossed via scripted keystrokes, merge lands. The whole HITL loop, no human,
-  no network, no real agent.
+   `t.TempDir()` HOME — task created, fake agent plans/implements, gates crossed
+   via scripted keystrokes, merge lands. The whole HITL loop, no human, no
+   network, no real agent.
 
-### 7.2 Testing the orchestration backend
+**Seams / fakes.** Every impure boundary is an interface with a fake:
 
-Task engine, gates, worktrees, adapters, marketplaces are headless Go packages
-and are tested headlessly (§7 intro). The TUI is a *client* of these packages —
-all workflow logic lives below the UI, so UI tests stay thin and backend tests
-carry the semantic weight. If a behavior can only be tested through the TUI,
-the architecture is wrong: push it down.
+- **fake nvim** — a scripted RPC peer that replays canned `redraw` batches for
+  given inputs, so `nvimrpc.Grid` rendering and input forwarding are tested with
+  no real Neovim. Real Neovim runs behind `-tags=integration`.
+- **fake PTY** — an in-memory pipe pair implementing the `pty` interface, so
+  terminal-pane models and the `vt` parser test without spawning processes.
+- **fake agents** — the existing `agentrun.Runner` fake pattern.
+- **fake terminal** — `term.Output` targets a `bytes.Buffer` for byte-exact
+  assertions; raw mode is behind an interface (never touches a real fd in tests).
 
-### 7.3 Editor/testing infrastructure (v0, kept)
+### 8.2 Testing the orchestration backend
 
-The embedded Neovim config keeps its existing guarantees: the headless keymap
-guardrail (`internal/assets/keymaps_integration_test.go`), tutorial guard, and
-docs drift test. New TUI views that embed nvim (e.g. diff review) reuse the
-headless-nvim harness.
+Task engine, gates, worktrees, adapters, git service, and marketplaces are
+headless Go packages tested headlessly. The TUI is a *client* of these — all
+workflow logic lives below the UI, so UI tests stay thin and backend tests carry
+the semantic weight. If a behavior can only be tested through the TUI, the
+architecture is wrong: push it down.
 
-### 7.4 Performance budget (tested, not aspirational)
+### 8.3 Editor-engine testing
+
+The slim embedded Neovim config keeps a headless smoke test (drive `nvim
+--embed` over RPC, open a buffer, confirm LSP attaches) plus the docs drift test.
+Grid-rendering fidelity is covered by `nvimrpc` snapshot tests against recorded
+redraw batches, and a real-Neovim integration test that opens a buffer and
+compares the rendered screen.
+
+### 8.4 Performance budget (tested, not aspirational)
 
 A terminal IDE must feel instant. Budgets enforced by benchmarks in CI
 (`go test -bench`, compared against checked-in baselines; regressions fail):
 
 | Operation | Budget |
 |---|---|
-| `karya` cold start to attached session | < 500 ms (warm tmux server) |
+| `karya` cold start to first frame | < 300 ms |
 | Any CLI command that doesn't touch the network | < 100 ms to first output |
-| TUI keypress → rendered frame | < 16 ms (60 fps) on a 2019 laptop |
+| Keypress → rendered frame | < 16 ms (60 fps) on a 2019 laptop |
 | Gate list / task board over 500 tasks | < 100 ms |
 | `karya review` open (diff ≤ 5k lines) | < 300 ms |
 
 Rules that protect the budget: no network on any render path (marketplace data
-is cached and refreshed in background), no shelling out per keystroke, TUI
-renders dirty cells only, and agent I/O is always async (the UI never blocks on
-an agent).
+is cached and refreshed in background), no shelling out per keystroke, the
+renderer diffs dirty cells only and reuses buffers (no per-cell allocation in the
+hot path), and agent/PTY/nvim I/O is always async (the UI never blocks).
 
 ---
 
-## 8. Skills marketplace
+## 9. Skills marketplace
 
 A **skill** is a portable capability package: a `SKILL.md` (name, description —
 which is the trigger — plus procedure) plus optional `scripts/`,
@@ -388,7 +507,7 @@ already converged on; karya treats it as the common currency.
   listing, registries can be signature-verified (cosign, later), and `doctor`
   reports installed skills per agent.
 
-## 9. MCP marketplace
+## 10. MCP marketplace
 
 Same shape, for MCP servers:
 
@@ -407,7 +526,7 @@ Same shape, for MCP servers:
 
 ---
 
-## 10. Documentation system (for humans *and* agents)
+## 11. Documentation system (for humans *and* agents)
 
 Docs are tooling, not prose. v1.0 formalizes three audiences, three paths:
 
@@ -426,48 +545,64 @@ Rules:
 - **Specs and plans are docs.** They follow the Markdown contract of §3 so both
   audiences parse them; `STATE.json` is the machine-readable shadow.
 - **Decision records:** significant design choices land as short ADRs in
-  `docs/adr/` (contributor-audience), linked from DESIGN.md — replacing the v0
-  pattern of burying decisions in PROGRESS.md.
+  `docs/adr/` (contributor-audience), linked from DESIGN.md. ADR 0001 records
+  the single-process / embed-Neovim pivot.
 - **Living sync rule (unchanged):** behavior changes update `docs/` + DESIGN.md
   in the same PR; `docs/tutorial.md` must always match reality.
 
 ---
 
-## 11. Architecture & package map
-
-New/changed packages (v0 packages unchanged unless noted):
+## 12. Architecture & package map
 
 ```
+── Headless workflow engine (reused across the pivot) ──
 internal/task/        task lifecycle, state machine, STATE.json, artifacts
 internal/spec/        spec parse/validate/render; acceptance-criteria execution
 internal/worktree/    git worktree create/lock/teardown per task
 internal/gate/        gate model, approvals, delegation, audit log
-internal/review/      review sessions: plan/diff/evidence rendering + feedback
+internal/review/      review sessions: plan/diff/evidence assembly + feedback
+internal/git/         headless git service (status/stage/commit/diff/log/push)
 internal/agentrun/    Agent interface + claude/codex/crush/gemini/aider/copilot
-                      adapters + generic shell adapter (supersedes v0's
-                      detect-only internal/agent for task work; pane-level
-                      switching stays in internal/agent)
+                      adapters + generic shell adapter; Runner/Git exec seam
 internal/prompts/     step prompt assembly from spec + feedback + context
 internal/skills/      skill registry client, install, per-agent materialization
 internal/mcp/         MCP registry client, install, per-agent config render
-internal/tui/         karya-native TUI core (cell buffer, input parser, modal
-                      keymap engine) + views: task board, review layout, gate
-                      inbox, marketplace browsers. Pure update/view split so
-                      models are unit-testable without a terminal (§7.1)
+internal/config/      XDG paths + karya prefix (isolation); NVIM_APPNAME
+internal/tools/        tool detect/install + mise bootstrap
+internal/agent/        agent detection (pane-level switching handled in-process)
 internal/sandbox/     (later) OS sandbox interface for agent processes
-internal/agent/       v0 pane management (kept); gains task awareness
-internal/ship/        v0 headless runner (folded into agentrun as adapters land)
+
+── Single-process TUI runtime (new; replaces tmux + nvim-UI + lazygit) ──
+internal/term/        raw-mode terminal I/O, ANSI, terminfo-lite, input decoder
+internal/cellbuf/     styled cell grid + minimal diff renderer (snapshot target)
+internal/tui/         Elm-style Model/Update/View runtime + Program loop
+internal/pty/         PTY host + pty/vt terminal emulator for shell/agent panes
+internal/nvimrpc/     nvim --embed msgpack-RPC client + Grid model + msgpack codec
+internal/keymap/      unified keymap engine (single leader, modal, which-key)
+internal/layout/      window/pane/tab tree: splits, focus, resize, geometry
+internal/gitui/       built-in git panel (replaces lazygit)
+internal/taskview/    task board view      internal/gateview/  gate inbox view
+internal/reviewview/  review layout view   internal/diffview/  diff renderer
 ```
 
-Control flow: `karya task start` → `worktree` + `task` records → `agentrun`
-(drive steps) → artifacts land in the task dir → `gate` blocks transitions →
-`review` renders artifacts → human approves → `verify` runs spec verification →
-merge/ship. The tmux session (v0 `session`) becomes the host UI: a task sidebar
-window, review layouts, and agent panes bound to task worktrees.
+**Removed by the pivot:** `internal/tmuxx/` (tmux wrapper), `internal/session/`
+(tmux layout), `internal/editor/` (send-keys routing + headless plugin sync),
+`internal/assets/tmux.conf`, and the UI/keymap subtree of `internal/assets/nvim/`
+(the config slims to options + LSP). The lazygit window binding is gone.
 
-## 12. Command surface (v1.0 additions)
+Control flow: `karya` launches the `tui.Program`, which builds a `layout` tree
+of panes (editor via `nvimrpc`, shells/agents via `pty`, karya views), routes
+input through `keymap`, and renders through `cellbuf` + `term`. `karya task
+start` → `worktree` + `task` records → `agentrun` drives steps → artifacts land
+in the task dir → `gate` blocks transitions → `reviewview` renders artifacts →
+human approves → `verify` runs spec verification → merge/ship. Agent panes are
+PTYs bound to task worktrees.
+
+## 13. Command surface
 
 ```
+karya                            Launch the single-process TUI IDE for the cwd
+karya edit <file> [line]         Open a file in the embedded editor (also $EDITOR)
 karya task new <slug>            Scaffold a task spec; open in editor
 karya task refine <id>           Agent-assisted spec sharpening (human approves)
 karya task start <id>            Create worktree+branch, run plan step
@@ -483,15 +618,10 @@ karya skills search|install|remove|list|registry   Skills marketplace
 karya mcp search|install|remove|list|sync          MCP marketplace
 karya init                       Scaffold .karya/ + repo AGENTS.md in a project
 karya task audit <id>            Gate history: who/what approved what, when
+karya lang|install|update|uninstall|doctor|shellenv|help|docs|tutorial|version
 ```
 
-All v0 commands (`dev`, `agent`, `edit`, `run`, `new`, `lang`, `install`,
-`update`, `uninstall`, `doctor`, `shellenv`, …) are unchanged in behavior;
-`agent` and `dev` gain task awareness.
-
----
-
-## 13. Security & trust model
+## 14. Security & trust model
 
 - Agents never receive credentials from karya; env passthrough is explicit.
 - Marketplace content is prompt-bearing code: hash-verified at install,
@@ -502,25 +632,34 @@ All v0 commands (`dev`, `agent`, `edit`, `run`, `new`, `lang`, `install`,
   visible: you can always answer "who approved this line of code?"
 - Everything karya installs or generates remains under karya-owned paths;
   `karya uninstall` removes karya, its marketplaces' content, task worktrees,
-  and nothing else (v0 guarantee, extended).
+  and nothing else.
 
-## 14. Migration from v0
+## 15. Migration from the orchestrator design
 
-- **Kept as-is:** isolation model, embedded assets pipeline, tmux orchestration,
-  editor config, language tooling, self-update, install/uninstall, doctor.
-- **Extended:** `internal/agent` (pane mgmt) gains task binding; `internal/ship`
-  folds into `agentrun`; prefs store gains gate/delegation preferences.
-- **Replaced:** v0's "chat pane is the workflow" model. Panes remain, but the
-  task engine is the workflow.
-- **No breaking CLI changes** before v1.0; new commands are additive.
+- **Kept as-is:** system isolation model, embedded assets pipeline, the task
+  engine (`task`/`spec`/`worktree`), the agent adapter layer (`agentrun`),
+  language tooling, self-update, install/uninstall, doctor (with updated checks).
+- **Replaced:** the presentation/orchestration layer. tmux (windowing),
+  standalone Neovim UI, and lazygit are gone; karya draws its own screen, embeds
+  Neovim as an engine, and ships one keymap. `internal/tmuxx`, `internal/session`,
+  and `internal/editor` are removed; `internal/assets/nvim` slims to an engine
+  config.
+- **New:** the `term`/`cellbuf`/`tui`/`pty`/`nvimrpc`/`keymap`/`layout`/`gitui`
+  stack and the karya-native views.
+- The transition is phased (ROADMAP.md): docs first, then a walking-skeleton TUI,
+  then the editor embed, then panes/git/views — the binary stays launchable at
+  every phase and the headless engine never regresses.
 
-## 15. Open questions (resolve in early phases)
+## 16. Open questions (resolve in early phases)
 
 1. Cross-machine task resume: are task dirs syncable/committable (`.karya/`
    committed vs gitignored-by-default with opt-in commit)? Default: gitignored
    except `SPEC.md` (committed, it's the contract).
-2. Multi-agent parallel implementation on one task (competing diffs) — v1.1+.
-3. Registry hosting: central git repo vs OCI artifacts — decide in Phase E
-   based on signing/tooling cost.
-4. Sandbox ordering: ship worktree-only isolation first; seatbelt/bubblewrap in
+2. `ext_multigrid` vs single-grid: start single-grid; adopt multigrid only when
+   karya needs Neovim windows/floats as independent karya panes.
+3. Rendering Neovim's cmdline/messages/popupmenu natively (`ext_cmdline` etc.)
+   vs letting Neovim draw them on the global grid — defer the `ext_*` split.
+4. Registry hosting: central git repo vs OCI artifacts — decide in the skills
+   phase based on signing/tooling cost.
+5. Sandbox ordering: ship worktree-only isolation first; seatbelt/bubblewrap in
    a hardening phase once the task engine is stable.
