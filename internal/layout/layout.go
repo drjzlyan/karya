@@ -127,6 +127,20 @@ func (t *Tree) FocusedID() PaneID {
 	return c.focus
 }
 
+// FocusPane activates the tab containing pane id and focuses it, returning true
+// if found. Used to raise an already-open view (e.g. the git panel) instead of
+// opening a duplicate.
+func (t *Tree) FocusPane(id PaneID) bool {
+	for ti, tb := range t.tabs {
+		if findLeaf(tb.root, id) != nil {
+			t.active = ti
+			tb.focus = id
+			return true
+		}
+	}
+	return false
+}
+
 // FocusedContent returns the content of the focused pane in the active tab, or
 // nil if there is none.
 func (t *Tree) FocusedContent() PaneContent {

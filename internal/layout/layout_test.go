@@ -201,6 +201,27 @@ func TestTabsSwitch(t *testing.T) {
 	}
 }
 
+func TestFocusPane(t *testing.T) {
+	tr := NewTree()
+	a := tr.AddTab("t1", fakePane{'A'})
+	b := tr.AddTab("t2", fakePane{'B'}) // active tab is now t2
+	if tr.ActiveTab() != 1 {
+		t.Fatalf("expected tab2 active")
+	}
+	if !tr.FocusPane(a) {
+		t.Fatalf("FocusPane(a) should succeed")
+	}
+	if tr.ActiveTab() != 0 || tr.FocusedID() != a {
+		t.Fatalf("FocusPane did not activate a's tab/focus: active=%d focus=%d", tr.ActiveTab(), tr.FocusedID())
+	}
+	if tr.FocusPane(b) && tr.ActiveTab() != 1 {
+		t.Fatalf("FocusPane(b) should re-activate tab2")
+	}
+	if tr.FocusPane(9999) {
+		t.Fatalf("FocusPane of unknown id should be false")
+	}
+}
+
 func TestRenderCallsContent(t *testing.T) {
 	tr := NewTree()
 	tr.AddTab("t", fakePane{'A'})

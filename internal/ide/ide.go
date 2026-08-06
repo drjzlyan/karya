@@ -9,11 +9,21 @@ import (
 	"os"
 
 	"github.com/drjzlyan/karya/internal/cellbuf"
+	"github.com/drjzlyan/karya/internal/git"
+	"github.com/drjzlyan/karya/internal/gitui"
 	"github.com/drjzlyan/karya/internal/keymap"
 	"github.com/drjzlyan/karya/internal/layout"
 	"github.com/drjzlyan/karya/internal/term"
 	"github.com/drjzlyan/karya/internal/tui"
 )
+
+// paneView is a karya-native, interactive view pane (git panel, task board, …):
+// it renders itself and handles forwarded keys, and can ask to be closed.
+type paneView interface {
+	layout.PaneContent
+	HandleKey(k term.Key)
+	Done() bool
+}
 
 // spawnFunc creates a pane's content sized for the given inner rectangle. It is
 // injected so tests can supply fake panes instead of spawning real shells.
@@ -40,12 +50,13 @@ type Model struct {
 	rows   int
 	status string
 
-	whichkey []keymap.Candidate
-	shells   []*shellPane
-	editors  []*editorPane
-	file     string
-	leader   term.Key
-	prov     Provisioner
+	whichkey  []keymap.Candidate
+	shells    []*shellPane
+	editors   []*editorPane
+	file      string
+	leader    term.Key
+	prov      Provisioner
+	gitPaneID layout.PaneID
 }
 
 // shellReadMsg carries a chunk of a shell pane's output back into the loop.
@@ -245,14 +256,38 @@ func (m *Model) context() keymap.Context {
 }
 
 // forward sends an unclaimed key to the focused pane: shells receive raw bytes,
-// the embedded editor receives Neovim key notation.
+// the embedded editor receives Neovim key notation, and karya views handle it
+// directly (closing the pane if the view asks).
 func (m *Model) forward(k term.Key) {
 	switch p := m.tree.FocusedContent().(type) {
 	case *editorPane:
 		p.write(k)
 	case *shellPane:
 		p.write(encodeKey(k))
+	case paneView:
+		id := m.tree.FocusedID()
+		p.HandleKey(k)
+		if p.Done() {
+			if id == m.gitPaneID {
+				m.gitPaneID = 0
+			}
+			m.tree.CloseFocused()
+			m.syncPaneSizes()
+		}
 	}
+}
+
+// openGitPanel focuses the git panel if open, else opens it in a new tab.
+func (m *Model) openGitPanel() *gitui.Panel {
+	if m.gitPaneID != 0 && m.tree.FocusPane(m.gitPaneID) {
+		if p, ok := m.tree.FocusedContent().(*gitui.Panel); ok {
+			return p
+		}
+	}
+	panel := gitui.New(git.New(m.dir, nil))
+	m.gitPaneID = m.tree.AddTab("git", panel)
+	m.syncPaneSizes()
+	return panel
 }
 
 // dispatch runs a karya action.
@@ -293,6 +328,12 @@ func (m *Model) dispatch(a keymap.ActionID) tui.Cmd {
 	case keymap.ActionTabPrev:
 		m.tree.PrevTab()
 		m.syncPaneSizes()
+	case keymap.ActionGitPanel:
+		m.openGitPanel()
+	case keymap.ActionGitCommit:
+		m.openGitPanel().EnterCommit()
+	case keymap.ActionGitPush:
+		m.openGitPanel().Push()
 	case keymap.ActionSendLeader:
 		m.forward(m.leader)
 	case keymap.ActionQuit:
@@ -457,6 +498,8 @@ func paneTitle(c layout.PaneContent) string {
 		return "shell"
 	case *editorPane:
 		return "editor"
+	case *gitui.Panel:
+		return "git"
 	case *placeholderPane:
 		return v.title
 	}
