@@ -21,6 +21,7 @@ import (
 	"github.com/drjzlyan/karya/internal/layout"
 	"github.com/drjzlyan/karya/internal/review"
 	"github.com/drjzlyan/karya/internal/reviewview"
+	"github.com/drjzlyan/karya/internal/searchview"
 	"github.com/drjzlyan/karya/internal/task"
 	"github.com/drjzlyan/karya/internal/taskview"
 	"github.com/drjzlyan/karya/internal/term"
@@ -75,6 +76,7 @@ type Model struct {
 	reviewPaneID layout.PaneID
 	inboxPaneID  layout.PaneID
 	finderPaneID layout.PaneID
+	searchPaneID layout.PaneID
 	editorPaneID layout.PaneID
 }
 
@@ -373,6 +375,18 @@ func (m *Model) forward(k term.Key) tui.Cmd {
 				return cmd
 			}
 		}
+		// Project search can request opening a match at its location.
+		if sv, ok := p.(*searchview.Search); ok {
+			if match := sv.OpenRequest(); match != nil {
+				if m.searchPaneID != 0 && m.tree.FocusPane(m.searchPaneID) {
+					m.tree.CloseFocused()
+					m.searchPaneID = 0
+				}
+				cmd := m.openFile(match.File, match.Line)
+				m.syncPaneSizes()
+				return cmd
+			}
+		}
 		// The task board can request a review or an agent pane for a task.
 		if board, ok := p.(*taskview.Board); ok {
 			if rid := board.ReviewRequest(); rid != "" {
@@ -395,6 +409,8 @@ func (m *Model) forward(k term.Key) tui.Cmd {
 				m.inboxPaneID = 0
 			case m.finderPaneID:
 				m.finderPaneID = 0
+			case m.searchPaneID:
+				m.searchPaneID = 0
 			}
 			m.tree.CloseFocused()
 			m.syncPaneSizes()
@@ -507,6 +523,17 @@ func (m *Model) openFinder() {
 		}
 	}
 	m.finderPaneID = m.tree.AddTab("find", finder.New(finder.ListFiles(m.dir)))
+	m.syncPaneSizes()
+}
+
+// openSearch opens (or focuses) the project search (live grep) view.
+func (m *Model) openSearch() {
+	if m.searchPaneID != 0 && m.tree.FocusPane(m.searchPaneID) {
+		if _, ok := m.tree.FocusedContent().(*searchview.Search); ok {
+			return
+		}
+	}
+	m.searchPaneID = m.tree.AddTab("search", searchview.New(m.dir, searchview.Ripgrep))
 	m.syncPaneSizes()
 }
 
@@ -677,6 +704,8 @@ func (m *Model) dispatch(a keymap.ActionID) tui.Cmd {
 		m.openInbox()
 	case keymap.ActionFindFile:
 		m.openFinder()
+	case keymap.ActionSearch:
+		m.openSearch()
 	case keymap.ActionFocusEditor:
 		m.focusEditor()
 	case keymap.ActionSendLeader:
@@ -853,6 +882,8 @@ func paneTitle(c layout.PaneContent) string {
 		return "gates"
 	case *finder.Finder:
 		return "find"
+	case *searchview.Search:
+		return "search"
 	case *placeholderPane:
 		return v.title
 	}
