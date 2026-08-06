@@ -112,10 +112,23 @@ vim.api.nvim_create_autocmd("LspAttach", {
     local map = function(mode, lhs, rhs)
       vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, silent = true })
     end
+    -- Navigation
     map("n", "gd", vim.lsp.buf.definition)
+    map("n", "gD", vim.lsp.buf.declaration)
     map("n", "gr", vim.lsp.buf.references)
     map("n", "gi", vim.lsp.buf.implementation)
+    map("n", "gy", vim.lsp.buf.type_definition)
     map("n", "K", vim.lsp.buf.hover)
+    map("i", "<C-k>", vim.lsp.buf.signature_help)
+    -- Symbols
+    map("n", "<leader>ds", vim.lsp.buf.document_symbol)
+    map("n", "<leader>ws", vim.lsp.buf.workspace_symbol)
+    -- Diagnostics
+    map("n", "<leader>e", vim.diagnostic.open_float)
+    map("n", "[d", function() vim.diagnostic.jump({ count = -1 }) end)
+    map("n", "]d", function() vim.diagnostic.jump({ count = 1 }) end)
+    map("n", "<leader>q", vim.diagnostic.setloclist)
+    -- Edits
     map("n", "<leader>rn", vim.lsp.buf.rename)
     map({ "n", "v" }, "<leader>ca", vim.lsp.buf.code_action)
     map({ "n", "v" }, "<leader>f", function()
