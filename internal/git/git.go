@@ -162,6 +162,11 @@ func (r *Repo) DiffRange(base, head string) (string, error) {
 	return r.out("diff", base+"..."+head)
 }
 
+// Merge merges branch into the current branch with a merge commit.
+func (r *Repo) Merge(branch, message string) error {
+	return r.do("merge", "--no-ff", "-m", message, branch)
+}
+
 // Commit summary line.
 type Commit struct {
 	Hash    string

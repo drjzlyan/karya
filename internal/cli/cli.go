@@ -67,6 +67,10 @@ func Run(args []string) int {
 		return cmdGate(rest)
 	case "review":
 		return cmdReview(rest)
+	case "verify":
+		return cmdVerify(rest)
+	case "merge":
+		return cmdMerge(rest)
 	case "init":
 		return cmdInit(rest)
 	case "lang":
