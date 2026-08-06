@@ -13,6 +13,8 @@ import (
 	"github.com/drjzlyan/karya/internal/gitui"
 	"github.com/drjzlyan/karya/internal/keymap"
 	"github.com/drjzlyan/karya/internal/layout"
+	"github.com/drjzlyan/karya/internal/task"
+	"github.com/drjzlyan/karya/internal/taskview"
 	"github.com/drjzlyan/karya/internal/term"
 	"github.com/drjzlyan/karya/internal/tui"
 )
@@ -50,13 +52,14 @@ type Model struct {
 	rows   int
 	status string
 
-	whichkey  []keymap.Candidate
-	shells    []*shellPane
-	editors   []*editorPane
-	file      string
-	leader    term.Key
-	prov      Provisioner
-	gitPaneID layout.PaneID
+	whichkey   []keymap.Candidate
+	shells     []*shellPane
+	editors    []*editorPane
+	file       string
+	leader     term.Key
+	prov       Provisioner
+	gitPaneID  layout.PaneID
+	taskPaneID layout.PaneID
 }
 
 // shellReadMsg carries a chunk of a shell pane's output back into the loop.
@@ -268,8 +271,11 @@ func (m *Model) forward(k term.Key) {
 		id := m.tree.FocusedID()
 		p.HandleKey(k)
 		if p.Done() {
-			if id == m.gitPaneID {
+			switch id {
+			case m.gitPaneID:
 				m.gitPaneID = 0
+			case m.taskPaneID:
+				m.taskPaneID = 0
 			}
 			m.tree.CloseFocused()
 			m.syncPaneSizes()
@@ -288,6 +294,38 @@ func (m *Model) openGitPanel() *gitui.Panel {
 	m.gitPaneID = m.tree.AddTab("git", panel)
 	m.syncPaneSizes()
 	return panel
+}
+
+// openTaskBoard focuses the task board if open, else opens it in a new tab.
+func (m *Model) openTaskBoard() *taskview.Board {
+	if m.taskPaneID != 0 && m.tree.FocusPane(m.taskPaneID) {
+		if b, ok := m.tree.FocusedContent().(*taskview.Board); ok {
+			return b
+		}
+	}
+	board := taskview.New(m.loadTasks)
+	m.taskPaneID = m.tree.AddTab("tasks", board)
+	m.syncPaneSizes()
+	return board
+}
+
+// loadTasks reads the repo's tasks for the board (decoupling taskview from the
+// task store).
+func (m *Model) loadTasks() []taskview.Item {
+	store := task.NewStore(m.dir)
+	tasks, err := store.List()
+	if err != nil {
+		return nil
+	}
+	items := make([]taskview.Item, 0, len(tasks))
+	for _, t := range tasks {
+		title := t.ID
+		if sp, err := store.Spec(t.ID); err == nil {
+			title = task.Title(sp)
+		}
+		items = append(items, taskview.Item{ID: t.ID, State: string(t.State), Title: title})
+	}
+	return items
 }
 
 // dispatch runs a karya action.
@@ -328,6 +366,12 @@ func (m *Model) dispatch(a keymap.ActionID) tui.Cmd {
 	case keymap.ActionTabPrev:
 		m.tree.PrevTab()
 		m.syncPaneSizes()
+	case keymap.ActionTaskBoard:
+		m.openTaskBoard()
+	case keymap.ActionTaskNew:
+		m.status = "new task: run `karya task new <slug>` (in-TUI form coming soon)"
+	case keymap.ActionTaskStart:
+		m.status = "start task: run `karya task start <id>` (in-TUI form coming soon)"
 	case keymap.ActionGitPanel:
 		m.openGitPanel()
 	case keymap.ActionGitCommit:
@@ -500,6 +544,8 @@ func paneTitle(c layout.PaneContent) string {
 		return "editor"
 	case *gitui.Panel:
 		return "git"
+	case *taskview.Board:
+		return "tasks"
 	case *placeholderPane:
 		return v.title
 	}
