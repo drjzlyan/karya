@@ -16,6 +16,16 @@ for the full command list, [commands.md](commands.md).
 > This reference describes the single-process TUI. Run `karya doctor` to see
 > what your installed build provides.
 
+> **Changing the leader.** `Ctrl-Space` is the default, but some environments
+> intercept it — most notably **macOS**, where *System Settings → Keyboard →
+> Keyboard Shortcuts → Input Sources* binds `Ctrl-Space` to "Select the previous
+> input source", so it never reaches the terminal. If the leader does nothing,
+> either turn that macOS shortcut off, or pick another leader with the
+> `KARYA_LEADER` environment variable, e.g. `KARYA_LEADER=ctrl+a karya tui`.
+> Accepted values: `ctrl+space` (default) or `ctrl+<letter>` (e.g. `ctrl+a`,
+> `ctrl+b`, `ctrl+g`). Whatever you choose, it is the single leader for
+> everything below, and the status line shows it.
+
 ---
 
 ## Discoverability: which-key

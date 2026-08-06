@@ -1,6 +1,10 @@
 package keymap
 
-import "github.com/drjzlyan/karya/internal/term"
+import (
+	"strings"
+
+	"github.com/drjzlyan/karya/internal/term"
+)
 
 // The canonical karya actions. One flat namespace; the leader chords that reach
 // them are defined in DefaultBindings. See DESIGN.md §6.2.
@@ -56,22 +60,44 @@ const (
 	ActionTabGoto9 ActionID = "tab.goto.9"
 )
 
-// Leader is karya's single leader key: Ctrl+Space.
+// Leader is karya's default leader key: Ctrl+Space. It can be overridden per
+// user (e.g. on macOS, where Ctrl+Space is often grabbed by the OS input-source
+// shortcut) via DefaultBindingsFor + ParseLeader.
 var Leader = term.Ctrl(' ')
 
-// lead builds a chord that begins with the leader followed by the given runes.
-func lead(runes ...rune) []term.Key {
-	keys := make([]term.Key, 0, len(runes)+1)
-	keys = append(keys, Leader)
-	for _, r := range runes {
-		keys = append(keys, term.RuneKey(r))
+// ParseLeader interprets a leader spec like "ctrl+space", "ctrl+a", or "ctrl+\"
+// into a Key. Unrecognized specs fall back to the default (Ctrl+Space).
+func ParseLeader(spec string) term.Key {
+	s := strings.ToLower(strings.TrimSpace(spec))
+	s = strings.ReplaceAll(s, "c-", "ctrl+")
+	switch s {
+	case "", "ctrl+space", "ctrl+@":
+		return term.Ctrl(' ')
 	}
-	return keys
+	if strings.HasPrefix(s, "ctrl+") {
+		rest := strings.TrimPrefix(s, "ctrl+")
+		if r := []rune(rest); len(r) == 1 {
+			return term.Ctrl(r[0])
+		}
+	}
+	return term.Ctrl(' ')
 }
 
-// DefaultBindings returns karya's unified binding table. Every IDE action is a
-// Ctrl+Space chord; the same chords apply whatever pane has focus.
-func DefaultBindings() []Binding {
+// DefaultBindings returns karya's unified binding table with the default leader.
+func DefaultBindings() []Binding { return DefaultBindingsFor(Leader) }
+
+// DefaultBindingsFor returns karya's unified binding table using the given leader
+// key. Every IDE action is a <leader> chord; the same chords apply whatever pane
+// has focus.
+func DefaultBindingsFor(leader term.Key) []Binding {
+	lead := func(runes ...rune) []term.Key {
+		keys := make([]term.Key, 0, len(runes)+1)
+		keys = append(keys, leader)
+		for _, r := range runes {
+			keys = append(keys, term.RuneKey(r))
+		}
+		return keys
+	}
 	const (
 		gPanes = "Panes"
 		gTabs  = "Tabs"
@@ -117,7 +143,7 @@ func DefaultBindings() []Binding {
 		{Keys: lead('?'), Action: ActionHelpKeys, Desc: "Keymap reference", Group: gApp},
 		{Keys: lead('Q'), Action: ActionQuit, Desc: "Quit karya", Group: gApp},
 		// Send a literal leader to the focused pane.
-		{Keys: []term.Key{Leader, Leader}, Action: ActionSendLeader, Desc: "Send Ctrl+Space to pane", Group: gPanes},
+		{Keys: []term.Key{leader, leader}, Action: ActionSendLeader, Desc: "Send leader to pane", Group: gPanes},
 	}
 	// Tab jumps 1..9
 	tabGoto := []ActionID{

@@ -160,6 +160,20 @@ func TestViewRendersFrameAndStatus(t *testing.T) {
 	}
 }
 
+func TestConfigurableLeaderViaEnv(t *testing.T) {
+	t.Setenv("KARYA_LEADER", "ctrl+a")
+	m := testModel(40, 12)
+	// The default Ctrl+Space is no longer the leader; Ctrl+A is.
+	press(m, term.Ctrl('a'))
+	if len(m.whichkey) == 0 {
+		t.Fatalf("Ctrl+A should act as the leader")
+	}
+	cmd := press(m, term.RuneKey('Q'))
+	if cmd == nil {
+		t.Fatalf("Ctrl+A then Q should quit")
+	}
+}
+
 func TestViewRendersWhichKeyOverlay(t *testing.T) {
 	m := testModel(50, 14)
 	press(m, keymap.Leader)

@@ -33,6 +33,7 @@ type Model struct {
 	shells   []*shellPane
 	editors  []*editorPane
 	file     string
+	leader   term.Key
 }
 
 // shellReadMsg carries a chunk of a shell pane's output back into the loop.
@@ -41,8 +42,6 @@ type shellReadMsg struct {
 	data []byte
 	err  error
 }
-
-const defaultStatus = "Ctrl+Space = leader · ? keys · Q quit"
 
 // New builds the root model for working directory dir at the given size. Its
 // first pane is a shell.
@@ -79,15 +78,22 @@ func newModel(dir string, cols, rows int, spawn spawnFunc) *Model {
 	if rows < 2 {
 		rows = 24
 	}
+	leader := keymap.ParseLeader(os.Getenv("KARYA_LEADER"))
 	return &Model{
 		tree:   layout.NewTree(),
-		keys:   keymap.New(keymap.DefaultBindings()),
+		keys:   keymap.NewWithLeader(keymap.DefaultBindingsFor(leader), leader),
+		leader: leader,
 		spawn:  spawn,
 		dir:    dir,
 		cols:   cols,
 		rows:   rows,
-		status: defaultStatus,
+		status: leaderHint(leader),
 	}
+}
+
+// leaderHint renders the status-line hint naming the active leader.
+func leaderHint(leader term.Key) string {
+	return leader.String() + " = leader · ? keys · Q quit"
 }
 
 // seed creates the first tab's pane and sizes it.
@@ -177,7 +183,7 @@ func (m *Model) handleKey(k term.Key) tui.Cmd {
 		m.whichkey = res.Pending
 		m.status = "leader…  (Esc cancels)"
 	case keymap.ResCancel, keymap.ResNoMatch:
-		m.status = defaultStatus
+		m.status = leaderHint(m.leader)
 	}
 	return nil
 }
@@ -244,12 +250,13 @@ func (m *Model) dispatch(a keymap.ActionID) tui.Cmd {
 		m.tree.PrevTab()
 		m.syncPaneSizes()
 	case keymap.ActionSendLeader:
-		m.forward(keymap.Leader)
+		m.forward(m.leader)
 	case keymap.ActionQuit:
 		m.shutdown()
 		return tui.Quit
 	case keymap.ActionHelpKeys:
-		m.status = "Ctrl+Space then h/j/k/l focus · |/- split · H/J/K/L resize · c/n/p tabs · Q quit"
+		l := m.leader.String()
+		m.status = l + " then h/j/k/l focus · |/- split · H/J/K/L resize · c/n/p tabs · Q quit"
 	default:
 		if n := tabGotoIndex(a); n > 0 {
 			m.tree.GotoTab(n)

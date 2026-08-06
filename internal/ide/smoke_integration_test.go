@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -98,6 +99,80 @@ func TestTUIEditorSmoke(t *testing.T) {
 	}
 
 	quitAndWait(t, p, cmd)
+}
+
+// TestTUIEditorInput verifies real keystrokes reach the embedded editor and the
+// screen updates: it types text in insert mode and checks it renders.
+func TestTUIEditorInput(t *testing.T) {
+	if _, err := exec.LookPath("nvim"); err != nil {
+		t.Skip("nvim not on PATH")
+	}
+	bin := buildKarya(t)
+	dir := t.TempDir()
+	file := filepath.Join(dir, "input.txt")
+	if err := os.WriteFile(file, []byte("start\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "tui", file)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "SHELL=/bin/sh")
+	p, err := pty.Start(cmd, 80, 24)
+	if err != nil {
+		t.Skipf("pty unavailable: %v", err)
+	}
+	defer func() { _ = p.Close() }()
+
+	// keep draining so nothing blocks
+	var out syncBytes
+	go func() { _, _ = io.Copy(&out, p) }()
+
+	// wait for initial render
+	waitBytes(t, &out, []byte("start"), 8*time.Second)
+	out.reset()
+
+	// Type: o (open line) TYPEDLINE <Esc> — regular keys, not a leader.
+	_, _ = p.Write([]byte("oTYPEDLINE\x1b"))
+	if !waitBytes(t, &out, []byte("TYPEDLINE"), 5*time.Second) {
+		t.Fatalf("typed text did not render; recent output:\n%q", out.tail(400))
+	}
+}
+
+type syncBytes struct {
+	mu  sync.Mutex
+	buf []byte
+}
+
+func (s *syncBytes) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	s.buf = append(s.buf, p...)
+	s.mu.Unlock()
+	return len(p), nil
+}
+func (s *syncBytes) contains(b []byte) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return bytes.Contains(s.buf, b)
+}
+func (s *syncBytes) reset() { s.mu.Lock(); s.buf = nil; s.mu.Unlock() }
+func (s *syncBytes) tail(n int) []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.buf) > n {
+		return append([]byte(nil), s.buf[len(s.buf)-n:]...)
+	}
+	return append([]byte(nil), s.buf...)
+}
+
+func waitBytes(t *testing.T, s *syncBytes, want []byte, d time.Duration) bool {
+	t.Helper()
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		if s.contains(want) {
+			return true
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return s.contains(want)
 }
 
 func readUntilByte(t *testing.T, p *pty.PTY, want []byte, timeout time.Duration) []byte {

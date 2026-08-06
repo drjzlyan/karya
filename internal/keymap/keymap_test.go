@@ -154,3 +154,37 @@ func TestContextScopedBinding(t *testing.T) {
 
 // Rune is a small test helper on Candidate.
 func (c Candidate) Rune() rune { return c.Key.Rune }
+
+func TestParseLeader(t *testing.T) {
+	cases := map[string]term.Key{
+		"":           term.Ctrl(' '),
+		"ctrl+space": term.Ctrl(' '),
+		"c-space":    term.Ctrl(' '),
+		"ctrl+a":     term.Ctrl('a'),
+		"c-b":        term.Ctrl('b'),
+		"CTRL+G":     term.Ctrl('g'),
+		"ctrl+\\":    term.Ctrl('\\'),
+		"nonsense":   term.Ctrl(' '), // falls back to default
+	}
+	for spec, want := range cases {
+		if got := ParseLeader(spec); got != want {
+			t.Fatalf("ParseLeader(%q) = %v want %v", spec, got, want)
+		}
+	}
+}
+
+func TestCustomLeaderDispatches(t *testing.T) {
+	leader := term.Ctrl('a')
+	e := NewWithLeader(DefaultBindingsFor(leader), leader)
+	// Ctrl+Space should now just forward (not the leader anymore).
+	if res := e.Feed(term.Ctrl(' '), Context{}); res.Kind != ResForward {
+		t.Fatalf("old leader should forward now, got %+v", res)
+	}
+	// Ctrl+A then l -> focus right.
+	if res := e.Feed(leader, Context{}); res.Kind != ResPending {
+		t.Fatalf("custom leader should be pending, got %+v", res)
+	}
+	if res := e.Feed(term.RuneKey('l'), Context{}); res.Kind != ResDispatch || res.Action != ActionFocusRight {
+		t.Fatalf("custom leader chord failed: %+v", res)
+	}
+}
