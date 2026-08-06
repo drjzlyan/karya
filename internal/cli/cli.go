@@ -46,6 +46,8 @@ func Run(args []string) int {
 	case "-v", "--version", "version":
 		fmt.Println(version.String())
 		return 0
+	case "tui":
+		return cmdTUI(rest)
 	case "dev":
 		return cmdDev(rest)
 	case "agent":

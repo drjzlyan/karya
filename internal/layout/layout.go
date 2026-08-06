@@ -127,6 +127,20 @@ func (t *Tree) FocusedID() PaneID {
 	return c.focus
 }
 
+// FocusedContent returns the content of the focused pane in the active tab, or
+// nil if there is none.
+func (t *Tree) FocusedContent() PaneContent {
+	c := t.cur()
+	if c == nil {
+		return nil
+	}
+	n := findLeaf(c.root, c.focus)
+	if n == nil {
+		return nil
+	}
+	return n.content
+}
+
 // SplitFocused splits the focused pane in the given direction, placing content
 // in the new pane, focusing it, and returning its id. If the focused pane's
 // parent is already a split of the same direction, the new pane is added as a

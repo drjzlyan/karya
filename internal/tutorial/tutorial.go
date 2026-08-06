@@ -19,10 +19,10 @@ import (
 	"strings"
 
 	"github.com/drjzlyan/karya/internal/agent"
+	"github.com/drjzlyan/karya/internal/agentrun"
 	"github.com/drjzlyan/karya/internal/assets"
 	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/project"
-	"github.com/drjzlyan/karya/internal/agentrun"
 	"github.com/drjzlyan/karya/internal/spec"
 	"github.com/drjzlyan/karya/internal/task"
 	"github.com/drjzlyan/karya/internal/tmuxx"
