@@ -180,3 +180,36 @@ func TestActivateManagedEnv(t *testing.T) {
 		t.Errorf("ToolsBin appears %d times after re-activation, want 1", n)
 	}
 }
+
+// TestEnvPutsManagedToolsFirst is the isolation guarantee that agents (headless
+// runs and PTY panes) use karya's own tools: the child env's PATH lists karya's
+// managed tool dirs before the user's PATH (DESIGN.md §4, §5).
+func TestEnvPutsManagedToolsFirst(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin:/bin")
+	p := Resolve()
+	env := p.Env("karya")
+
+	var pathVal string
+	for _, e := range env {
+		if v, ok := strings.CutPrefix(e, "PATH="); ok {
+			pathVal = v
+		}
+	}
+	if pathVal == "" {
+		t.Fatal("Env produced no PATH")
+	}
+	// karya's managed dirs (under the data prefix) must come before the user PATH.
+	managed := p.managedPathDirs()
+	if len(managed) == 0 {
+		t.Fatal("no managed path dirs")
+	}
+	firstManaged := strings.Index(pathVal, managed[0])
+	userIdx := strings.Index(pathVal, "/usr/bin")
+	if firstManaged < 0 || userIdx < 0 || firstManaged >= userIdx {
+		t.Fatalf("managed tools not ahead of user PATH:\n%s", pathVal)
+	}
+	// And the managed dirs live inside karya's isolated prefix.
+	if !strings.HasPrefix(managed[0], p.Data) && !strings.HasPrefix(managed[0], p.Config) {
+		t.Fatalf("managed dir %q not under the karya prefix", managed[0])
+	}
+}

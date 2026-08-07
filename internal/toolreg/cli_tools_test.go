@@ -1,6 +1,9 @@
 package toolreg
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestCoreAndDocToolsPresent guards the expanded catalog: the core CLI and
 // documentation tools karya manages so nothing is assumed to exist globally.
@@ -28,6 +31,12 @@ func TestCoreAndDocToolsPresent(t *testing.T) {
 	git, ok := r.Get("git")
 	if !ok || git.Method != MethodDetect {
 		t.Errorf("git should be a detect-only tool; got ok=%v method=%q", ok, git.Method)
+	}
+
+	// tree is not in mise's registry under its bare name, so it must pin a
+	// prebuilt backend (aqua:/ubi:) — otherwise mise warns on every shell.
+	if tree, ok := r.Get("tree"); !ok || !strings.Contains(tree.Pkg, ":") {
+		t.Errorf("tree must pin a backend-qualified package (got %q)", tree.Pkg)
 	}
 
 	// Documentation tools land under the docs category.

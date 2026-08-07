@@ -17,6 +17,25 @@ var tmuxConf string
 //go:embed shell/zshrc shell/bashrc shell/starship.toml
 var shellFS embed.FS
 
+//go:embed nvimengine/init.lua
+var nvimEngineFS embed.FS
+
+// ExtractNvimEngine writes karya's plugin-free Neovim engine config into dir
+// (typically the karya/nvim-engine app-name config dir). The embedded editor
+// loads this instead of the user's config, so it gets options + syntax +
+// treesitter + native LSP with no plugin bootstrap. Rewritten every call so
+// `karya update` refreshes it; idempotent and cheap.
+func ExtractNvimEngine(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	data, err := nvimEngineFS.ReadFile("nvimengine/init.lua")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "init.lua"), data, 0o644)
+}
+
 // shellInitFiles maps an embedded shell asset to its extracted filename. zshrc
 // lands as ".zshrc" so a ZDOTDIR pointing at the dir loads it; bashrc keeps its
 // name (referenced explicitly via --rcfile); starship.toml is the pinned prompt

@@ -9,8 +9,19 @@ import (
 	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/doctor"
 	"github.com/drjzlyan/karya/internal/lang"
+	"github.com/drjzlyan/karya/internal/skills"
 	"github.com/drjzlyan/karya/internal/version"
 )
+
+// reportSkills prints the installed marketplace skills (DESIGN.md §9).
+func reportSkills(w io.Writer, p config.Paths) {
+	store := skills.Store{Root: p.SkillsDir()}
+	names := store.List()
+	fmt.Fprintf(w, "\nSkills (%d installed)\n", len(names))
+	for _, n := range names {
+		fmt.Fprintf(w, "  ✓ %s\n", n)
+	}
+}
 
 // cmdDoctor runs karya's health checks and prints a grouped report. It exits
 // non-zero when any check is at Problem level, so scripts and `karya tutorial`
@@ -41,6 +52,7 @@ func cmdDoctor(args []string) int {
 		CheckUpdates: *checkUpdates,
 	})
 	renderReport(os.Stdout, report)
+	reportSkills(os.Stdout, p)
 
 	if !report.Healthy() {
 		return 1

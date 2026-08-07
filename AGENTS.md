@@ -6,23 +6,41 @@ resume point. It defines **how** we build karya so the project stays correct,
 maintainable, well-tested, well-documented, and welcoming to contributors.
 
 ## What karya is
-An **AI-first, terminal-based IDE** shipped as a **single Go binary**. It
-orchestrates Neovim (editor), tmux (multiplexer), and a coding agent into one
-cohesive IDE, and installs/updates/uninstalls itself **without touching any of
-the user's existing settings**. Full design: [DESIGN.md](DESIGN.md).
+A **human-in-the-loop, agent-based IDE** shipped as a **single Go binary** — one
+process that owns the terminal. karya draws its own screen (window/pane/tab
+manager, git panel, task/gate/review views, PTY-hosted shells and agent CLIs) and
+**embeds Neovim as the text-editing engine** over msgpack-RPC (`nvim --embed`),
+rendering Neovim's grid into karya's own cell buffer. Everything is driven by one
+unified keymap under a single leader. It installs/updates/uninstalls itself
+**without touching any of the user's existing settings**. Full design:
+[DESIGN.md](DESIGN.md); founding pivot: [ADR 0001](docs/adr/0001-single-process-tui-embed-neovim.md).
 
 karya has two internal layers, both shipped inside the one binary:
-- an embedded Neovim editor configuration (Lua), extracted to the isolated karya
-  prefix on install.
-- Go-native session, agent, project, and tooling logic that drives Neovim, tmux,
-  and the chosen coding agent.
+- a **headless workflow engine** (Go): tasks, specs, worktrees, gates, the agent
+  adapter layer, git, and marketplaces — all testable without a terminal.
+- a **single-process TUI runtime** (Go, stdlib-only): terminal I/O + cell buffer
+  (`term`/`cellbuf`), the Elm-style `tui` runtime, the PTY host (`pty`), the
+  Neovim RPC client (`nvimrpc`), the unified keymap engine (`keymap`), the
+  window/pane manager (`layout`), and the views (`gitui`/`taskview`/`reviewview`/…).
+- a slim embedded Neovim config (Lua) — **engine only**: options, LSP, treesitter,
+  completion. No UI, statusline, or keymap plugins; karya owns all of that.
 
 ## Locked decisions (do not relitigate)
-- **Orchestrator, not a from-scratch editor.** Neovim + tmux are reused.
-- **Go**, single static binary, no CGO. `go.mod` currently has **zero external
-  dependencies** — stdlib only; keep the dependency graph that small.
-- **BYO agent CLIs** (`crush/claude/codex/gemini/aider/copilot`) as first-class.
-  A native LLM agent is deferred to Phase 8 but the interface must allow it.
+- **Single process; karya owns the terminal.** No external multiplexer (tmux
+  gone), no external git TUI (lazygit gone). karya renders its own UI.
+- **Neovim is embedded as an engine, not run as a UI.** Reuse Neovim for editing
+  (LSP/treesitter/text ops) via `nvim --embed` msgpack-RPC; karya draws the grid
+  and routes all input. Do not shell out to a user-facing `nvim`.
+- **One leader, one keymap.** A single `keymap` engine (leader `Ctrl-Space`)
+  drives every IDE action; unclaimed keys are forwarded to the focused pane. No
+  per-tool keymap layers.
+- **Go**, single static binary, no CGO. `go.mod` has **zero external
+  dependencies** — stdlib only. The TUI stack (cell buffer, ANSI/terminfo, PTY,
+  msgpack-RPC) is built from scratch to honor this. Adding a dependency is an
+  ADR-level decision.
+- **BYO agent CLIs** (`crush/claude/codex/gemini/aider/copilot`) as first-class,
+  behind the `internal/agentrun` adapter interface; a native LLM agent may be
+  added behind the same interface.
 
 ---
 
@@ -30,9 +48,14 @@ karya has two internal layers, both shipped inside the one binary:
 karya must **never** read or write the user's `~/.zshrc`, `~/.tmux.conf`,
 `~/.gitconfig`, `~/.config/nvim`, Homebrew, or global mise. All state lives under
 karya-owned dirs. The primitives:
-- Neovim: launch with `NVIM_APPNAME=karya/nvim` (isolated config/data/state/cache;
-  the `/nvim` suffix nests it below the karya prefix — use `config.NvimAppName`).
-- tmux: run on a dedicated socket `tmux -L karya -f <karya tmux.conf>`.
+- Neovim: spawn `nvim --embed` with `NVIM_APPNAME=karya/nvim` (isolated
+  config/data/state/cache; the `/nvim` suffix nests it below the karya prefix —
+  use `config.NvimAppName`). karya connects over msgpack-RPC; it never launches a
+  user-facing `nvim`.
+- Panes: karya hosts shells and agent CLIs in its own PTYs (`internal/pty`), each
+  spawned through the `karya shell` wrapper so the isolated env/prompt is applied
+  without touching rc files. (No tmux server, no dedicated socket — removed by the
+  single-process pivot.)
 - Shell: **opt-in** only via `eval "$(karya shellenv)"`; never edit rc files.
 - Tools: detect on `PATH` first; otherwise install into the karya prefix.
 
@@ -50,7 +73,7 @@ make build                       # ./bin/karya (version injected via ldflags -X)
 make gate                        # full pre-PR gate, mirrors CI exactly — run this
 make test                        # go test ./...
 go test -race ./...              # unit tests with race detector (as CI runs them)
-go test -tags=integration ./...  # integration tests; needs tmux + nvim on PATH
+go test -tags=integration ./...  # integration tests; needs nvim on PATH (+ a pty)
 make lint                        # golangci-lint v2 via `go run ...@latest`
 make fmt / make vet / make tidy  # format, static analysis, module tidy
 make sync-docs                   # REQUIRED after editing docs/*.md (see docs section)
@@ -60,8 +83,8 @@ make formula TAG=vX.Y.Z SUMS=dist/checksums.txt   # regenerate Homebrew formula
 Gotchas:
 - Version info only appears when built with the ldflags in the Makefile or
   GoReleaser; a bare `go build` reports `dev`/`none`.
-- Integration tests skip gracefully when `tmux`/`nvim` are missing, so a green
-  local run without them installed does **not** prove integration behavior.
+- Integration tests skip gracefully when `nvim` (or a usable pty) is missing, so
+  a green local run without it does **not** prove integration behavior.
 
 ---
 
@@ -78,17 +101,26 @@ Rules:
 - **Unit tests** are hermetic: no network, no real tmux, no writes outside
   `t.TempDir()`. Put pure logic here (path resolution, agent selection, string
   escaping, cycling math, prefs parsing).
-- **Integration tests** carry `//go:build integration` and drive the real `tmux`
-  binary on a **throwaway socket** (`tmuxx.New("karya-itest-…", …)`), asserting
-  layout/env/state, then kill the server. They must never touch the user's tmux
-  or the real karya dirs. Example: `internal/session/session_integration_test.go`.
-- **Keymap guardrail:** `internal/assets/keymaps_integration_test.go` drives
-  headless Neovim over the embedded config and asserts every supported language
-  exposes the identical `<leader>c` "Code" interface. Changing Lua keymaps can
-  break it; keep `docs/keymaps.md` in sync in the same change.
-- Design for testability: separate side effects from logic. (E.g. `session.Build`
-  creates the layout with no `attach`, so it is testable; `session.Dev` composes
-  `Build` + `Attach`.) When something is hard to test, that's a design signal —
+- **Integration tests** carry `//go:build integration` and drive real
+  subsystems: the `pty` host on a real pseudo-terminal, `nvim --embed` over RPC,
+  and real `git worktree` in `t.TempDir()` repos, asserting behavior then tearing
+  down. They must never touch the user's dirs. **PTY TUI tests** run the real
+  `karya` binary on a pty, script keystrokes, and scrape the screen (DESIGN.md
+  §8.1). End-to-end HITL tests carry `-tags=e2e`.
+- **TUI is tested like a backend.** Every UI component is a `tui.Model`
+  (`Update`/`View` are pure). Test at four levels: model unit tests (feed `Msg`s,
+  assert model+`Cmd`), `cellbuf` golden snapshots (`View` → buffer → golden,
+  `-update` regenerates), PTY integration, and e2e. Impure boundaries have fakes:
+  fake nvim (scripted RPC peer replaying `redraw` batches), fake PTY (in-memory
+  pipes), fake agents (`agentrun.Runner`), fake terminal (`term.Output` →
+  `bytes.Buffer`). Real nvim/pty go behind `-tags=integration`.
+- **Editor-engine guardrail:** the slim embedded Neovim config keeps a headless
+  RPC smoke test (open a buffer, confirm LSP attaches) plus the docs drift test.
+  karya owns keymaps now, so there is no `<leader>c`-per-language Lua guardrail;
+  keep `docs/keymaps.md` in sync when the unified `keymap` table changes.
+- Design for testability: separate side effects from logic — workflow logic lives
+  in headless packages, never in a `View`. If a behavior is only reachable through
+  the UI, push it down. When something is hard to test, that's a design signal —
   refactor rather than skip the test.
 - Prefer table-driven tests. Cover edge cases and error paths, not just happy paths.
 
@@ -97,12 +129,15 @@ Rules:
 ## Design principles (SOLID + pragmatic Go)
 Keep the codebase readable and maintainable. Apply SOLID with a Go accent:
 
-- **Single Responsibility** — one package = one capability (`session`, `agent`,
-  `editor`, `tmuxx`, `config`, `prefs`, `tools`, `update`, `doctor`). Functions
-  do one thing; if a function needs a paragraph to explain, split it.
+- **Single Responsibility** — one package = one capability (`term`, `cellbuf`,
+  `tui`, `pty`, `nvimrpc`, `keymap`, `layout`, `gitui`, `task`, `agentrun`,
+  `config`, `tools`, `update`, `doctor`). Functions do one thing; if a function
+  needs a paragraph to explain, split it. TUI layers depend only downward.
 - **Open/Closed** — extend via new implementations, not by editing callers. The
-  agent layer is the prime example: adding a native agent (Phase 8) must mean
-  adding an implementation behind an interface, not rewriting `agent`.
+  agent adapter layer is the prime example: adding an agent (or a native engine)
+  means adding an implementation behind `agentrun.Agent`, not rewriting callers.
+  Likewise `layout.PaneContent` (editor/terminal/view panes) is closed for
+  modification, open for new pane kinds.
 - **Liskov** — any implementation of an interface must be substitutable without
   surprising callers.
 - **Interface Segregation** — small, focused interfaces defined by the *consumer*.
@@ -157,39 +192,50 @@ Good docs are part of "done":
 ## Where things live
 ```
 main.go                 entrypoint → internal/cli
-internal/cli/           command dispatch + flags + app wiring
+internal/cli/           command dispatch + flags + app wiring; launches the TUI
 internal/config/        XDG paths + karya prefix (isolation lives here)
 internal/version/       version/build info
-internal/assets/        go:embed payload (tmux.conf + vendored nvim config + shell
-                        init + user docs) + extract/version
-internal/tmuxx/         tmux wrapper (dedicated socket)
-internal/session/       `dev` layout: Build (testable) + Dev (Build+Attach), Quit
-internal/agent/         agent detect/select/switch/cycle/reset
-internal/editor/        `edit` (editor pane) + `run` (build/test pane) routing
-internal/project/       `new` scaffolds
-internal/lang/          language/version selection
-internal/tools/         tool detect/install + mise bootstrap
-internal/toolreg/       tool catalog/registry (aqua-pinned, see gotchas)
-internal/prefs/         per-project preference store
-internal/doctor/        health checks
-internal/update/        self-update
-internal/ship/          headless agent task runner
+internal/assets/        go:embed payload (slim nvim engine config + shell init +
+                        user docs) + extract/version
+
+─ single-process TUI runtime (stdlib-only; new) ─
+internal/term/          raw-mode terminal I/O, ANSI, terminfo-lite, input decoder
+internal/cellbuf/       styled cell grid + minimal diff renderer (snapshot target)
+internal/tui/           Elm-style Model/Update/View runtime + Program loop
+internal/pty/           PTY host + pty/vt terminal emulator for shell/agent panes
+internal/nvimrpc/       nvim --embed msgpack-RPC client + Grid model + msgpack codec
+internal/keymap/        unified keymap engine (single leader, modal, which-key)
+internal/layout/        window/pane/tab tree: splits, focus, resize, geometry
+internal/gitui/         built-in git panel (replaces lazygit)
+internal/taskview/  gateview/  reviewview/  diffview/   karya-native views
+
+─ headless workflow engine (reused) ─
 internal/spec/          task spec contract: parse/validate/render (DESIGN.md §3)
 internal/task/          task engine: gate state machine + .karya/tasks/<id>/ store
+internal/gate/          gate model, approvals, delegation, audit log
+internal/review/        review-session assembly (plan/diff/evidence + feedback)
 internal/worktree/      per-task git worktrees on task/<id> branches
-internal/agent/         (also) pluggable Runner seam (BYO-CLI + native engine)
-internal/native/        built-in Claude-API agent engine (per-tool-call permit)
-internal/tutorial/      in-binary tutorial
+internal/git/           headless git service (status/stage/commit/diff/log/push)
+internal/agentrun/      Agent interface + adapters (BYO CLIs) + Runner/Git seam
+internal/prompts/       step prompt assembly (spec + feedback + context)
+internal/agent/         agent detection
+internal/skills/  mcp/  marketplace clients (later phases)
+internal/native/        built-in Claude-API agent engine (behind agentrun)
+internal/project/  lang/  tools/  toolreg/  prefs/  doctor/  update/  tutorial/
 
-docs/                   USER-FACING product docs (embedded in binary, Phase 7)
+docs/                   USER-FACING product docs (embedded in binary)
+docs/adr/               architecture decision records (ADR 0001 = the pivot)
 DESIGN.md ROADMAP.md PROGRESS.md AGENTS.md  INTERNAL docs (root; never shipped)
 README.md CONTRIBUTING.md                  user landing + contributor entry
 ```
 
 Notes:
-- The embedded Neovim config is real code and lives in `internal/assets/nvim/`
-  (Lua, lazy.nvim, pinned by `lazy-lock.json`). The empty-looking root `nvim/`
-  dir is a runtime leftover, not the config — ignore it.
+- **Removed by the single-process pivot:** `internal/tmuxx/`, `internal/session/`,
+  `internal/editor/`, `internal/assets/tmux.conf`, and the UI/keymap subtree of
+  `internal/assets/nvim/`. If you find lingering references, they are cleanup.
+- The embedded Neovim config in `internal/assets/nvim/` is now **engine-only**
+  (options + LSP + treesitter + completion). karya sets chrome-off options
+  (`laststatus=0`, no tabline/statusline) at runtime via RPC after attach.
 - **Tool provisioning pins prebuilt backends.** In `internal/toolreg/catalog.go`,
   tools must resolve to prebuilt **aqua** backends (e.g.
   `aqua:neovim/neovim@0.11.7`) — bare mise names resolve to build-from-source
@@ -199,14 +245,16 @@ Notes:
 ## Command surface
 | karya command | What it does |
 |---|---|
-| `dev` (default) | Build/attach the isolated tmux IDE session for the cwd |
-| `agent` | Switch/cycle/reset the coding-agent pane in a session |
-| `run` | Send a command to the build/test pane (or run it directly) |
-| `edit` | Open a file in the editor pane; also karya's `$EDITOR` |
+| `karya` (default) | Launch the single-process TUI IDE for the cwd |
+| `edit` | Open a file in the embedded editor pane; also karya's `$EDITOR` |
+| `task` | Create/list/show/start/abandon tasks (the HITL unit of work) |
+| `plan` / `implement` | Run an agent step headlessly in a task worktree |
+| `review` / `gate` | Review artifacts; approve/reject/delegate gates |
+| `verify` / `merge` | Run spec verification; merge or open a PR (post-gate) |
 | `new` / `project` | Scaffold a new project for a supported language |
 | `lang` | Choose languages + runtimes; regenerate the isolated mise config |
 | `install` / `update` / `uninstall` | Isolated self-install, self-update, and teardown |
-| `doctor` | Health checks: tools, versions, isolation, per-language tooling |
+| `doctor` | Health checks: tools, versions, isolation, nvim-embed + pty |
 | `help` / `docs` / `tutorial` | Offline docs embedded in the binary |
 
 ---
@@ -240,7 +288,7 @@ gofmt -l .                       # must print nothing
 go vet ./...                     # must pass
 golangci-lint run                # must pass (golangci-lint v2; see below)
 go test -race ./...              # unit tests (race-enabled)
-go test -tags=integration ./...  # integration tests (requires tmux)
+go test -tags=integration ./...  # integration tests (requires nvim + a pty)
 go build ./...                   # builds clean
 ```
 CI installs **golangci-lint v2 at `latest`** (`.github/workflows/ci.yml` sets

@@ -1,251 +1,174 @@
 # karya keymaps & commands reference
 
-karya is three layers you drive together: the **`karya` CLI**, the **tmux** IDE
-session (prefix `Ctrl-a`), and **Neovim** (leader `Space`). This is the complete
-reference. For a guided, hands-on path through it, see
-[tutorial.md](tutorial.md).
+karya is **one program with one keymap**. There is a single leader —
+**`Ctrl-Space`** (written `<L>` below) — and the *same* chords drive everything:
+moving between panes, resizing, splitting, switching tabs, git, tasks, and gates.
+Whatever holds focus — the editor, a shell, or an agent — the leader works the
+same way. Keys karya does not claim are forwarded to the focused pane (into the
+embedded editor, or a shell). For a guided path, see [tutorial.md](tutorial.md);
+for the full command list, [commands.md](commands.md).
 
-> Editor keymaps below are provided by karya's embedded Neovim config, which is
-> extracted on `karya install`. CLI/tmux orchestration is available now; run
-> `karya doctor` to see what's available in your installed build.
+> **One leader, one grammar.** Earlier karya layered three separate keymaps — a
+> tmux prefix, a Neovim leader, and lazygit's bindings. That is gone. karya now
+> draws its own UI and routes every keystroke through a single keymap engine, so
+> there is nothing per-tool to memorize.
 
----
+> This reference describes the single-process TUI. Run `karya doctor` to see
+> what your installed build provides.
 
-## 1. karya CLI
-
-| Command | Action |
-|---|---|
-| `karya` | Launch or attach the IDE session for the current directory |
-| `karya dev [name] [path]` | Explicit session launch (flags below) |
-| `karya dev -a <agent>` | Choose the coding agent (`none` for a plain shell) |
-| `karya dev -k` | Kill an existing session and recreate it |
-| `karya dev -q` | Quit (kill) the session cleanly |
-| `karya agent status` | Show current/available agents + saved preference |
-| `karya agent switch` | Interactive agent switcher (in session) |
-| `karya agent next` / `prev` | Cycle agents |
-| `karya agent reset` | Reset pane layout (preserves the editor) |
-| `karya agent focus` | Jump to the agent pane |
-| `karya agent send [--file f --line n --label t]` | Paste stdin into the agent pane (editor↔agent bridge) |
-| `karya agent native [prompt]` | Run karya's built-in Claude-API agent — approves each file write / command (needs `ANTHROPIC_API_KEY`) |
-| `karya agent prefs` / `clear` | Show / clear per-project agent preference |
-| `karya edit <file> [line]` | Open a file in the editor pane (used as `$EDITOR`) |
-| `karya run [-d dir] <cmd>` | Run a command in the build/test pane |
-| `karya run --focus` | Focus the build/test pane |
-| `karya new <lang> <name>` | Scaffold a project (python/java/typescript/go/cpp/rust) |
-| `karya ship [--push --pr --no-verify]` | Stage, let the agent write the commit message, commit (& push / open PR) |
-| `karya init [--force]` | Scaffold `.karya/` + a repo `AGENTS.md` for the task workflow |
-| `karya task new <slug> [--agent n]` | Scaffold a task spec (`.karya/tasks/<date>-<slug>/SPEC.md`) |
-| `karya task list` / `tasks` | The task board (also `Ctrl-a T`) |
-| `karya task status` | Per-state counts + the gate inbox |
-| `karya task show <id>` | Task detail: state, workspace, spec summary, gate history |
-| `karya task start <id> [--base <ref>]` | Create the task worktree (branch `task/<id>`) |
-| `karya task abandon <id> [-y]` | Remove the task: worktree, branch, and artifacts |
-| `karya lang` | Interactive language + runtime-version selector |
-| `karya lang list` | Show the selected languages and versions |
-| `karya lang add <lang> [versions]` | Add/change a language (installs its tooling) |
-| `karya lang remove <lang>` | Drop a language from the selection |
-| `karya lang all` | Select every language at its latest stable version |
-| `karya install` | Set up karya (isolated, non-destructive) |
-| `karya update` | Self-update binary, configs, tools, editor plugins |
-| `karya uninstall` | Remove karya entirely (nothing else touched) |
-| `karya doctor` | Health check: tools, versions, isolation & per-language tooling |
-| `karya shellenv` | Print opt-in shell integration (`eval "$(karya shellenv)"`) |
-| `karya completion <shell>` | Print a bash/zsh/fish completion script to source |
-| `karya keys` | Show this full CLI / tmux / Neovim key reference |
-| `karya version` | Version / build info |
-| `karya tutorial [n]` | Run the self-working tutorial (verifies against a sandbox) |
-| `karya docs [topic]` | Read the embedded docs offline (no topic lists them) |
-| `karya help [command]` | General help, or detailed help for one command |
-
-> Note: options come before positionals — `karya dev -a claude myproj`.
+> **Changing the leader.** `Ctrl-Space` is the default, but some environments
+> intercept it — most notably **macOS**, where *System Settings → Keyboard →
+> Keyboard Shortcuts → Input Sources* binds `Ctrl-Space` to "Select the previous
+> input source", so it never reaches the terminal. If the leader does nothing,
+> either turn that macOS shortcut off, or pick another leader with the
+> `KARYA_LEADER` environment variable, e.g. `KARYA_LEADER=ctrl+a karya tui`.
+> Accepted values: `ctrl+space` (default) or `ctrl+<letter>` (e.g. `ctrl+a`,
+> `ctrl+b`, `ctrl+g`). Whatever you choose, it is the single leader for
+> everything below, and the status line shows it.
 
 ---
 
-## 2. tmux (prefix `Ctrl-a`)
+## Discoverability: which-key
 
-Bindings marked *(default)* are standard tmux built-ins.
+Press **`Ctrl-Space`** and pause. A popup shows every continuation from here —
+the groups (`t` tasks, `g` git, …) and the leaf actions. Keep typing to drill in;
+`Esc` cancels. You rarely need to memorize anything: the leader *is* the menu.
 
-### Sessions / windows / panes
-
-| Key | Action |
-|---|---|
-| `Ctrl-a d` | Detach (session keeps running) |
-| `Ctrl-a s` | Session switcher |
-| `Ctrl-a c` | New window *(default)* |
-| `Ctrl-a n` / `p` | Next / previous window *(default)* |
-| `Ctrl-a 1`–`9` | Jump to window by number *(default)* |
-| `Ctrl-a h/j/k/l` | Move to pane left/down/up/right |
-| `Ctrl-a H/J/K/L` | Resize pane (repeatable) |
-| `Ctrl-a \|` / `-` | Split right / below |
-| `Ctrl-a z` | Zoom (toggle fullscreen) pane *(default)* |
-| `Ctrl-a [` | Copy mode (scroll; `v` select, `y` yank, `q` exit) |
-| `Ctrl-a r` | Reload karya tmux config |
-
-### karya bindings (call the `karya` binary)
-
-| Key | Action |
-|---|---|
-| `Ctrl-a A` | Switch agent (interactive) → `karya agent switch` |
-| `Ctrl-a N` | Next agent → `karya agent next` |
-| `Ctrl-a D` | Reset layout → `karya agent reset` |
-| `Ctrl-a P` | New project (`language:name`) → `karya new` |
-| `Ctrl-a G` | Ship: agent writes the commit message, then commit & push → `karya ship --push` |
-| `Ctrl-a T` | Task board popup → `karya task list` |
-| `Ctrl-a S` | Toggle synchronize-panes |
-| `Ctrl-a g` | Open lazygit (reuse or create the `git` window) |
-| `Ctrl-a ?` | Pop up this key map & command reference → `karya docs keymaps` |
-| `Ctrl-a Q` | Kill the IDE session (confirm) |
+The current mode (Passthrough / Leader / Command / Search) is always shown in the
+status line, so you are never trapped.
 
 ---
 
-## 3. Neovim (leader `Space`)
+## 1. Window, pane & tab control (`<L>` = `Ctrl-Space`)
 
-### Global
-
-| Key | Mode | Action |
-|---|---|---|
-| `<Esc>` | n | Clear search highlight |
-| `<leader>S` | n | Save |
-| `<leader>Z` | n | Quit |
-| `<leader>x` | n | Close buffer |
-| `<leader>-` / `<leader>\|` | n | Split below / right |
-| `<leader>=` | n | Equalize splits |
-| `<C-h/j/k/l>` | n | Navigate windows |
-| `<A-j>` / `<A-k>` | n/v | Move line(s) down / up |
-| `<` / `>` | v | Indent (selection stays active) |
-
-### Files, search, explorer
+The one set of bindings for the whole IDE — no separate multiplexer.
 
 | Key | Action |
 |---|---|
-| `<leader>ff` | Find files |
-| `<leader>fr` | Recent files |
-| `<leader><space>` | Buffers |
-| `<leader>s/` | Live grep |
-| `<leader>s*` | Grep word under cursor |
-| `<leader>st` | Search TODO/FIXME |
-| `<leader>:` | Command history |
-| `<leader>E` | Explorer at current file's dir (oil) |
-| `<leader>O` | Explorer at working dir |
+| `<L> h` / `j` / `k` / `l` | Focus the pane to the left / down / up / right |
+| `<L> H` / `J` / `K` / `L` | Resize the focused pane (repeatable) |
+| `<L> \|` | Split the focused pane to the right |
+| `<L> -` | Split the focused pane downward |
+| `<L> =` | Equalize all splits |
+| `<L> z` | Zoom / unzoom the focused pane (toggle fullscreen) |
+| `<L> x` | Close the focused pane (confirm) |
+| `<L> w` | Pane / window switcher (pick from a list) |
+| `<L> c` | New tab |
+| `<L> n` / `<L> p` | Next / previous tab |
+| `<L> 1`–`9` | Jump to tab by number |
+| `<L> e` | Focus the editor pane |
+| `<L> f` | Find file (fuzzy) — opens the selection in the editor |
+| `<L> /` | Search the project (live grep) — opens a match at its line |
+| `<L> b` | Focus the build/test pane; run the last command |
+| `<L> ?` | Full keymap & command reference |
+| `<L> Q` | Quit karya (confirm) |
+| `Ctrl-Space Ctrl-Space` | Send a literal `Ctrl-Space` to the focused pane |
 
-### LSP (shared across all languages)
+## 2. Tasks — `<L> t` (human-in-the-loop)
 
-| Key | Mode | Action |
-|---|---|---|
-| `gd` / `gD` | n | Definition / declaration |
-| `gr` | n | References |
-| `gi` / `gt` | n | Implementation / type definition |
-| `K` | n | Hover docs |
-| `<C-k>` | i | Signature help |
-| `<leader>lr` | n | Rename symbol |
-| `<leader>la` | n/v | Code action |
-| `<leader>lf` | n/v | Format via LSP |
-| `<leader>ls` / `<leader>ld` | n | Workspace / document symbols |
-
-### Diagnostics (trouble)
+Each task is a spec contract (`.karya/tasks/<id>/SPEC.md`) that runs in its own
+isolated git worktree (branch `task/<id>`) and advances through human gates.
 
 | Key | Action |
 |---|---|
-| `<leader>ee` | Diagnostics list |
-| `<leader>er` / `<leader>ei` | References / implementations |
-| `<leader>en` / `<leader>ep` | Next / previous item |
+| `<L> t t` | Task board (every task, its state, agent, title) |
+| `<L> t n` | New task (prompts for a slug; scaffolds the spec) |
+| `<L> t s` | Start a task (create its isolated worktree) |
+| `<L> r` | Review the pending gate for the current task |
+| `<L> a` | Agent inbox / delegate the current gate to an agent |
 
-### Editing: treesitter, comments, surround
-
-| Key | Mode | Action |
-|---|---|---|
-| `gcc` / `gc` | n / n,v | Toggle line / motion comment |
-| `sa` / `sd` / `sr` | n,v / n | Add / delete / replace surround |
-| `gnn` `grn` `grm` `grc` | n | Init / grow node / grow scope / shrink |
-| `af`/`if`, `ac`/`ic`, `ab`/`ib`, `ap`/`ip` | — | Around/inside function, class, block, parameter |
-| `]f`/`[f`, `]c`/`[c`, `]b`/`[b`, `]p`/`[p` | n | Next/prev function, class, block, parameter |
-
-### Debug (nvim-dap)
+On the task board the whole gate lifecycle is keyboard-driven — each key runs the
+matching `karya` command in the background and updates the row's state in place:
 
 | Key | Action |
 |---|---|
-| `<leader>db` / `<leader>dB` | Toggle / conditional breakpoint |
-| `<leader>dc` | Continue / start |
-| `<leader>di` / `<leader>do` / `<leader>dO` | Step into / over / out |
-| `<leader>dr` | REPL |
-| `<leader>du` | Toggle DAP UI |
-| `<leader>dt` / `<leader>dx` | Terminate / clear breakpoints |
+| `j`/`k` | Move the selection |
+| `n` | New task (type a slug, `Enter` creates it and opens its spec) |
+| `s` | Start the selected task (create its isolated worktree) |
+| `p` | Plan — the agent drafts `PLAN.md` (→ plan gate) |
+| `i` | Implement the approved plan (→ diff gate) |
+| `v` | Verify — run the spec's Verification block (→ verify gate) |
+| `m` | Merge the approved worktree back to base |
+| `Enter` | Review the selected task's pending gate |
+| `a` | Run the task's agent interactively in a pane |
+| `r` | Refresh · `q` closes |
 
-### Code — `<leader>c` (identical in every language)
+Review and approval stay native (`Enter` / `<L> r`): a human always crosses the
+gate. Destructive actions (abandon) confirm.
 
-One context-aware group. The **same keys** work whatever the file is: karya
-dispatches to the active buffer's language. No per-language prefixes to remember.
+## 3. Git — `<L> g` (built-in panel)
 
-| Key | Mode | Action |
+karya has its own git panel — no external git TUI.
+
+| Key | Action |
+|---|---|
+| `<L> g g` | Open the git panel (status, stage, diff, log, branches) |
+| `<L> g c` | Commit (agent can draft the message) |
+| `<L> g p` | Push |
+
+The panel is a set of bordered panes — **Changes** (working tree), **Branches**,
+**Stashes**, and **Log** (recent history) stacked on the left, with a live diff of
+the selected item on the right — so it stays useful even on a clean tree and it's
+always clear which section has focus.
+
+`Tab` (and `Shift-Tab`) cycles focus between the panes; `j`/`k` move within the
+focused pane; `Enter` performs its primary action for that pane. Per pane:
+
+| Pane | `Enter` / keys |
+|---|---|
+| Changes | `Space`/`Enter` stage/unstage · `a`/`u` stage/unstage all · `c` commit · `P` push |
+| Branches | `Enter` checks out the selected branch (current marked `*`) · `b` creates a new branch |
+| Stashes | `Enter` pops the selected stash · `s` stashes the working tree |
+| Log | moving previews each commit's diff |
+
+`s` (stash) and `b` (new branch) work from any pane. `Ctrl-d`/`Ctrl-u` scroll the
+diff; `q` closes. The diff view is the same renderer used by task review.
+
+## 4. Editing (the embedded Neovim engine)
+
+The editor pane is Neovim embedded as an engine: full modal editing, LSP,
+treesitter, and completion. Because karya forwards unclaimed keys straight to it,
+**normal Vim editing works as you expect** — `hjkl`, operators, text objects,
+`:` commands, visual mode, and so on. karya only intercepts the `Ctrl-Space`
+leader (for IDE actions) before Neovim sees it.
+
+Editor-local actions (format, code action, go-to-definition, run test, …) are
+provided by karya's slim Neovim config under Neovim's own `Space` leader inside
+the editor, and are also reachable as IDE actions from `Ctrl-Space` where they
+cross panes (e.g. running tests routes output to the build/test pane). The full,
+current editor action list is shown by `<L> ?`.
+
+Common LSP keys (in the editor pane, under Neovim's own `Space` leader): `gd`
+definition, `gD` declaration, `gr` references, `gi` implementation, `gy` type
+definition, `K` hover, `<C-k>` signature help, `<Space>ds`/`<Space>ws` document/
+workspace symbols, `<Space>e` show diagnostic, `[d`/`]d` prev/next diagnostic,
+`<Space>q` diagnostics list, `<Space>rn` rename, `<Space>ca` code action,
+`<Space>f` format. The servers are the ones karya auto-installs. For fuzzy file
+navigation and project-wide search across the whole repo, use the karya views
+`<L> f` and `<L> /` above (they open results back in the editor).
+
+**Zero-setup language servers.** When you open a file, karya auto-installs that
+language's server (and formatter/linter) into its own isolated prefix in the
+background — no `:Mason`, no manual install. The status line shows
+`installing go language tools…`, then the LSP attaches on its own when ready.
+Nothing is installed globally; only the languages you actually open get tooling.
+Supported today: Go, Python, Rust, TypeScript/JavaScript, C/C++ (plus the
+always-on Lua/JSON/YAML/Bash/Markdown/TOML servers). More via the marketplace
+later.
+
+## 5. Modes
+
+| Mode | How you enter it | What it does |
 |---|---|---|
-| `<leader>cf` | n/v | Format |
-| `<leader>ci` | n | Organize imports *(languages with an organizer)* |
-| `<leader>cr` | n/v | Refactor (code actions) |
-| `<leader>cc` | n | Build / compile project |
-| `<leader>cp` | n | Run project |
-| `<leader>cR` | n | Run current file |
-| `<leader>ct` / `<leader>cT` | n | Run nearest test / test file · class |
-| `<leader>cl` | n | Re-run last test |
-| `<leader>cd` / `<leader>cD` | n | Debug nearest test / test file *(debug-capable langs)* |
-| `<leader>ch` / `<leader>cH` | n | Incoming / outgoing calls |
-| `<leader>t` | n | Focus tmux build/test pane |
+| Passthrough | default | Keys flow to the focused pane; only `<L>` (and a tiny always-on set) are intercepted |
+| Leader | `Ctrl-Space` | Next keys resolve against the keymap; which-key popup appears |
+| Command | `:` in a karya view | Type a karya view command |
+| Search | `/` in a karya view/list | Incremental search |
 
-Language-specific extras stay under the same prefix, e.g. Python `<leader>cm`
-(run module) / `<leader>cs` (run selection) / `<leader>cv` (show venv), and Java
-`<leader>cw*` workspace actions (build/reload/restart jdtls/clear cache/logs/type
-hierarchy/verify). Every action also exists as a command, e.g. `:GoTestNearest`,
-`:RustRunFile`, `:CppBuild`.
+`Esc` always returns to Passthrough.
 
-### Agent — `<leader>a` (editor↔agent bridge)
+---
 
-Send editor context straight into the coding-agent pane — the agent feels part of
-the editor, not a separate CLI. Text is pasted unsubmitted so you stay in control.
-
-| Key | Mode | Action |
-|---|---|---|
-| `<leader>aa` | n | Focus the agent pane |
-| `<leader>ab` | n | Send the whole buffer |
-| `<leader>as` | v | Send the visual selection (with `file:line`) |
-| `<leader>ac` | n/v | Explain code under cursor / selection |
-| `<leader>ad` | n | Send the diagnostic on this line |
-| `<leader>af` | n | Send a reference to the current file |
-
-### Karya Tasks — `<leader>k` (human-in-the-loop)
-
-Drive `karya task` from the editor. Each task is a spec contract
-(`.karya/tasks/<id>/SPEC.md`) that runs in its own isolated git worktree
-(branch `task/<id>`) and advances through human gates. These run in the
-build/test pane so you see the board and gate history there.
-
-| Key | Mode | Action |
-|---|---|---|
-| `<leader>kn` | n | New task (prompts for a slug; scaffolds the spec) |
-| `<leader>kl` | n | List tasks (the task board) |
-| `<leader>ks` | n | Show a task (state, spec summary, gate history) |
-| `<leader>kt` | n | Start a task (create its isolated worktree) |
-| `<leader>ka` | n | Abandon a task (remove worktree, branch, artifacts) |
-
-### Git
-
-| Key | Mode | Action |
-|---|---|---|
-| `<leader>gc` | n | **Ship**: stage, agent-write the commit message, commit → `karya ship` |
-| `<leader>gd` | n | Diffview (current changes) |
-| `<leader>gh` | n | Preview hunk |
-| `<leader>gb` | n | Blame line |
-| `<leader>gs` / `<leader>gr` | n/v | Stage / reset hunk |
-| `<leader>gu` | n | Undo stage hunk |
-| `<leader>gn` / `<leader>gp` | n | Next / previous hunk |
-| `<leader>gD` | n | Diff against index |
-
-(Manual commit/push/branch also live in lazygit: `Ctrl-a g`.)
-
-### Developer commands (from the embedded config)
-
-`:DevHealth` · `:DevInfo` · `:DevReload` · `:DevUpdate` · `:DevProfile` ·
-`:DevCleanCache [treesitter|jdtls|swap|sessions|lazy|all]`
-
-### Discoverability
-
-Press `<leader>` and pause — `which-key` shows every group. You rarely need to
-memorize anything.
+For every `karya` subcommand (`task`, `plan`, `implement`, `review`, `gate`,
+`verify`, `merge`, `lang`, `install`, `doctor`, …) see [commands.md](commands.md)
+or run `karya help <command>`.

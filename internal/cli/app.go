@@ -2,9 +2,11 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/drjzlyan/karya/internal/assets"
 	"github.com/drjzlyan/karya/internal/config"
+	"github.com/drjzlyan/karya/internal/lang"
 	"github.com/drjzlyan/karya/internal/prefs"
 	"github.com/drjzlyan/karya/internal/tmuxx"
 	"github.com/drjzlyan/karya/internal/toolreg"
@@ -66,7 +68,7 @@ func newApp() (*app, error) {
 	// absolute path from karya's isolated prefix (best-effort: the editor falls
 	// back to PATH if it is missing).
 	_ = toolreg.WriteManifest(p.ToolsManifest(), resolver.Manifest())
-	return &app{
+	a := &app{
 		paths:    p,
 		bin:      bin,
 		env:      env,
@@ -74,5 +76,26 @@ func newApp() (*app, error) {
 		prefs:    prefs.New(p.PrefsFile()),
 		reg:      reg,
 		resolver: resolver,
-	}, nil
+	}
+	// Keep the isolated mise config in sync with the catalog + selection on every
+	// run, like the tmux/shell/nvim configs above. Cheap (render + write, no
+	// install), and it lets catalog fixes — e.g. pinning a tool to a prebuilt
+	// backend — propagate without an explicit `karya lang`/`install`.
+	a.syncMiseConfig()
+	return a, nil
+}
+
+// syncMiseConfig regenerates the isolated mise config.toml from the current
+// language selection and tool catalog. Best-effort: a failure just leaves the
+// previous config in place.
+func (a *app) syncMiseConfig() {
+	sel, err := loadSelection(a)
+	if err != nil {
+		return
+	}
+	vars := lang.MiseVars{
+		GoPath:    filepath.Join(a.paths.Data, "go"),
+		CargoHome: filepath.Join(a.paths.Data, "cargo"),
+	}
+	_ = lang.WriteMiseConfig(a.paths.MiseConfig(), sel, vars, miseToolsFor(a.reg, sel))
 }

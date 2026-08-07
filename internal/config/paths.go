@@ -24,6 +24,12 @@ const AppName = "karya"
 // deliberately matches NvimConfig() so Neovim reads exactly what karya extracts.
 const NvimAppName = AppName + "/nvim"
 
+// NvimEngineAppName is the NVIM_APPNAME for the embedded editing engine
+// (single-process TUI). Its own app-name keeps the slim, plugin-free engine
+// config and its state fully isolated from the legacy karya/nvim tree, so the
+// embed loads exactly what karya extracts to NvimEngineDir().
+const NvimEngineAppName = AppName + "/nvim-engine"
+
 // Paths is the set of karya-owned directories, all namespaced by AppName.
 type Paths struct {
 	// Config: ~/.config/karya (extracted nvim config, tmux.conf, …)
@@ -116,8 +122,25 @@ func (p Paths) EnsureDirs() error {
 // the extracted tree lives there, mirroring a standard ~/.config/nvim layout.
 func (p Paths) NvimConfig() string { return filepath.Join(p.Config, "nvim") }
 
+// NvimEngineDir is where the plugin-free engine config is extracted. With
+// NVIM_APPNAME=karya/nvim-engine, the embedded editor reads its config from
+// ~/.config/karya/nvim-engine, isolated from the legacy karya/nvim tree.
+func (p Paths) NvimEngineDir() string { return filepath.Join(p.Config, "nvim-engine") }
+
 // TmuxConf is the extracted karya tmux configuration used with `tmux -f`.
 func (p Paths) TmuxConf() string { return filepath.Join(p.Config, "tmux.conf") }
+
+// GlobalInstructions is the user-wide agent instructions file, prepended to
+// every agent step prompt before the project and task layers (DESIGN.md §5,
+// §11). Edited with `karya config edit`; absent by default.
+func (p Paths) GlobalInstructions() string { return filepath.Join(p.Config, "instructions.md") }
+
+// SkillsDir is where installed skill packages live in the karya prefix, never in
+// the user's global agent dirs (DESIGN.md §9).
+func (p Paths) SkillsDir() string { return filepath.Join(p.Data, "skills") }
+
+// RegistriesFile records the skill/MCP registry URLs the user has added.
+func (p Paths) RegistriesFile() string { return filepath.Join(p.Config, "registries") }
 
 // ShellInitDir holds karya's own shell startup files (a zsh .zshrc and a bash
 // rcfile). The pane shell (`karya shell`) points ZDOTDIR / --rcfile here so it can

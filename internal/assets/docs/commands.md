@@ -3,35 +3,39 @@
 Every `karya` command, grouped by what it does. Read this offline any time with
 `karya docs commands`, or get focused help with `karya help <command>`.
 
-> Flags come **before** positionals: `karya dev -a claude myproj`, not
-> `karya dev myproj -a claude`.
+> karya is a **single-process TUI IDE**: running `karya` opens its own screen —
+> window/pane manager, editor (embedded Neovim), git panel, and task/review views
+> — all under one keymap ([keymaps.md](keymaps.md)). There is no external
+> multiplexer to attach to.
+
+> Flags come **before** positionals: `karya task new -a claude my-slug`, not
+> `karya task new my-slug -a claude`.
 
 ---
 
-## Session
+## The IDE
 
 | Command | What it does |
 |---|---|
-| `karya` | Launch or attach the IDE session for the current directory |
-| `karya dev [name] [path]` | Explicit session launch |
-| `karya dev -a, --agent <name\|none>` | Choose the coding agent (`none` = plain shell) |
-| `karya dev -k, --kill` | Kill an existing session and recreate it |
-| `karya dev -q, --quit` | Quit (kill) the session cleanly |
-| `karya edit <file> [line]` | Open a file in the editor pane (also karya's `$EDITOR`) |
-| `karya run [-d dir] <cmd…>` | Run a command in the build/test pane |
-| `karya run --focus` | Focus the build/test pane (no command) |
+| `karya` | Launch the single-process TUI IDE for the current directory |
+| `karya edit <file> [line]` | Open a file in the embedded editor pane (also karya's `$EDITOR`) |
+
+Inside the IDE, everything is keyboard-driven under the `Ctrl-Space` leader —
+panes, tabs, git, tasks, gates, and the embedded editor. See
+[keymaps.md](keymaps.md).
 
 ## Coding agents
 
+Agents are configured per task (the spec's `agent:` field, or per-step pins) and
+run either headlessly (`karya plan`/`implement`) or interactively in a PTY pane
+bound to the task worktree.
+
 | Command | What it does |
 |---|---|
-| `karya agent status` | Current + available agents and the saved preference |
-| `karya agent switch` / `next` / `prev` | Change or cycle the session's agent |
-| `karya agent reset` | Rebuild the pane layout (preserves the editor) |
-| `karya agent focus` | Jump to the agent pane |
-| `karya agent send [--file f --line n --label t]` | Paste stdin into the agent pane (the editor↔agent bridge) |
-| `karya agent native [prompt]` | Run karya's **built-in** Claude-API agent — approves each file write / command. Needs `ANTHROPIC_API_KEY` (model via `KARYA_AGENT_MODEL`) |
-| `karya agent prefs` / `clear` | Show / forget the per-project agent preference |
+| `karya doctor` | Shows detected agents (`crush`/`claude`/`codex`/`gemini`/`aider`/`copilot`) |
+| `karya plan <id>` | Run the plan step with the task's agent (headless) |
+| `karya implement <id>` | Run/continue the implement step with the task's agent |
+| `karya gate delegate <id> --to <agent>` | Delegate a gate crossing to an agent (recorded) |
 
 ## Tasks (human-in-the-loop)
 
@@ -49,10 +53,23 @@ work merge. State and gate history live in `STATE.json` next to the spec.
 | `karya task show <id>` | State, workspace, spec summary, and the full gate history |
 | `karya task start <id> [--base <ref>]` | Create the task's worktree on branch `task/<id>` forked from the base ref (default `HEAD`) |
 | `karya task abandon <id> [-y]` | Teardown: remove the worktree, the branch, and the task's artifacts |
+| `karya task audit <id>` | Gate history: who/what approved what, and when |
 
 Tasks advance through mandatory human gates — plan, diff, verification —
-recorded in `STATE.json`. The agent-driven steps (`karya plan`, `implement`,
-`verify`, `merge`) arrive with the upcoming adapter layer.
+recorded in `STATE.json`.
+
+## Gates, review & merge
+
+| Command | What it does |
+|---|---|
+| `karya plan <id>` | (Re)run the plan step; produces `PLAN.md` for review |
+| `karya implement <id>` | Run/continue the implement step in the task worktree |
+| `karya review <id>` | Open the review layout for the pending gate (spec · artifact · feedback) |
+| `karya gate list` | The gate inbox: tasks waiting on a human |
+| `karya gate approve\|reject <id>` | Cross a gate (reject requires feedback; loops back to the agent) |
+| `karya gate delegate <id> --to <agent>` | Let an agent cross the gate (recorded in `STATE.json`) |
+| `karya verify <id>` | Run the spec's `Verification` block; record evidence |
+| `karya merge <id>` | Merge the task branch (post-verify gate) or open a PR |
 
 ## Projects & languages
 
@@ -81,7 +98,7 @@ recorded in `STATE.json`. The agent-driven steps (`karya plan`, `implement`,
 
 | Command | What it does |
 |---|---|
-| `karya tutorial [n \| ide [lang]]` | The self-working tutorial (verified against a throwaway sandbox); `ide` runs the in-editor walkthrough |
+| `karya tutorial [n]` | The self-working tutorial (verified against a throwaway sandbox) |
 | `karya docs [topic]` | Read the embedded docs offline (no topic lists them) |
-| `karya keys` | The full CLI / tmux / Neovim key reference |
+| `karya keys` | The full unified keymap reference (single `Ctrl-Space` leader) |
 | `karya help [command]` | This help, or detailed help for one command |
