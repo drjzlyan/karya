@@ -1,366 +1,342 @@
 # karya — Roadmap to v1.0
 
 Phased build order for the human-in-the-loop agent IDE. karya is a **single
-self-contained process** that owns the terminal (its own window/pane manager,
-git UI, and review surfaces) and embeds Neovim as the text-editing engine over
-msgpack-RPC — everything under one unified keymap. Each phase is shippable and
-leaves the binary working. Full design: [DESIGN.md](DESIGN.md). Founding
-decision: [ADR 0001](docs/adr/0001-single-process-tui-embed-neovim.md). Live
-status: [PROGRESS.md](PROGRESS.md). The v0 roadmap (Phases 0–8, shipped) is in
+self-contained process** that owns the terminal (its own window/pane manager, git
+UI, review surfaces, and six top-level views) and embeds Neovim as the
+text-editing engine over msgpack-RPC — everything under one unified keymap. Each
+phase is shippable and leaves the binary working. Full design:
+[DESIGN.md](DESIGN.md). Founding decision:
+[ADR 0001](docs/adr/0001-single-process-tui-embed-neovim.md). Live status:
+[PROGRESS.md](PROGRESS.md). The v0 roadmap (tmux era, shipped) is in
 [archive/v0/ROADMAP.md](archive/v0/ROADMAP.md).
 
-Legend: ☐ not started · ◐ in progress · ☑ done
+Legend: ☐ not started · ◐ core shipped, follow-ups open · ☑ done
 
-> **The pivot.** The task engine (Phase A, shipped) and the agent adapter layer
-> (Phase B, headless) are reused unchanged. What changed is the presentation
-> layer: instead of orchestrating an external tmux + a standalone Neovim UI +
-> lazygit — three tools with three keymaps — karya now draws its own screen.
-> Phases 1–3 build that single-process TUI; the workflow phases (verification,
-> marketplaces, hardening) follow.
-
----
-
-## Phase A — Task engine foundation ☑
-**Goal:** the task is a real, persistent, isolated unit of work.
-
-- ☑ `internal/task` — lifecycle, `STATE.json`, artifact store (`.karya/tasks/<id>/`)
-- ☑ `internal/spec` — spec parse/validate/render (front-matter + Objective /
-  Acceptance criteria / Context / Constraints / Verification)
-- ☑ `internal/worktree` — git worktree create/lock/teardown per task, branch
-  `task/<id>`, base-ref selection, dirty-tree safety
-- ☑ `karya task new|list|status|show|start|abandon`; `karya init`
-- ☑ Integration tests: real `git worktree` in `t.TempDir()` repos
-
-**Done:** a task is created from a spec, gets an isolated worktree, and its state
-survives restarts — with zero effect on the user's working tree.
+This roadmap is **one linear scheme** in two parts: **Part I — Shipped (P0–P12)**
+summarizes the current build; **Part II — Forward (P13–P20)** is the detailed
+plan. Older docs and memory used a mixed scheme (Phase A/B, 0–7, and a six-view
+"Phase 9"); the mapping to these linear numbers is in
+[PROGRESS.md](PROGRESS.md#phase-map-old--new).
 
 ---
 
-## Phase B — Agent adapter layer ◐
-**Goal:** one interface drives every coding-agent CLI, headless-first. Headless
-and unaffected by the UI pivot; proceeds in parallel with Phase 1+.
+# Part I — Shipped (the current build)
 
-- ◐ `internal/agentrun` — `Agent` interface, `Caps` matrix, transcripts to task dir
-  (WIP carried over; complete the `defaultExec` seam + adapters)
-- ◐ Adapters: claude, codex, crush, gemini, aider, copilot + generic shell adapter
-- ☐ Plan-mode mapping: native where available, prompt-scaffold emulation otherwise
-- ◐ `internal/prompts` — step prompt assembly (spec + feedback + repo context)
-- ☐ Adapter contract tests via scripted fake-agent binary; opt-in `-tags=e2e`
-  real-CLI smoke suite
-- ☑ Fold v0 `internal/ship` into `agentrun` (rename done)
+## Current build at a glance
 
-**Done when:** `karya plan <id>` and `karya implement <id>` run any detected
-agent headlessly in the task worktree, capturing PLAN.md and transcripts.
+**What it does now.** karya is a six-view TUI IDE for human-in-the-loop, agents-
+first software engineering. You launch it on a repo and switch between six
+workspaces with `Ctrl+Space 1-6` (or the `Ctrl+Space Space` picker):
 
----
+1. **Human-in-Control** — embedded-Neovim editor (LSP/treesitter) + fuzzy finder +
+   project search + terminal + a read-only **Companion** agent pane (asks only).
+2. **Multi-Agent SE** — task board + gate inbox (dashboard depth is forward work).
+3. **Git** — lazygit-style panel (status/stage/commit/diff/log/branch/stash).
+4. **Review** — task-gate reviews (PR review is forward work).
+5. **Scratch** — placeholder (forward work).
+6. **Settings** — placeholder (forward work).
 
-## Phase 0 — Design pivot (docs first) ◐
-**Goal:** the design of record describes the single-process TUI IDE before any
-runtime code is written.
+Underneath: a **task engine** — spec contracts, a gate state machine
+(draft→planned→approved→implementing→verifying→merging→done) with a `STATE.json`
+audit trail, per-task git worktrees, and executable verification; **headless agent
+adapters** (claude/codex/crush/gemini/aider/…) behind one interface; **zero-setup**
+LSP/toolchains via an isolated mise; a **skills marketplace**; and a **slim CLI**
+(`version`/`update`/`uninstall` + bare-`karya` launch) with the lifecycle driven
+in-process.
 
-- ☑ Rewrite DESIGN.md: orchestrator → single process; embedded-Neovim engine;
-  unified keymap; new package map; removed packages; TUI testing strategy
-- ◐ Rewrite ROADMAP.md + PROGRESS.md for the new phases
-- ☐ Update AGENTS.md: single-process architecture; drop tmux socket, keep
-  `NVIM_APPNAME`; stdlib-only reaffirmed; where-things-live
-- ☐ Rewrite `docs/keymaps.md` (one unified leader table) + `docs/tutorial.md`
-- ☐ Add `docs/adr/0001-single-process-tui-embed-neovim.md`
-- ☐ `make sync-docs`; docs-drift test green
+**Package map.**
+- *stdlib TUI runtime*: `term` · `cellbuf` · `tui` · `keymap` · `layout` · `pty`(+`pty/vt`)
+- *embedded editor*: `nvimrpc`(+`nvimrpc/msgpack`) · `assets/nvimengine`
+- *root model + view shell*: `ide` (+ `ide/workspace.go`)
+- *views*: `gitui` · `taskview` · `reviewview` · `gateview` · `finder` · `searchview` · `companionview` · `diffview`
+- *task/agent engine*: `task` · `spec` · `worktree` · `gate` · `review` · `verify` · `agentrun` · `prompts` · `tasksvc` · `agent`
+- *platform*: `config` · `prefs` · `toolreg` · `tools` · `skills` · `assets` · `git` · `cli`
 
-**Done when:** docs describe the target architecture and the drift test passes.
+**Conventions established in P12 (future phases follow these):**
 
----
-
-## Phase 1 — TUI walking skeleton ☑
-**Goal:** karya renders its own screen and routes input under one leader — no
-editor yet, but splittable, focusable, resizable panes with a live shell.
-
-- ☑ `internal/term` — raw mode (build-tagged darwin/linux termios), ANSI output,
-  terminfo-lite capability table, size, input `Decoder` (Key/Resize/Mouse/Paste;
-  CSI/SS3/UTF-8, lone-Esc timeout)
-- ☑ `internal/cellbuf` — styled cell grid, wide-rune width, minimal `Diff` renderer
-- ☑ `internal/tui` — Elm-style `Model/Update/View`, `Program` loop, frame
-  coalescing, SIGWINCH, panic-safe restore
-- ☑ `internal/keymap` — unified engine: data-driven bindings, modal resolution,
-  which-key candidates (single leader `Ctrl-Space`, always intercepted)
-- ☑ `internal/layout` — tab/pane tree: splits, focus-by-adjacency, resize, rects
-- ☑ `internal/pty` (+ `pty/vt`) — PTY host + VT parser; live shell panes
-- ☑ `internal/ide` + `karya tui` launches the TUI (bare `karya` flips in Phase 3,
-  once the editor is embedded)
-
-- ☑ Tests: decoder tables, cellbuf diff, keymap resolution, layout geometry,
-  tui loop over pipes, vt snapshots, ide model tests, and an integration PTY
-  smoke test (real binary renders + quits on Ctrl-Space Q)
-
-**Done when:** `karya tui` opens its own multi-pane TUI; `Ctrl-Space |/-` split,
-`Ctrl-Space h/j/k/l` focus, `Ctrl-Space H/J/K/L` resize, which-key discovery —
-with working shell panes, all under one keymap. **Shipped 2026-08-06.**
-
----
-
-## Phase 2 — Embed Neovim as the editing engine ☑
-**Goal:** real editing inside a karya pane via msgpack-RPC.
-
-- ☑ `internal/nvimrpc/msgpack` — minimal stdlib msgpack codec (Marshal + streaming
-  Decoder) for the nvim RPC subset
-- ☑ `internal/nvimrpc` — spawn `nvim --embed`, RPC request/notify + reader,
-  `nvim_ui_attach`, `redraw` → `Grid` reducer → `cellbuf`, `nvim_input`,
-  `nvim_ui_try_resize`, chrome-off options
-- ☑ Editor pane wired into `internal/layout`/`internal/ide`; `karya tui <file>`
-  opens the file in the embedded editor
-- ☑ Tests: msgpack round-trip, `Grid` reducer snapshots from synthetic batches,
-  fake-peer client tests (-race); `-tags=integration` real-nvim (typing renders
-  to Grid) + PTY smoke (open file, quit)
-- ☑ Slim, plugin-free engine config (`internal/assets/nvimengine/init.lua`:
-  options + syntax + treesitter + native LSP + completion) loaded under an
-  isolated `karya/nvim-engine` app-name instead of `--clean`, so LSP/treesitter
-  work in the embed with no plugin/network bootstrap
-- ☑ Configurable leader (`KARYA_LEADER`) — Ctrl+Space is unreliable on macOS
-- ☑ Flip bare `karya` and `karya edit` to the TUI (`karya dev` stays the explicit
-  legacy tmux launcher until the Phase 7 removal)
-- ☑ Zero-setup LSP: opening a file auto-installs its server/formatter/linter into
-  karya's isolated prefix in the background (reuses the mise + tool catalog),
-  attaches on ready; managed PATH threaded into the embed
-- ☐ `.karya/project.toml` LSP override (needs a stdlib TOML reader) — deferred to
-  the marketplace phases; auto-detect covers the common case now
-
-**Done when:** editing (with LSP/treesitter) works inside the embedded editor
-pane, forwarded by karya's keymap, with no Neovim keymap/UI surface of its own.
-**Shipped 2026-08-06.**
-
----
-
-## Phase 3 — Panes, git panel, and task/gate/review views ◐
-**Goal:** the full IDE surface, every part under the one keymap.
-
-- ☑ `internal/git` (headless) + `internal/gitui` — status/stage/commit/diff/log/
-  branch/push (replaces lazygit); `Ctrl+Space g g/c/p`
-- ☑ `internal/diffview` — unified diff parser + cellbuf renderer (shared)
-- ☑ `internal/taskview` (task board, `Ctrl+Space t t`) + `internal/reviewview`
-  (scrollable review, `Ctrl+Space r`) + `internal/review` (artifact assembly)
-- ☑ `internal/gate` — pending-gate model over the task state machine; crossings
-  record actor + feedback in STATE.json (the audit trail)
-- ☑ `karya review <id>`, `karya gate list|approve|reject|delegate`
-- ☑ Tests: git service (fake `Runner` + real-git integration), view model +
-  snapshot tests, gate crossing logic
-- ☐ In-TUI approve/reject keys + gate inbox view (`internal/gateview`) — Phase 4
-- ☐ Agent CLIs as PTY panes bound to task worktrees — Phase 4 (with agentrun
-  interactive runs)
-
-**Done when:** the full loop spec → plan → gate → implement → gate runs with
-human approvals, git is a native panel, and every crossing is recorded.
-**Core shipped 2026-08-07; in-TUI approve + agent panes move to Phase 4.**
-
----
-
-## Phase 4 — Verification & merge ◐
-**Goal:** karya certifies; agents never self-certify.
-
-- ☑ `internal/verify`: executable `Verification` blocks run in the task worktree,
-  captured to `VERIFY-<n>.md` evidence (karya certifies, complete evidence)
-- ☑ `karya verify <id>` (records evidence) + `karya merge <id>` (merge or `--pr`,
-  post verify-gate only; transitions to done, tears down the worktree)
-- ☑ In-TUI approve/reject keys + gate inbox view (`internal/gateview`,
-  `Ctrl+Space a`); review view crosses gates in place
-- ☑ Agent CLIs as PTY panes bound to task worktrees (task board `a`)
-- ☐ `tdd: true` acceptance-test-first flow with failure-signature check
-- ☐ Cross-agent reviewer step (implementer ≠ reviewer) as pre-gate filter
-- ☐ Regression net: auto-detected per-language fast suite at the verify gate
-- ☐ Performance benchmarks in CI with checked-in baselines (DESIGN.md §8.4)
-
-**Done when:** a task reaches DONE only through verify-gate evidence, and merge
-lands on the user's terms (direct merge or PR).
-**Core shipped 2026-08-07; tdd/cross-agent/regression-net/perf remain.**
-
----
-
-## Phase 4.5 — Config & continuity ☑
-**Goal:** a ready-to-work default view, layered agent instructions, and
-agent-agnostic per-task memory so agents are swappable without losing work.
-
-- ☑ Default 3-pane layout on bare `karya`: editor (left) + agent pane (top-right,
-  first detected agent, in the repo) + build/test shell (bottom-right); graceful
-  fallbacks (DESIGN.md §6.1); config override deferred
-- ☑ Layered instructions global → project → task (enhance, not override; opt-in
-  `<!-- karya:override -->`): global `instructions.md` under the karya prefix,
-  prepended in `internal/prompts` before repo `AGENTS.md`/`.karya/CONTEXT.md`
-- ☑ Per-task `MEMORY.md` (agent-agnostic): read into every prompt, append/read
-  API, shown in review — so an agent working a task can be replaced mid-task
-- ☑ Agents run on karya's tools: test asserts the child env puts karya's managed
-  `PATH` ahead of the user's; agent panes/headless runs use the task worktree cwd
-- ☐ `karya config edit` for the global instructions file (deferred)
-
-**Done when:** karya opens into the 3-pane view; agent prompts layer global +
-project + task context; and swapping the agent on a task preserves continuity.
-**Shipped 2026-08-07.**
-
----
-
-## Phase 4.6 — Human IDE features ☑
-**Goal:** karya is a full editor for humans (triage, close reading, manual
-fixes), not only an agent surface (DESIGN.md §6.4).
-
-- ☑ Editor LSP navigation (plugin-free, engine config): declaration/type-def,
-  document/workspace symbols, diagnostics float + `[d`/`]d` + loclist, signature
-  help — with the existing definition/references/implementation/hover/rename/
-  code-action/format
-- ☑ Fuzzy file finder view (`internal/finder`, `Ctrl+Space f`): ripgrep file
-  list (walk fallback), fuzzy filter, Enter opens in the editor pane
-- ☑ Project search / live grep view (`internal/searchview`, `Ctrl+Space /`):
-  ripgrep matches (file:line), Enter opens at the location
-- ☑ `editorPane.OpenFile(path, line)` + focus-editor action (`Ctrl+Space e`)
-
-**Done when:** a human can find files, search the project, and use full LSP
-navigation without leaving karya. **Shipped 2026-08-07.**
-
----
-
-## Phase 5 — Skills marketplace ◐
-**Goal:** portable SKILL.md packages, installed once, visible to every agent.
-
-- ☑ `internal/skills` — registry client, hash-verified atomic install into the
-  karya prefix (Source: HTTP/dir/fake)
-- ☑ Default registry + `karya skills registry add <url>`
-- ☑ Per-agent materialization (symlinks into detected agents' dirs) + removal on
-  uninstall/remove
-- ☑ Project-local `.karya/skills/` listed (auto-visible to task agents)
-- ☑ `karya skills search|install|remove|list` + `karya doctor` reports skills
-- ☐ `internal/skillsview` TUI browser
-
-**Done when:** a skill installs from the registry and is usable by every opted-in
-agent in task runs, fully inside karya-owned paths.
-**Core shipped 2026-08-07; TUI browser deferred.**
-
----
-
-## Phase 6 — MCP marketplace
-**Goal:** one MCP install → every agent's native config.
-
-- ☐ `internal/mcp` — registry client, runtime provisioning via isolated mise
-- ☐ `mcp.toml` source of truth (global + per-project `.karya/mcp.toml`)
-- ☐ Native config renderers: claude `.mcp.json`, crush `crush.json`, gemini
-  `settings.json`, …; regenerate on agent add/remove
-- ☐ Permission scoping per project; secrets by env-var reference only
-- ☐ `karya mcp search|install|remove|list|sync` + `internal/mcpview` TUI browser
-
-**Done when:** installing an MCP server makes it available to all detected agents
-without the user editing any agent config by hand.
-
----
-
-## Phase 7 — Hardening, sandbox, v1.0
-**Goal:** production-trustworthy HITL IDE.
-
-- ☐ `internal/sandbox` — seatbelt (macOS) / bubblewrap (Linux) confinement of
-  agent processes to the task worktree
-- ☐ Registry signing verification (cosign) for skills + MCP
-- ☐ `karya task audit` — full gate/delegation history report
-- ☐ Perf benchmarks green against the budgets (DESIGN.md §8.4)
-- ☐ Remove every remaining tmux/lazygit reference; `doctor` checks nvim-embed + PTY
-- ☐ Dogfood: karya developed through karya tasks for one full cycle
-- ☐ Docs completion: tutorial + keymaps + ADRs for all phases
-- ☐ Tag v1.0
-
-**Done when:** sandboxed task execution, signed marketplace content, audit trail,
-and docs that match behavior. Ship v1.0.
-
----
-
-## Phase 9 — Six-view IDE restructure ◐
-**Goal:** reorganize the IDE around six top-level views (workspaces) the user
-switches between, with agents as headless backend engines karya drives, a slim
-CLI, and seamless cross-view navigation. The views blend together — from any view
-you can jump to the right one for a task (git file → editor, task → git/review).
-
-The six views:
-1. **Human-in-Control** — editor (nav/search/LSP) + terminal + a read-only
-   **Companion** agent pane (asks only, never edits files).
-2. **Multi-Agent SE** — dashboard of every task, agent output, and state; create
-   and instruct tasks; the configurable role pipeline runs here.
-3. **Git** — lazygit-style git ops + worktree list + per-worktree diff.
-4. **Review** — open PRs in configured repos + adhoc PR URL; reviewer comments
-   over the PR base commit.
-5. **Scratch** — ideas/docs/mermaid in a global dir (not the repo), path set in
-   Settings.
-6. **Settings** — language/LSP/formatter installs; global + project agent
-   instructions; agent config; orchestration pipeline; skills; MCP.
-
-**Locked decisions (2026-08-07):** agents are **headless backends karya drives**
-(no interactive agent-in-terminal panes for the SE flow); top-level view switcher
-(`Ctrl+Space 1-6` + `Ctrl+Space Space` picker); **CLI is just
-`version`/`update`/`uninstall`** + bare-`karya` TUI launch; the role pipeline
-(looper / knowledge-maintainer / planner / executor / tester-verifier / reviewer)
-is **user-configurable** with those six as the default preset.
-
-- ☑ **P1 shell** — view switcher + per-workspace pane trees
-  (`internal/ide/workspace.go`), existing panes migrated into their views,
-  cross-view jumps (git file `o`→editor, task `g`/`Enter`→git/review)
-- ☑ Read-only **Companion** agent pane (`internal/companionview`, headless Q&A)
-- ☑ In-process task lifecycle (`internal/tasksvc`) — the TUI no longer shells out
-  to `karya <subcommand>`; CLI slimmed (lifecycle commands deleted; other legacy
-  tooling commands hidden-but-dispatchable, pending migration into Settings in P8)
-- ☐ **P2 Human-in-Control depth** — richer Companion (streaming answers, task/repo
-  context via `internal/prompts`), file tree/breadcrumbs, terminal ergonomics
-- ☐ **P3 Multi-Agent orchestration** — configurable role pipeline as the default
-  preset; per-role headless backend + instructions; per-task per-role status +
-  transcripts (build on `internal/agentrun`, `task`, `gate`)
-- ☐ **P4 Git worktree depth** — first-class worktree list + per-worktree diff over
-  base; jump-to-editor/review from a worktree
-- ☐ **P5 Review of PRs** — `gh pr list` for configured repos + adhoc PR URL; fetch
-  PR base commit, assemble diff via `internal/diffview`, reviewer emits inline
-  comments over the base; optionally post via `gh`
-- ☐ **P6 Scratch** — global scratch dir (Settings-configurable), markdown +
-  mermaid render, doc/page drafting via a headless backend
-- ☐ **P7 Settings UI + MCP** — TUI over `internal/config`/`prefs`/`toolreg`/
-  `skills`; global vs project instructions (non-overriding unless opted in);
-  orchestration pipeline editor; MCP marketplace (folds in Phase 6)
-- ☐ **P8 CLI/tmux cleanup** — remove the hidden legacy subcommands + the
-  tmux/session layer once nothing shells out to `karya <subcommand>`
-
-**Architecture & conventions (established in P1 — future phases follow these):**
-
-- **Workspace layer** (`internal/ide/workspace.go`): root `ide.Model` holds
+- **Workspace layer** (`internal/ide/workspace.go`): the root `ide.Model` holds
   `workspaces [6]*workspace` + an `active` index. Each `workspace` owns its own
-  `*layout.Tree` and its per-view singleton pane IDs (finder/search/git/task/
-  review/inbox/editor). `m.tree` is a live pointer to the active workspace's tree,
-  kept in sync by `switchTo`/`initWorkspaces`, so all pane code and tests operate
-  on one tree. Pane IDs live on `workspace` (not `Model`) because per-tree ids are
-  allocated independently and would collide across workspaces.
+  `*layout.Tree` and its per-view singleton pane IDs. `m.tree` is a live pointer to
+  the active workspace's tree, kept in sync by `switchTo`/`initWorkspaces`, so all
+  pane code and tests operate on one tree. Pane IDs live on `workspace` (not
+  `Model`) because per-tree ids are allocated independently and would collide
+  across workspaces.
 - **Switching**: `switchTo(kind)` sets `active`, lazily seeds the view's default
-  layout on first visit (`seedWorkspace`), and re-syncs pane sizes. Only the
-  editor view is seeded eagerly; the rest seed on first switch (fast startup).
-  Bound to `Ctrl+Space 1-6`; the picker overlay is `Ctrl+Space Space`.
+  layout on first visit (`seedWorkspace`), and re-syncs pane sizes. Only the editor
+  view seeds eagerly; the rest seed on first switch (fast startup).
 - **Cross-view navigation = poll-drain request bus** (no channels): a view sets a
   request field (e.g. `gitui.Panel.OpenRequest`, `taskview.Board.GitRequest/
   ReviewRequest`, `companionview.Companion.AskRequest`), and the root model drains
   it in `forward()`, switching to the target workspace first, then acting. Add new
   cross-view intents the same way.
-- **Agents are headless**: the Companion (`internal/companionview`) and the task
-  lifecycle both call agents via headless one-shot mode off the render path
-  (`agent.NewRunner(name).Headless(...)`, `internal/agentrun`). No interactive
-  agent PTY panes in the SE flow. Companion answers only — never edits files.
+- **Agents are headless**: the Companion and the task lifecycle call agents via
+  one-shot headless mode off the render path (`agent.NewRunner(name).Headless(...)`,
+  `internal/agentrun`). No interactive agent PTY panes in the SE flow.
 - **In-process lifecycle** (`internal/tasksvc`): `Env{Repo, Store, Worktrees}` +
   `RepoEnv(dir)`; `Plan/Implement/Verify/Merge/NewTask/Start/Abandon/List/
-  CrossGate`. The TUI drives the gate lifecycle by calling these directly — it
-  never shells out to a `karya` subcommand.
-- **Pane migration** (where each existing view lives): editor + terminal +
-  Companion, with finder/search, in view 1; task board + gate inbox in view 2;
-  git panel (+ worktree list/diff, P4) in view 3; task-gate reviews in view 4
-  (PR review is P5); placeholders in views 4–6 until their phases land.
+  CrossGate`. The TUI drives gates by calling these directly — never shells out.
 
-**Risks carried forward (address in P8):** the hidden legacy subcommands
-(`shell`, `agent native`, `agent switch-to`, `tui`) are still shelled out by the
-tmux/session layer — remove them together with that layer, not before, or a live
-session breaks. `syncPaneSizes` sizes only the active tree; keep re-syncing on
-`switchTo` when a view was resized while hidden.
+## Shipped phases
 
-**Verification (each phase keeps these green):** `go build ./...`;
-`go test ./...`; golangci-lint via `make lint` (runs it through `go run`, not on
-PATH); the integration smoke (`go test -tags=integration ./internal/ide/`) launches
-`karya tui` on a real PTY. Manual: cycle all six views via `Ctrl+Space 1-6` and
-the picker; ask the Companion a question and confirm no file mutation; open a
-changed file from Git → lands in the editor; run a task lifecycle op and confirm
-it runs in-process (no `karya` subprocess) and the board refreshes.
+Each block is a compact summary; the full chronological detail is in
+[PROGRESS.md](PROGRESS.md). `(was …)` cross-references the older scheme.
 
-**Done when:** all six views are usable and blend together, agents run only as
-karya-driven backends, and the CLI is just `version`/`update`/`uninstall`.
+### P0 — v0 foundation (tmux era, archived) ☑ · *(was v0 Phases 0–8)*
+Isolated tmux IDE session, embedded Neovim config, agent-pane management,
+six-language scaffolding + toolchains, self-update, install/uninstall, and the
+**XDG isolation model**. The presentation layer (tmux/nvim-UI/lazygit) was
+replaced by the single-process pivot; the isolation model + toolchain substrate
+are reused. Planning docs in `archive/v0/`.
+
+### P1 — Task engine foundation ☑ · *(was Phase A, + 9–14 origins)*
+`internal/spec` (SPEC.md contract), `internal/task` (gate state machine +
+`STATE.json` audit trail, in-repo `.karya/tasks/<id>/`), `internal/worktree`
+(worktree-per-task on `task/<id>`, base-ref + dirty-tree safety), `karya
+task`/`karya init`. A task is created from a spec, gets an isolated worktree, and
+survives restarts with zero effect on the user's tree.
+
+### P2 — Agent adapter layer (headless) ◐ · *(was Phase B)*
+`internal/agentrun` (`Agent` interface, `Caps` matrix, transcripts) + adapters
+(claude/codex/crush/gemini/aider/copilot + generic shell), `internal/prompts`
+(layered step-prompt assembly), `internal/agent` (`Runner`, `NewRunner`, native
+Claude-API engine). Core drives `plan`/`implement` headlessly.
+**Follow-ups → P20:** remaining adapter coverage, plan-mode mapping, contract
+tests via a scripted fake-agent binary.
+
+### P3 — Single-process pivot: design/docs ◐ · *(was Phase 0)*
+DESIGN.md rewritten (single-process runtime, embedded-Neovim engine, unified
+keymap, package map, TUI testing strategy) + [ADR 0001](docs/adr/0001-single-process-tui-embed-neovim.md).
+**Follow-ups → P20:** AGENTS.md single-process update, `docs/keymaps.md`/
+`docs/tutorial.md` rewrite for the six views, docs-drift test.
+
+### P4 — TUI walking skeleton ☑ · *(was Phase 1)*
+The stdlib TUI stack: `term` (raw mode, ANSI, input decoder), `cellbuf` (styled
+grid + diff), `tui` (Elm Model/Update/View + Program loop), `keymap` (one
+`Ctrl-Space` leader engine + which-key), `layout` (tab/pane tree), `pty`(+`vt`)
+live shell panes, composed by `internal/ide`. Splittable/focusable/resizable panes
+under one keymap; PTY integration smoke test.
+
+### P5 — Embed Neovim as the editing engine ☑ · *(was Phase 2)*
+`internal/nvimrpc`(+`msgpack`) drives `nvim --embed` (redraw → `Grid` → `cellbuf`,
+input forwarding, chrome-off); `internal/assets/nvimengine` is a plugin-free engine
+config (options + treesitter + native LSP + completion) under an isolated app-name;
+**zero-setup LSP** auto-installs a file's server/formatter into karya's prefix in
+the background. Bare `karya` flips to the TUI. Configurable leader (`KARYA_LEADER`).
+
+### P6 — Git panel, task board, review + gates ☑ · *(was Phase 3)*
+`internal/git` (headless service) + `internal/gitui` (lazygit-style multi-pane:
+changes/branches/stashes/log + diff), `internal/diffview` (shared unified-diff
+renderer), `internal/taskview` (task board), `internal/gate` + `internal/review` +
+`internal/reviewview` (pending-gate model, artifact assembly, scrollable review).
+The full spec→plan→gate→implement→gate loop with recorded crossings.
+
+### P7 — Verification & merge ◐ · *(was Phase 4)*
+`internal/verify` (executable `Verification` in the worktree → `VERIFY-<n>.md`
+evidence), merge-or-`--pr` post verify-gate, in-TUI approve/reject +
+`internal/gateview` inbox, agent CLIs as PTY panes bound to worktrees.
+**Follow-ups → P14/P20:** cross-agent reviewer pre-gate (→P14); `tdd:true`
+acceptance-test-first, regression net, perf benchmarks (→P20).
+
+### P8 — Config & continuity ☑ · *(was Phase 4.5)*
+Default 3-pane layout on bare `karya`; layered agent instructions global → project
+→ task (enhance-not-override, opt-in `<!-- karya:override -->`); per-task
+`MEMORY.md` (agent-agnostic, in prompts + review) so agents are swappable
+mid-task; agents inherit karya's managed PATH.
+
+### P9 — Human IDE features ☑ · *(was Phase 4.6)*
+Full editor LSP navigation (symbols/diagnostics/signature help added to the engine
+config); `internal/finder` fuzzy file finder (`Ctrl+Space f`); `internal/searchview`
+project live-grep (`Ctrl+Space /`); `editorPane.OpenFile` + focus-editor. A human
+can triage, read, and fix without leaving karya.
+
+### P10 — Skills marketplace ◐ · *(was Phase 5)*
+`internal/skills` (registry client, hash-verified atomic install into the karya
+prefix), default registry + `karya skills registry add`, per-agent materialization
+(symlinks into detected agents' dirs), project-local `.karya/skills/`, `karya
+skills …` + `karya doctor` report.
+**Follow-ups → P18:** `internal/skillsview` TUI browser.
+
+### P11 — In-TUI task lifecycle wiring ☑ · *(was the 2026-08-07 lifecycle work)*
+`karya plan`/`karya implement` wrapping `agentrun.RunStep` and owning the gate
+transitions; the task board became a keyboard-driven lifecycle surface
+(`n`ew/`s`tart/`p`lan/`i`mplement/`v`erify/`m`erge). (Later folded in-process in
+P12; the standalone CLI commands were removed.)
+
+### P12 — Six-view shell ☑ · *(was six-view "Phase 9" · P1)*
+`internal/ide/workspace.go` (view switcher + per-workspace pane trees), existing
+panes migrated into their views, cross-view jumps (git file `o`→editor, task
+`g`/`Enter`→git/review), the read-only `internal/companionview` (headless Q&A),
+in-process `internal/tasksvc` (no more shelling out), and the **CLI slimmed** to
+`version`/`update`/`uninstall` (lifecycle commands deleted; other legacy tooling
+commands hidden-but-dispatchable pending P19). Established the conventions above.
+
+---
+
+# Part II — Forward (detailed plan)
+
+Each phase names its goal, the key work, the packages to create or reuse, and its
+done-when. Immediate next: **P14** (with **P13** alongside).
+
+## P13 — Human-in-Control depth ☐
+**Goal:** the editor view is a full IDE for humans and a genuinely useful
+companion.
+
+- **Companion depth:** stream answers incrementally (`agentrun` `Caps.Streaming`)
+  instead of a single blocking reply; inject task/repo context via
+  `prompts.Context` (global → project → task) so answers are grounded; scrollback +
+  copy.
+- **File navigation:** a file-tree / project-explorer pane + breadcrumbs + buffer
+  list, so browsing doesn't depend on the finder alone.
+- **Terminal ergonomics:** multiple terminals, clear/scroll, sensible focus.
+- *Reuse:* `companionview`, `prompts`, `agentrun`, `finder`, `editorPane`.
+
+**Done when:** Companion answers stream with task/repo context, and a human can
+navigate the project from the editor view without the finder.
+
+## P14 — Multi-Agent orchestration ☐  *(centerpiece)*
+**Goal:** multiple named agent roles collaborate to complete a task; the dashboard
+lets you observe every task/role/output/state and create/instruct tasks.
+
+- **Role pipeline (default preset):** looper · knowledge-maintainer · planner ·
+  executor · tester-verifier · reviewer. Each role maps to a headless backend + a
+  role instruction layer. The set and flow are **user-configurable** (the config
+  surface is designed here; the full editor lands in P18 Settings).
+- **Orchestrator:** sequence roles with hand-offs and the mandatory human gates
+  between them — extend `agentrun.RunStep` beyond plan/implement to review/verify
+  steps (DESIGN Phases C–D), reusing the `gate` state machine and per-task
+  `MEMORY.md` for continuity across roles.
+- **Cross-agent review** (implementer ≠ reviewer) as a pre-gate filter — the
+  deferred P7 item lands here.
+- **Dashboard:** per-task, per-role status + live output/transcripts + current
+  state; create tasks; add instructions mid-task (append to `MEMORY.md`).
+- *Reuse:* `agentrun`, `task`, `gate`, `prompts`, `tasksvc`, `taskview`; extend
+  `taskview` or add `internal/dashboardview`.
+
+**Done when:** a task can be driven through the role pipeline with per-role status
++ transcripts visible, cross-agent review runs before gates, and the human can
+create and instruct tasks from the dashboard.
+
+## P15 — Git worktree depth ☐
+**Goal:** first-class worktree management in the Git view (agents work on
+worktrees, so this is how you inspect their work).
+
+- **Worktree list pane** backed by `worktree.Manager` + `git worktree list`:
+  task worktrees with branch, base, and status.
+- **Per-worktree diff over its base commit** (`task.Base`) via `git.DiffRange` +
+  `diffview`.
+- **Jump** from a worktree to the editor/review for that task (cross-view bus).
+- *Reuse:* `worktree`, `git` (`DiffRange`/`Show`), `diffview`, `task.Base`.
+
+**Done when:** the Git view lists task worktrees and shows each one's diff over its
+base, with jump-to-editor/review.
+
+## P16 — Review of PRs ☐
+**Goal:** review open PRs across configured repos, and any adhoc PR URL, with the
+reviewer's comments over the PR base.
+
+- **List open PRs:** `gh pr list --json` across the repos configured in Settings.
+- **Adhoc URL:** paste a PR URL → `gh pr view` / `gh api` for metadata, base
+  commit, and diff.
+- **Assemble review:** diff over the PR base via `diffview`; a headless reviewer
+  backend emits inline comments over the base; render via the `reviewview` pattern.
+  Optionally post via `gh pr review`.
+- *Reuse:* `reviewview`, `diffview`, `agentrun`, the `gh` CLI (already used for
+  `merge --pr`); new `internal/prreview` + `internal/prview`.
+
+**Done when:** open PRs list, an adhoc PR URL can be reviewed with comments over
+its base, and results show in the Review view.
+
+## P17 — Scratch ☐
+**Goal:** a global scratchpad for ideas, docs, and mermaid diagrams — stored
+outside the repo.
+
+- **Global scratch dir** under `config.Paths` (path is Settings-configurable), not
+  the repository.
+- **Markdown** editing (reuse `editorPane` on scratch files) + **mermaid**
+  render/export; **agent-assisted drafting** (ask a headless backend to draft a doc
+  / design a page / produce a diagram).
+- *Reuse:* `editorPane`, `config.Paths`, `agentrun`; new `internal/scratchview`.
+
+**Done when:** notes/docs/mermaid live in a global dir (not the repo), are editable
+in the Scratch view, and can be drafted with agent help.
+
+## P18 — Settings UI + MCP ☐  *(folds old MCP marketplace)*
+**Goal:** configure the whole IDE — global and per-project — from a TUI, and wire
+one MCP install into every agent.
+
+- **Settings view** (`internal/settingsview`) over `config`/`prefs`/`toolreg`/
+  `tools`/`skills`: language/LSP/formatter installs; **global vs project agent
+  instructions** (project does not override global unless the user opts in — reuse
+  the `prompts` override marker); agent config; the **P14 orchestration-pipeline
+  editor**; the scratch-dir path; a **skills browser** (the deferred P10 item).
+- **MCP marketplace:** `internal/mcp` registry + runtime provisioning via the
+  isolated mise; `mcp.toml` as the source of truth (global + `.karya/mcp.toml`);
+  per-agent **native config renderers** (claude `.mcp.json`, crush `crush.json`,
+  gemini `settings.json`, …) regenerated on agent add/remove; permission scoping
+  per project; secrets by env-var reference only. Surfaced **in Settings** (no new
+  CLI — the CLI stays slim).
+- Also fold: **`.karya/project.toml` LSP override** (needs a stdlib TOML reader).
+- *Reuse:* `config`, `prefs`, `toolreg`, `tools`, `skills`, `prompts`; new
+  `internal/settingsview`, `internal/mcp` (+ MCP browser).
+
+**Done when:** the IDE is fully configurable from the Settings view (global +
+project), and installing an MCP server makes it available to all detected agents
+without hand-editing any agent config.
+
+## P19 — CLI / tmux teardown ☐
+**Goal:** complete the slim-CLI promise and delete the legacy tmux/session layer.
+
+- Remove the **hidden legacy subcommands** (`dev`/`new`/`run`/`edit`/`ship`/`lang`/
+  `profile`/`tool`/`install`/`doctor`/`shellenv`/`completion`/`help`/`docs`/
+  `tutorial`/`init`/`skills`/`agent`/`tui`/`shell`) once their function lives in
+  the views/Settings and nothing shells out to `karya <subcommand>`.
+- Delete the **tmux/session layer**: `internal/session`, the tmux client,
+  `assets.ExtractTmuxConf`, the agent `Manager`, the `internal/editor` (tmux
+  send-to-pane) package, and the hidden `shell`/`agent native`/`agent switch-to`/
+  `tui` subprocess callers. Ensure `app.go` bootstrap no longer needs tmux.
+- Reconcile tests; relocate any still-needed logic into the views/config.
+
+**Done when:** the CLI is exactly `version`/`update`/`uninstall` + bare-`karya`,
+no tmux/session code remains, and build/tests/lint are green.
+
+## P20 — Hardening & v1.0 ☐  *(folds old hardening phase + deferred items)*
+**Goal:** production-trustworthy HITL IDE; tag v1.0.
+
+- **Sandbox** (`internal/sandbox`): seatbelt (macOS) / bubblewrap (Linux)
+  confinement of agent processes to the task worktree.
+- **Registry signing** (cosign) verification for skills + MCP.
+- **`karya task audit`** — full gate/delegation history report (surfaced in a
+  view).
+- **Deferred verification work (from P7):** `tdd:true` acceptance-test-first with a
+  failure-signature check; auto-detected per-language regression net at the verify
+  gate; performance benchmarks vs the DESIGN §8.4 budgets in CI with checked-in
+  baselines.
+- **Agent-adapter follow-ups (from P2):** remaining adapters, plan-mode mapping,
+  contract tests via a scripted fake-agent binary.
+- **OKF:** knowledge frontmatter + `karya knowledge export` (DESIGN §11).
+- **Docs completion (from P3):** AGENTS.md single-process update, `docs/keymaps.md`
+  + `docs/tutorial.md` for the six views, ADRs for all phases, docs-drift test.
+- **Dogfood** karya through karya tasks for one full cycle; **tag v1.0**.
+
+**Done when:** sandboxed execution, signed marketplace content, an audit trail,
+perf budgets green, and docs that match behavior. Ship v1.0.
+
+---
+
+## Risks carried forward
+
+- The **hidden legacy subcommands** (`shell`, `agent native`, `agent switch-to`,
+  `tui`) are still shelled out by the tmux/session layer — remove them **together
+  with that layer in P19**, not before, or a live session breaks.
+- `syncPaneSizes` sizes only the active workspace's tree; keep re-syncing on
+  `switchTo` when a view was resized while hidden.
+
+## Verification (every phase keeps these green)
+
+`go build ./...` · `go test ./...` · golangci-lint via `make lint` (runs it through
+`go run`, not on PATH) · the integration smoke `go test -tags=integration
+./internal/ide/` (launches `karya tui` on a real PTY). Manual: cycle all six views
+via `Ctrl+Space 1-6` and the picker; ask the Companion a question and confirm no
+file mutation; open a changed file from Git → lands in the editor; run a task
+lifecycle op and confirm it runs in-process (no `karya` subprocess) and the board
+refreshes.
