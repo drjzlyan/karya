@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/drjzlyan/karya/internal/agent"
 	"github.com/drjzlyan/karya/internal/config"
 	"github.com/drjzlyan/karya/internal/skills"
 )
@@ -47,13 +48,39 @@ func skillsList(store skills.Store) int {
 	names := store.List()
 	if len(names) == 0 {
 		fmt.Println("No skills installed. Find some with `karya skills search`.")
-		return 0
+	} else {
+		fmt.Println("Installed skills:")
+		for _, n := range names {
+			fmt.Printf("  %s\n", n)
+		}
 	}
-	fmt.Println("Installed skills:")
-	for _, n := range names {
-		fmt.Printf("  %s\n", n)
+	// Project-local skills in .karya/skills/ are auto-visible to task agents.
+	if proj := projectSkills(); len(proj) > 0 {
+		fmt.Println("\nProject skills (.karya/skills):")
+		for _, n := range proj {
+			fmt.Printf("  %s\n", n)
+		}
 	}
 	return 0
+}
+
+// projectSkills lists skill dirs under the current repo's .karya/skills/.
+func projectSkills() []string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil
+	}
+	entries, err := os.ReadDir(filepath.Join(cwd, ".karya", "skills"))
+	if err != nil {
+		return nil
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			names = append(names, e.Name())
+		}
+	}
+	return names
 }
 
 func skillsSearch(p config.Paths, store skills.Store, query string) int {
@@ -101,6 +128,9 @@ func skillsInstall(p config.Paths, store skills.Store, args []string) int {
 				return fail(err)
 			}
 			fmt.Printf("installed %s %s from %s\n", entry.Name, entry.Version, reg)
+			if agents := materializeToAgents(store); len(agents) > 0 {
+				fmt.Printf("available to: %s\n", strings.Join(agents, ", "))
+			}
 			return 0
 		}
 	}
@@ -120,8 +150,56 @@ func skillsRemove(store skills.Store, args []string) int {
 	if err := store.Remove(args[0]); err != nil {
 		return fail(err)
 	}
+	// Remove the skill's symlink from each agent's skills dir.
+	for _, dir := range agentSkillsDirs(agent.Detect()) {
+		_ = store.Unlink(dir, args[0])
+	}
 	fmt.Printf("removed %s\n", args[0])
 	return 0
+}
+
+// materializeToAgents symlinks the installed skills into each detected agent's
+// native skills dir, returning the agents it reached (DESIGN.md §9).
+func materializeToAgents(store skills.Store) []string {
+	var reached []string
+	for _, a := range agent.Detect() {
+		dir := agentSkillsDir(a)
+		if dir == "" {
+			continue
+		}
+		if err := store.Materialize(dir); err == nil {
+			reached = append(reached, a)
+		}
+	}
+	return reached
+}
+
+// agentSkillsDirs returns the known skills dirs for the given agents.
+func agentSkillsDirs(agents []string) []string {
+	var dirs []string
+	for _, a := range agents {
+		if d := agentSkillsDir(a); d != "" {
+			dirs = append(dirs, d)
+		}
+	}
+	return dirs
+}
+
+// agentSkillsDir returns an agent CLI's native skills directory, or "" if karya
+// does not know one for it. Skills follow the SKILL.md convention that
+// Claude/Crush use; other agents get project-local skills instead.
+func agentSkillsDir(name string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	switch name {
+	case "claude":
+		return filepath.Join(home, ".claude", "skills")
+	case "crush":
+		return filepath.Join(home, ".config", "crush", "skills")
+	}
+	return ""
 }
 
 func skillsRegistry(p config.Paths, args []string) int {

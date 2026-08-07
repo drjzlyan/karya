@@ -10,7 +10,9 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/drjzlyan/karya/internal/agent"
 	"github.com/drjzlyan/karya/internal/editor"
+	"github.com/drjzlyan/karya/internal/skills"
 	"github.com/drjzlyan/karya/internal/tools"
 	"github.com/drjzlyan/karya/internal/update"
 	"github.com/drjzlyan/karya/internal/version"
@@ -179,6 +181,13 @@ func cmdUninstall(args []string) int {
 	if !*yes && !confirm(os.Stdin, "Continue?") {
 		fmt.Println("Aborted.")
 		return 0
+	}
+
+	// Remove skill symlinks karya materialized into agents' dirs, so no dangling
+	// links are left behind (isolation: karya cleans up what it created).
+	store := skills.Store{Root: a.paths.SkillsDir()}
+	for _, dir := range agentSkillsDirs(agent.Detect()) {
+		_ = store.Dematerialize(dir)
 	}
 
 	for _, d := range dirs {
