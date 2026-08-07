@@ -228,6 +228,50 @@ func (r *Repo) Branches() ([]string, error) {
 	return names, nil
 }
 
+// Checkout switches the working tree to an existing branch (or any ref).
+func (r *Repo) Checkout(ref string) error { return r.do("checkout", ref) }
+
+// CreateBranch creates a new branch from HEAD and switches to it.
+func (r *Repo) CreateBranch(name string) error { return r.do("checkout", "-b", name) }
+
+// Stash is one entry in the stash stack.
+type Stash struct {
+	Ref  string // e.g. "stash@{0}"
+	Desc string
+}
+
+// Stash saves the working tree and index to a new stash entry.
+func (r *Repo) Stash() error { return r.do("stash", "push") }
+
+// StashList lists stash entries (newest first).
+func (r *Repo) StashList() ([]Stash, error) {
+	out, err := r.out("stash", "list", "--format=%gd\x1f%gs")
+	if err != nil {
+		return nil, err
+	}
+	var stashes []Stash
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\x1f", 2)
+		s := Stash{Ref: parts[0]}
+		if len(parts) > 1 {
+			s.Desc = parts[1]
+		}
+		stashes = append(stashes, s)
+	}
+	return stashes, nil
+}
+
+// StashShow returns the diff a stash entry holds, for previewing it in the panel.
+func (r *Repo) StashShow(ref string) (string, error) {
+	return r.out("stash", "show", "--patch", ref)
+}
+
+// StashPop applies a stash entry and drops it from the stack.
+func (r *Repo) StashPop(ref string) error { return r.do("stash", "pop", ref) }
+
 // Push pushes the current branch to its upstream (best-effort: sets upstream on
 // first push).
 func (r *Repo) Push() error {

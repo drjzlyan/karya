@@ -106,14 +106,23 @@ karya has its own git panel — no external git TUI.
 | `<L> g c` | Commit (agent can draft the message) |
 | `<L> g p` | Push |
 
-The panel has two lists — **Changes** (the working tree) and **Log** (recent
-history) — with a live diff of whatever is selected, so it stays useful even on a
-clean tree. `Tab` switches focus between the two lists (a clean tree starts on the
-log); `j`/`k` move within the focused list. In Changes, `Space`/`Enter`
-stage/unstage the file, `a`/`u` stage/unstage all, `c` commits (the agent can
-draft the message), `P` pushes. In Log, moving previews each commit's diff.
-`Ctrl-d`/`Ctrl-u` scroll the diff; `q` closes. The diff view is the same renderer
-used by task review.
+The panel is a set of bordered panes — **Changes** (working tree), **Branches**,
+**Stashes**, and **Log** (recent history) stacked on the left, with a live diff of
+the selected item on the right — so it stays useful even on a clean tree and it's
+always clear which section has focus.
+
+`Tab` (and `Shift-Tab`) cycles focus between the panes; `j`/`k` move within the
+focused pane; `Enter` performs its primary action for that pane. Per pane:
+
+| Pane | `Enter` / keys |
+|---|---|
+| Changes | `Space`/`Enter` stage/unstage · `a`/`u` stage/unstage all · `c` commit · `P` push |
+| Branches | `Enter` checks out the selected branch (current marked `*`) · `b` creates a new branch |
+| Stashes | `Enter` pops the selected stash · `s` stashes the working tree |
+| Log | moving previews each commit's diff |
+
+`s` (stash) and `b` (new branch) work from any pane. `Ctrl-d`/`Ctrl-u` scroll the
+diff; `q` closes. The diff view is the same renderer used by task review.
 
 ## 4. Editing (the embedded Neovim engine)
 

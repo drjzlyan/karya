@@ -253,6 +253,27 @@ dashboard.
   `go vet`, `go test -race ./...`, `-tags=integration` (ide+agentrun), and
   golangci-lint v2 all green.
 
+### 2026-08-07 — Git panel: history, branches, stash + boxed multi-pane UX
+
+- The git panel is now a lazygit-style multi-pane surface instead of a single
+  continuous list. Left column stacks four **bordered panes** — Changes,
+  Branches, Stashes, Log — with the selected item's diff in a large pane on the
+  right, so it's always clear where each section starts and which has focus, and
+  the panel is useful even on a clean tree.
+- Promoted the IDE's box-frame drawer to a shared primitive `cellbuf.Box`
+  (title + focus styling, returns inner rect); `ide.drawFrame` now delegates to
+  it — one border implementation for the window manager and views.
+- git service (`internal/git`): `Checkout`, `CreateBranch`, `Stash`/`StashList`/
+  `StashShow`/`StashPop`; `Commit` carries author + relative date; `Show(ref)`
+  for commit diffs.
+- Panel keys: `Tab`/`Shift-Tab` cycle panes; `j`/`k` move; `Enter` acts per pane
+  (stage · checkout · pop); `s` stash, `b` new-branch input; `c` commit, `P` push
+  unchanged. Diff pane previews commit/stash/file diffs. docs/keymaps.md git
+  section rewritten + re-vendored.
+- Verified: git argv + parse tests; gitui load/focus-cycle/checkout/stash push+pop/
+  new-branch/boxed-render tests; `go build`, `go vet`, `-race`, `-tags=integration`
+  (ide), golangci-lint v2 all green.
+
 ### Resume point (do this next)
 
 1. Phase 6 — MCP marketplace (mirrors skills): `internal/mcp`, per-agent native

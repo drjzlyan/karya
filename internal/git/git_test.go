@@ -120,3 +120,55 @@ func TestLogParse(t *testing.T) {
 		t.Fatalf("log = %+v want %+v", commits, want)
 	}
 }
+
+func TestCheckoutAndCreateBranch(t *testing.T) {
+	fr := &fakeRunner{}
+	r := New("/repo", fr)
+	if err := r.Checkout("feature"); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(fr.calls[0], []string{"git", "checkout", "feature"}) {
+		t.Fatalf("checkout argv: %v", fr.calls[0])
+	}
+	if err := r.CreateBranch("new-thing"); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(fr.calls[1], []string{"git", "checkout", "-b", "new-thing"}) {
+		t.Fatalf("create-branch argv: %v", fr.calls[1])
+	}
+}
+
+func TestStashListParse(t *testing.T) {
+	fr := &fakeRunner{outputs: map[string]string{
+		"stash list --format=%gd\x1f%gs": "stash@{0}\x1fWIP on main: abc feature\nstash@{1}\x1fOn dev: fix",
+	}}
+	r := New("/repo", fr)
+	stashes, err := r.StashList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Stash{
+		{Ref: "stash@{0}", Desc: "WIP on main: abc feature"},
+		{Ref: "stash@{1}", Desc: "On dev: fix"},
+	}
+	if !reflect.DeepEqual(stashes, want) {
+		t.Fatalf("stashes = %+v want %+v", stashes, want)
+	}
+}
+
+func TestStashPushAndPop(t *testing.T) {
+	fr := &fakeRunner{}
+	r := New("/repo", fr)
+	if err := r.Stash(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(fr.calls[0], []string{"git", "stash", "push"}) {
+		t.Fatalf("stash argv: %v", fr.calls[0])
+	}
+	if err := r.StashPop("stash@{0}"); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(fr.calls[1], []string{"git", "stash", "pop", "stash@{0}"}) {
+		t.Fatalf("stash pop argv: %v", fr.calls[1])
+	}
+}

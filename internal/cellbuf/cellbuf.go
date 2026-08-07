@@ -204,6 +204,48 @@ func (b *Buffer) Fill(r Rect, c Cell) {
 	}
 }
 
+// Box draws a single-line border around r with an optional title, styled for
+// focus (bold cyan when focused, dim otherwise), and returns the inner content
+// rectangle. It is the shared pane-frame primitive used by the IDE window
+// manager and by multi-pane views such as the git panel. If r is too small for
+// a border it returns r unchanged.
+func Box(buf *Buffer, r Rect, title string, focused bool) Rect {
+	if r.W < 2 || r.H < 2 {
+		return r
+	}
+	st := Style{}
+	if focused {
+		st.Attrs |= AttrBold
+		st.FG = Palette(6) // cyan for the active pane
+	} else {
+		st.FG = Palette(8) // dim for inactive
+	}
+	left, right := r.X, r.X+r.W-1
+	top, bottom := r.Y, r.Y+r.H-1
+
+	set := func(x, y int, ru rune) { buf.Set(x, y, Cell{Rune: ru, Width: 1, Style: st}) }
+	set(left, top, '┌')
+	set(right, top, '┐')
+	set(left, bottom, '└')
+	set(right, bottom, '┘')
+	for x := left + 1; x < right; x++ {
+		set(x, top, '─')
+		set(x, bottom, '─')
+	}
+	for y := top + 1; y < bottom; y++ {
+		set(left, y, '│')
+		set(right, y, '│')
+	}
+	if title != "" && r.W > 4 {
+		label := " " + title + " "
+		if len(label) > r.W-2 {
+			label = label[:r.W-2]
+		}
+		buf.SetString(left+2, top, label, st)
+	}
+	return Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}
+}
+
 // Clone returns a deep copy of the buffer.
 func (b *Buffer) Clone() *Buffer {
 	cp := &Buffer{w: b.w, h: b.h, cells: make([]Cell, len(b.cells))}

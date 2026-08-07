@@ -105,43 +105,10 @@ func (s *shellPane) close() {
 }
 
 // drawFrame draws a box around r with title, styled by focus, and returns the
-// inner content rectangle. If r is too small for a border, it returns r
-// unchanged.
+// inner content rectangle. It delegates to cellbuf.Box, the shared pane-frame
+// primitive.
 func drawFrame(buf *cellbuf.Buffer, r cellbuf.Rect, title string, focused bool) cellbuf.Rect {
-	if r.W < 2 || r.H < 2 {
-		return r
-	}
-	st := cellbuf.Style{}
-	if focused {
-		st.Attrs |= cellbuf.AttrBold
-		st.FG = cellbuf.Palette(6) // cyan for the active pane
-	} else {
-		st.FG = cellbuf.Palette(8) // dim for inactive
-	}
-	left, right := r.X, r.X+r.W-1
-	top, bottom := r.Y, r.Y+r.H-1
-
-	set := func(x, y int, ru rune) { buf.Set(x, y, cellbuf.Cell{Rune: ru, Width: 1, Style: st}) }
-	set(left, top, '┌')
-	set(right, top, '┐')
-	set(left, bottom, '└')
-	set(right, bottom, '┘')
-	for x := left + 1; x < right; x++ {
-		set(x, top, '─')
-		set(x, bottom, '─')
-	}
-	for y := top + 1; y < bottom; y++ {
-		set(left, y, '│')
-		set(right, y, '│')
-	}
-	if title != "" && r.W > 4 {
-		label := " " + title + " "
-		if len(label) > r.W-2 {
-			label = label[:r.W-2]
-		}
-		buf.SetString(left+2, top, label, st)
-	}
-	return cellbuf.Rect{X: r.X + 1, Y: r.Y + 1, W: r.W - 2, H: r.H - 2}
+	return cellbuf.Box(buf, r, title, focused)
 }
 
 // encodeKey converts a Key into the byte sequence a terminal application (the

@@ -17,14 +17,19 @@ type mode uint8
 const (
 	modeNormal mode = iota
 	modeCommit
+	modeBranch // typing a new branch name
 )
 
-// focusArea is which list the panel's motion keys drive.
+// focusArea is which pane the panel's motion keys drive. Tab cycles through them
+// in this order.
 type focusArea uint8
 
 const (
-	focusChanges focusArea = iota // the working-tree file list
-	focusLog                      // the commit history
+	focusChanges  focusArea = iota // the working-tree file list
+	focusBranches                  // local branches (checkout)
+	focusStashes                   // the stash stack (pop)
+	focusLog                       // the commit history
+	numFocusAreas
 )
 
 // logDepth is how many recent commits the panel loads, so the history is useful
@@ -39,6 +44,12 @@ type Panel struct {
 	files  []git.FileStatus
 	sel    int
 
+	branches  []string
+	branchSel int
+
+	stashes  []git.Stash
+	stashSel int
+
 	commits []git.Commit
 	logSel  int
 
@@ -48,6 +59,7 @@ type Panel struct {
 
 	mode      mode
 	commitBuf string
+	branchBuf string
 	status    string
 	closed    bool
 }
@@ -89,6 +101,18 @@ func (p *Panel) refresh() {
 	if p.sel >= len(files) {
 		p.sel = max(0, len(files)-1)
 	}
+	if branches, err := p.repo.Branches(); err == nil {
+		p.branches = branches
+	}
+	if p.branchSel >= len(p.branches) {
+		p.branchSel = max(0, len(p.branches)-1)
+	}
+	if stashes, err := p.repo.StashList(); err == nil {
+		p.stashes = stashes
+	}
+	if p.stashSel >= len(p.stashes) {
+		p.stashSel = max(0, len(p.stashes)-1)
+	}
 	if commits, err := p.repo.Log(logDepth); err == nil {
 		p.commits = commits
 	}
@@ -97,38 +121,55 @@ func (p *Panel) refresh() {
 	}
 	// On a clean tree there is nothing to stage, so default motion to history —
 	// the panel stays useful instead of showing an empty void.
-	if len(p.files) == 0 && len(p.commits) > 0 {
+	if len(p.files) == 0 && p.focus == focusChanges && len(p.commits) > 0 {
 		p.focus = focusLog
 	}
 	p.loadDiff()
 }
 
+// loadDiff loads the preview shown in the diff pane for whatever the focused
+// pane has selected: a file's worktree/staged diff, a commit's diff, a stash's
+// diff, or nothing (branches have no diff preview).
 func (p *Panel) loadDiff() {
 	p.diffScroll = 0
-	if p.focus == focusLog {
+	switch p.focus {
+	case focusLog:
 		if len(p.commits) == 0 {
 			p.diff = nil
 			return
 		}
 		d, _ := p.repo.Show(p.commits[p.logSel].Hash)
 		p.diff = diffview.Parse(d)
-		return
-	}
-	if len(p.files) == 0 {
+	case focusStashes:
+		if len(p.stashes) == 0 {
+			p.diff = nil
+			return
+		}
+		d, _ := p.repo.StashShow(p.stashes[p.stashSel].Ref)
+		p.diff = diffview.Parse(d)
+	case focusBranches:
 		p.diff = nil
-		return
+	default: // focusChanges
+		if len(p.files) == 0 {
+			p.diff = nil
+			return
+		}
+		f := p.files[p.sel]
+		// Prefer the staged diff for a purely-staged file; else the worktree diff.
+		staged := f.Staged() && !f.Unstaged()
+		d, _ := p.repo.Diff(f.Path, staged)
+		p.diff = diffview.Parse(d)
 	}
-	f := p.files[p.sel]
-	// Prefer the staged diff for a purely-staged file; otherwise the worktree diff.
-	staged := f.Staged() && !f.Unstaged()
-	d, _ := p.repo.Diff(f.Path, staged)
-	p.diff = diffview.Parse(d)
 }
 
 // HandleKey processes a key forwarded to the focused panel.
 func (p *Panel) HandleKey(k term.Key) {
-	if p.mode == modeCommit {
+	switch p.mode {
+	case modeCommit:
 		p.handleCommitKey(k)
+		return
+	case modeBranch:
+		p.handleBranchKey(k)
 		return
 	}
 	switch {
@@ -137,9 +178,17 @@ func (p *Panel) HandleKey(k term.Key) {
 	case k == term.RuneKey('k') || k == term.Named(term.SymUp):
 		p.move(-1)
 	case k == term.Named(term.SymTab):
-		p.toggleFocus()
-	case k == term.RuneKey(' ') || k == term.Named(term.SymEnter):
-		p.toggleStage()
+		p.cycleFocus(1)
+	case k == (term.Key{Sym: term.SymTab, Mod: term.ModShift}):
+		p.cycleFocus(-1)
+	case k == term.Named(term.SymEnter):
+		p.activate()
+	case k == term.RuneKey(' '):
+		if p.focus == focusChanges {
+			p.toggleStage()
+		} else {
+			p.activate()
+		}
 	case k == term.RuneKey('a'):
 		_ = p.repo.StageAll()
 		p.refresh()
@@ -150,6 +199,11 @@ func (p *Panel) HandleKey(k term.Key) {
 		p.EnterCommit()
 	case k == term.RuneKey('P'):
 		p.Push()
+	case k == term.RuneKey('s'):
+		p.stash()
+	case k == term.RuneKey('b'):
+		p.mode = modeBranch
+		p.branchBuf = ""
 	case k == term.RuneKey('r'):
 		p.refresh()
 	case k == term.Ctrl('d'):
@@ -159,6 +213,48 @@ func (p *Panel) HandleKey(k term.Key) {
 	case k == term.RuneKey('q') || k == term.Named(term.SymEsc):
 		p.closed = true
 	}
+}
+
+// activate performs the primary action for the focused pane: stage/unstage a
+// file (Changes), check out a branch (Branches), or pop a stash (Stashes). The
+// Log pane has no activation.
+func (p *Panel) activate() {
+	switch p.focus {
+	case focusChanges:
+		p.toggleStage()
+	case focusBranches:
+		if len(p.branches) == 0 {
+			return
+		}
+		name := p.branches[p.branchSel]
+		if err := p.repo.Checkout(name); err != nil {
+			p.status = "checkout failed: " + err.Error()
+		} else {
+			p.status = "switched to " + name
+		}
+		p.refresh()
+	case focusStashes:
+		if len(p.stashes) == 0 {
+			return
+		}
+		ref := p.stashes[p.stashSel].Ref
+		if err := p.repo.StashPop(ref); err != nil {
+			p.status = "stash pop failed: " + err.Error()
+		} else {
+			p.status = "popped " + ref
+		}
+		p.refresh()
+	}
+}
+
+// stash saves the working tree to a new stash entry.
+func (p *Panel) stash() {
+	if err := p.repo.Stash(); err != nil {
+		p.status = "stash failed: " + err.Error()
+	} else {
+		p.status = "stashed working changes"
+	}
+	p.refresh()
 }
 
 func (p *Panel) handleCommitKey(k term.Key) {
@@ -189,31 +285,67 @@ func (p *Panel) handleCommitKey(k term.Key) {
 	}
 }
 
-// toggleFocus switches motion keys between the file list and the commit log,
-// then reloads the diff for whatever the newly focused list has selected.
-func (p *Panel) toggleFocus() {
-	if p.focus == focusChanges {
-		p.focus = focusLog
-	} else {
-		p.focus = focusChanges
-	}
+// cycleFocus moves focus to the next (delta +1) or previous (delta -1) pane and
+// reloads the diff for whatever the newly focused pane has selected.
+func (p *Panel) cycleFocus(delta int) {
+	p.focus = focusArea((int(p.focus) + delta + int(numFocusAreas)) % int(numFocusAreas))
 	p.loadDiff()
 }
 
+// move advances the selection within the focused pane.
 func (p *Panel) move(delta int) {
-	if p.focus == focusLog {
+	switch p.focus {
+	case focusBranches:
+		if len(p.branches) == 0 {
+			return
+		}
+		p.branchSel = clamp(p.branchSel+delta, 0, len(p.branches)-1)
+	case focusStashes:
+		if len(p.stashes) == 0 {
+			return
+		}
+		p.stashSel = clamp(p.stashSel+delta, 0, len(p.stashes)-1)
+	case focusLog:
 		if len(p.commits) == 0 {
 			return
 		}
 		p.logSel = clamp(p.logSel+delta, 0, len(p.commits)-1)
-		p.loadDiff()
-		return
+	default: // focusChanges
+		if len(p.files) == 0 {
+			return
+		}
+		p.sel = clamp(p.sel+delta, 0, len(p.files)-1)
 	}
-	if len(p.files) == 0 {
-		return
-	}
-	p.sel = clamp(p.sel+delta, 0, len(p.files)-1)
 	p.loadDiff()
+}
+
+// handleBranchKey edits the new-branch name; Enter creates and checks it out.
+func (p *Panel) handleBranchKey(k term.Key) {
+	switch {
+	case k == term.Named(term.SymEsc):
+		p.mode = modeNormal
+		p.branchBuf = ""
+	case k == term.Named(term.SymEnter):
+		name := p.branchBuf
+		p.mode = modeNormal
+		p.branchBuf = ""
+		if name == "" {
+			p.status = "new branch aborted: empty name"
+			return
+		}
+		if err := p.repo.CreateBranch(name); err != nil {
+			p.status = "create branch failed: " + err.Error()
+		} else {
+			p.status = "created branch " + name
+		}
+		p.refresh()
+	case k == term.Named(term.SymBackspace):
+		if n := len(p.branchBuf); n > 0 {
+			p.branchBuf = p.branchBuf[:n-1]
+		}
+	case k.Sym == term.SymRune && k.Mod == 0:
+		p.branchBuf += string(k.Rune)
+	}
 }
 
 func clamp(v, lo, hi int) int {

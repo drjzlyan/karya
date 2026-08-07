@@ -8,115 +8,229 @@ import (
 	"github.com/drjzlyan/karya/internal/git"
 )
 
-// View renders the panel into rect: a header, a left file list, a right diff of
-// the selected file, and a bottom status/commit line. It satisfies
-// layout.PaneContent.
+// minBox is the smallest useful box height (top border + 1 content row + bottom).
+const minBox = 3
+
+// View renders the panel as a set of bordered panes — Changes, Branches,
+// Stashes, and Log stacked in a left column, with the selected item's diff in a
+// large pane on the right — plus a bottom status/input line. Discrete panes
+// (rather than one continuous list) make it obvious where each section starts
+// and which one has focus. It satisfies layout.PaneContent.
 func (p *Panel) View(buf *cellbuf.Buffer, r cellbuf.Rect, focused bool) {
-	if r.W < 4 || r.H < 3 {
+	if r.W < 8 || r.H < 4 {
 		return
 	}
-	// Header.
-	header := "  branch: " + p.branch
-	buf.SetString(r.X, r.Y, fit(header, r.W), cellbuf.Style{Attrs: cellbuf.AttrBold})
-
-	// Bottom line: commit input or status.
+	// Top header: the current branch. Bottom line: status or an input prompt.
+	buf.SetString(r.X, r.Y, fit("  on "+p.branch, r.W), cellbuf.Style{Attrs: cellbuf.AttrBold})
 	bottomY := r.Y + r.H - 1
 	p.drawBottom(buf, r, bottomY)
 
 	bodyY := r.Y + 1
 	bodyH := bottomY - bodyY
-	if bodyH < 1 {
+	if bodyH < minBox {
 		return
 	}
-	listW := min(40, r.W/2)
+	leftW := clamp(r.W*2/5, 22, 44)
 
-	// Left column: Changes on top, Log below — so the panel is informative even
-	// when the tree is clean. Give Changes only what it needs (capped at half),
-	// and let the Log fill the rest.
-	changesH := len(p.files) + 1 // +1 header
-	if changesH < 2 {
-		changesH = 2 // header + "(clean)"
+	// Left column: four stacked panes. Give each its natural height, capped so the
+	// Log (last) still gets room; the Log absorbs any remainder.
+	natural := []int{
+		len(p.files) + 2,
+		min(len(p.branches), 4) + 2,
+		min(len(p.stashes), 3) + 2,
+		bodyH, // the log wants whatever is left
 	}
-	if max := bodyH / 2; changesH > max && max >= 2 {
-		changesH = max
-	}
-	if changesH > bodyH {
-		changesH = bodyH
-	}
-	p.drawChanges(buf, cellbuf.Rect{X: r.X, Y: bodyY, W: listW, H: changesH})
-	logY := bodyY + changesH
-	if logH := bottomY - logY; logH > 0 {
-		p.drawLog(buf, cellbuf.Rect{X: r.X, Y: logY, W: listW, H: logH})
-	}
+	h := splitColumn(bodyH, natural)
+	y := bodyY
+	p.drawChanges(buf, cellbuf.Rect{X: r.X, Y: y, W: leftW, H: h[0]})
+	y += h[0]
+	p.drawBranches(buf, cellbuf.Rect{X: r.X, Y: y, W: leftW, H: h[1]})
+	y += h[1]
+	p.drawStashes(buf, cellbuf.Rect{X: r.X, Y: y, W: leftW, H: h[2]})
+	y += h[2]
+	p.drawLog(buf, cellbuf.Rect{X: r.X, Y: y, W: leftW, H: h[3]})
 
-	diffX := r.X + listW + 1
-	diffW := r.X + r.W - diffX
-	if diffW > 0 {
-		diffview.Render(buf, cellbuf.Rect{X: diffX, Y: bodyY, W: diffW, H: bodyH}, p.diff, p.diffScroll)
+	// Right column: the diff of whatever is selected.
+	diffRect := cellbuf.Rect{X: r.X + leftW, Y: bodyY, W: r.W - leftW, H: bodyH}
+	inner := cellbuf.Box(buf, diffRect, p.diffTitle(), p.focus == focusLog || p.focus == focusStashes)
+	diffview.Render(buf, inner, p.diff, p.diffScroll)
+}
+
+// splitColumn distributes bodyH across len(natural) stacked boxes: each takes its
+// natural height but never so much that a later box drops below minBox, and the
+// last box absorbs any remainder. Boxes that cannot fit get 0 (skipped).
+func splitColumn(bodyH int, natural []int) []int {
+	n := len(natural)
+	out := make([]int, n)
+	remaining := bodyH
+	for i := 0; i < n; i++ {
+		if remaining < minBox {
+			out[i] = 0
+			continue
+		}
+		reserve := minBox * (n - i - 1) // keep room for the boxes below
+		avail := remaining - reserve
+		want := natural[i]
+		if want > avail {
+			want = avail
+		}
+		if want < minBox {
+			want = minBox
+		}
+		if want > remaining {
+			want = remaining
+		}
+		out[i] = want
+		remaining -= want
 	}
+	if remaining > 0 { // hand leftover to the last (log) box
+		out[n-1] += remaining
+	}
+	return out
 }
 
 func (p *Panel) drawChanges(buf *cellbuf.Buffer, r cellbuf.Rect) {
-	hdr := header("Changes", len(p.files), p.focus == focusChanges)
-	buf.SetString(r.X, r.Y, fit(hdr, r.W), cellbuf.Style{Attrs: cellbuf.AttrBold})
-	rows := cellbuf.Rect{X: r.X, Y: r.Y + 1, W: r.W, H: r.H - 1}
-	if rows.H < 1 {
+	inner, ok := boxInner(buf, r, title("Changes", len(p.files)), p.focus == focusChanges)
+	if !ok {
 		return
 	}
 	if len(p.files) == 0 {
-		buf.SetString(rows.X, rows.Y, fit("(clean)", rows.W), cellbuf.Style{FG: cellbuf.Palette(8)})
+		buf.SetString(inner.X, inner.Y, fit("clean", inner.W), dimStyle())
 		return
 	}
-	for i, f := range p.files {
-		if i >= rows.H {
-			break
-		}
+	start := windowStart(p.sel, inner.H, len(p.files))
+	for i := start; i < len(p.files) && i-start < inner.H; i++ {
+		f := p.files[i]
+		y := inner.Y + (i - start)
 		mark, markStyle := fileMark(f)
-		st := cellbuf.Style{}
-		if i == p.sel && p.focus == focusChanges {
-			st.Attrs |= cellbuf.AttrReverse
+		st := rowStyle(i == p.sel && p.focus == focusChanges)
+		buf.Set(inner.X, y, cellbuf.Cell{Rune: mark, Width: 1, Style: markStyle})
+		buf.SetString(inner.X+2, y, fit(f.Path, inner.W-2), st)
+	}
+}
+
+func (p *Panel) drawBranches(buf *cellbuf.Buffer, r cellbuf.Rect) {
+	inner, ok := boxInner(buf, r, title("Branches", len(p.branches)), p.focus == focusBranches)
+	if !ok {
+		return
+	}
+	if len(p.branches) == 0 {
+		buf.SetString(inner.X, inner.Y, fit("(none)", inner.W), dimStyle())
+		return
+	}
+	start := windowStart(p.branchSel, inner.H, len(p.branches))
+	for i := start; i < len(p.branches) && i-start < inner.H; i++ {
+		name := p.branches[i]
+		y := inner.Y + (i - start)
+		st := rowStyle(i == p.branchSel && p.focus == focusBranches)
+		marker := "  "
+		if name == p.branch {
+			marker = "* "
+			st.FG = cellbuf.Palette(2) // green for the current branch
 		}
-		buf.Set(rows.X, rows.Y+i, cellbuf.Cell{Rune: mark, Width: 1, Style: markStyle})
-		buf.SetString(rows.X+2, rows.Y+i, fit(f.Path, rows.W-2), st)
+		buf.SetString(inner.X, y, marker, st)
+		buf.SetString(inner.X+2, y, fit(name, inner.W-2), st)
+	}
+}
+
+func (p *Panel) drawStashes(buf *cellbuf.Buffer, r cellbuf.Rect) {
+	inner, ok := boxInner(buf, r, title("Stashes", len(p.stashes)), p.focus == focusStashes)
+	if !ok {
+		return
+	}
+	if len(p.stashes) == 0 {
+		buf.SetString(inner.X, inner.Y, fit("(none)", inner.W), dimStyle())
+		return
+	}
+	start := windowStart(p.stashSel, inner.H, len(p.stashes))
+	for i := start; i < len(p.stashes) && i-start < inner.H; i++ {
+		s := p.stashes[i]
+		y := inner.Y + (i - start)
+		st := rowStyle(i == p.stashSel && p.focus == focusStashes)
+		buf.SetString(inner.X, y, fit(s.Desc, inner.W), st)
 	}
 }
 
 func (p *Panel) drawLog(buf *cellbuf.Buffer, r cellbuf.Rect) {
-	hdr := header("Log", len(p.commits), p.focus == focusLog)
-	buf.SetString(r.X, r.Y, fit(hdr, r.W), cellbuf.Style{Attrs: cellbuf.AttrBold})
-	rows := cellbuf.Rect{X: r.X, Y: r.Y + 1, W: r.W, H: r.H - 1}
-	if rows.H < 1 {
+	inner, ok := boxInner(buf, r, title("Log", len(p.commits)), p.focus == focusLog)
+	if !ok {
 		return
 	}
 	if len(p.commits) == 0 {
-		buf.SetString(rows.X, rows.Y, fit("(no commits)", rows.W), cellbuf.Style{FG: cellbuf.Palette(8)})
+		buf.SetString(inner.X, inner.Y, fit("(no commits)", inner.W), dimStyle())
 		return
 	}
-	// Keep the selected commit in view (simple window that follows the cursor).
-	start := 0
-	if p.logSel >= rows.H {
-		start = p.logSel - rows.H + 1
-	}
-	for i := start; i < len(p.commits) && i-start < rows.H; i++ {
+	start := windowStart(p.logSel, inner.H, len(p.commits))
+	for i := start; i < len(p.commits) && i-start < inner.H; i++ {
 		c := p.commits[i]
-		y := rows.Y + (i - start)
-		st := cellbuf.Style{}
-		if i == p.logSel && p.focus == focusLog {
-			st.Attrs |= cellbuf.AttrReverse
-		}
-		buf.SetString(rows.X, y, c.Hash+" ", cellbuf.Style{FG: cellbuf.Palette(3)}) // yellow hash
-		buf.SetString(rows.X+len(c.Hash)+1, y, fit(c.Subject, rows.W-len(c.Hash)-1), st)
+		y := inner.Y + (i - start)
+		st := rowStyle(i == p.logSel && p.focus == focusLog)
+		buf.SetString(inner.X, y, c.Hash+" ", cellbuf.Style{FG: cellbuf.Palette(3)}) // yellow hash
+		buf.SetString(inner.X+len(c.Hash)+1, y, fit(c.Subject, inner.W-len(c.Hash)-1), st)
 	}
 }
 
-// header formats a section title with its count and a focus marker.
-func header(name string, n int, focused bool) string {
-	marker := "  "
-	if focused {
-		marker = "▸ "
+// diffTitle labels the diff pane with what it is showing.
+func (p *Panel) diffTitle() string {
+	switch p.focus {
+	case focusLog:
+		if len(p.commits) > 0 {
+			return "Diff · " + p.commits[p.logSel].Hash
+		}
+	case focusStashes:
+		if len(p.stashes) > 0 {
+			return "Diff · " + p.stashes[p.stashSel].Ref
+		}
+	case focusBranches:
+		return "Branches"
+	default:
+		if len(p.files) > 0 {
+			return "Diff · " + p.files[p.sel].Path
+		}
 	}
-	return fmt.Sprintf("%s%s (%d)", marker, name, n)
+	return "Diff"
 }
+
+// boxInner draws a section's border and returns its content rect. ok is false
+// when the box is too small to render into (so the caller skips its content).
+func boxInner(buf *cellbuf.Buffer, r cellbuf.Rect, name string, focused bool) (cellbuf.Rect, bool) {
+	if r.H < minBox || r.W < 4 {
+		return cellbuf.Rect{}, false
+	}
+	inner := cellbuf.Box(buf, r, name, focused)
+	return inner, inner.H >= 1 && inner.W >= 1
+}
+
+// windowStart returns the first index to render so that sel stays visible in a
+// viewport of height h over n items.
+func windowStart(sel, h, n int) int {
+	if h <= 0 || sel < h {
+		return 0
+	}
+	start := sel - h + 1
+	if start > n-h {
+		start = n - h
+	}
+	if start < 0 {
+		start = 0
+	}
+	return start
+}
+
+// title formats a pane title with its item count.
+func title(name string, n int) string { return fmt.Sprintf("%s (%d)", name, n) }
+
+// rowStyle returns the style for a list row, reversed when it is the selected
+// row of the focused pane.
+func rowStyle(selected bool) cellbuf.Style {
+	st := cellbuf.Style{}
+	if selected {
+		st.Attrs |= cellbuf.AttrReverse
+	}
+	return st
+}
+
+func dimStyle() cellbuf.Style { return cellbuf.Style{FG: cellbuf.Palette(8)} }
 
 // fileMark returns a status glyph and its color for a file.
 func fileMark(f git.FileStatus) (rune, cellbuf.Style) {
@@ -135,13 +249,17 @@ func fileMark(f git.FileStatus) (rune, cellbuf.Style) {
 func (p *Panel) drawBottom(buf *cellbuf.Buffer, r cellbuf.Rect, y int) {
 	st := cellbuf.Style{Attrs: cellbuf.AttrReverse}
 	buf.Fill(cellbuf.Rect{X: r.X, Y: y, W: r.W, H: 1}, cellbuf.Cell{Rune: ' ', Width: 1, Style: st})
-	if p.mode == modeCommit {
+	switch p.mode {
+	case modeCommit:
 		buf.SetString(r.X, y, fit("commit: "+p.commitBuf+"_", r.W), st)
+		return
+	case modeBranch:
+		buf.SetString(r.X, y, fit("new branch: "+p.branchBuf+"_", r.W), st)
 		return
 	}
 	text := p.status
 	if text == "" {
-		text = "Tab changes/log · j/k move · space stage · a/u all · c commit · P push · q close"
+		text = "Tab pane · j/k move · Enter act · space stage · c commit · P push · s stash · b branch · q close"
 	}
 	buf.SetString(r.X, y, fit(text, r.W), st)
 }
