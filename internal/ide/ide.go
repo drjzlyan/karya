@@ -6,14 +6,17 @@
 package ide
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/drjzlyan/karya/internal/agent"
 	"github.com/drjzlyan/karya/internal/cellbuf"
+	"github.com/drjzlyan/karya/internal/companionview"
 	"github.com/drjzlyan/karya/internal/finder"
 	"github.com/drjzlyan/karya/internal/gate"
 	"github.com/drjzlyan/karya/internal/gateview"
@@ -25,14 +28,14 @@ import (
 	"github.com/drjzlyan/karya/internal/reviewview"
 	"github.com/drjzlyan/karya/internal/searchview"
 	"github.com/drjzlyan/karya/internal/task"
+	"github.com/drjzlyan/karya/internal/tasksvc"
 	"github.com/drjzlyan/karya/internal/taskview"
 	"github.com/drjzlyan/karya/internal/term"
 	"github.com/drjzlyan/karya/internal/tui"
 )
 
-// errNotPending is returned when a gate crossing is attempted on a task that is
-// not awaiting a human gate.
-var errNotPending = errors.New("task is not awaiting a gate")
+// errNoAgent is returned to the companion pane when no coding agent is available.
+var errNoAgent = errors.New("no coding agent available")
 
 // paneView is a karya-native, interactive view pane (git panel, task board, …):
 // it renders itself and handles forwarded keys, and can ask to be closed.
@@ -59,7 +62,13 @@ type Provisioner interface {
 
 // Model is the root TUI model.
 type Model struct {
-	tree   *layout.Tree
+	// The six top-level workspaces and the active one. m.tree always points at
+	// the active workspace's pane tree (kept in sync by switchTo/initWorkspaces),
+	// so the pane-management code and its tests operate on one live tree.
+	workspaces [numWorkspaces]*workspace
+	active     WorkspaceKind
+	tree       *layout.Tree
+
 	keys   *keymap.Engine
 	spawn  spawnFunc
 	dir    string
@@ -67,20 +76,14 @@ type Model struct {
 	rows   int
 	status string
 
-	whichkey     []keymap.Candidate
-	shells       []*shellPane
-	editors      []*editorPane
-	file         string
-	leader       term.Key
-	prov         Provisioner
-	gitPaneID    layout.PaneID
-	taskPaneID   layout.PaneID
-	reviewPaneID layout.PaneID
-	inboxPaneID  layout.PaneID
-	finderPaneID layout.PaneID
-	searchPaneID layout.PaneID
-	editorPaneID layout.PaneID
-	board        *taskview.Board // the open task board, for background refresh
+	whichkey  []keymap.Candidate
+	shells    []*shellPane
+	editors   []*editorPane
+	file      string
+	leader    term.Key
+	prov      Provisioner
+	picker    bool // the workspace picker overlay is open
+	pickerSel int  // highlighted view in the picker
 }
 
 // shellReadMsg carries a chunk of a shell pane's output back into the loop.
@@ -99,18 +102,20 @@ func New(dir string, cols, rows int) *Model {
 	return m
 }
 
-// seedDefault lays out the ready-to-work default view: editor on the left, a
-// coding agent pane top-right, and a build/test shell bottom-right (DESIGN.md
-// §6.1). Each pane degrades gracefully when Neovim or an agent CLI is absent.
+// seedDefault lays out the ready-to-work default (Human-in-Control) view: editor
+// on the left, a read-only Companion agent pane top-right, and a build/test shell
+// bottom-right (DESIGN.md §6.1). The companion answers questions but never
+// touches files — file-changing agents run headlessly from the Multi-Agent view.
+// Each pane degrades gracefully when Neovim or an agent is absent.
 func (m *Model) seedDefault() {
 	inner := m.treeRect()
-	right := inner.W / 3 // agent/build share the right third
+	right := inner.W / 3 // companion/build share the right third
 	left := inner.W - right
 
 	editor := m.spawnEditor("", left-2, inner.H-2)
-	agent := m.spawnAgentContent(right-2, inner.H/2-2)
+	companion := m.spawnCompanion()
 	build := m.spawnShell(right-2, inner.H/2-2)
-	m.seedLayout(editor, agent, build)
+	m.seedLayout(editor, companion, build)
 }
 
 // seedLayout arranges three pane contents into the default view (editor left,
@@ -119,7 +124,7 @@ func (m *Model) seedDefault() {
 func (m *Model) seedLayout(editor, agent, build layout.PaneContent) {
 	editorID := m.tree.AddTab("dev", editor)
 	if _, ok := editor.(*editorPane); ok {
-		m.editorPaneID = editorID
+		m.ws().editorPaneID = editorID
 	}
 	m.adopt(editor)
 
@@ -141,17 +146,6 @@ func (m *Model) spawnEditor(file string, cols, rows int) layout.PaneContent {
 		return &placeholderPane{title: "editor", body: "Neovim unavailable — Ctrl+Space ? for keys"}
 	}
 	return ep
-}
-
-// spawnAgentContent returns a pane running the first detected agent CLI in the
-// repo, or a shell when no agent is installed.
-func (m *Model) spawnAgentContent(cols, rows int) layout.PaneContent {
-	if name := detectAgentName(""); name != "" {
-		if sp, err := newShellPane(exec.Command(name), m.dir, cols, rows); err == nil {
-			return sp
-		}
-	}
-	return m.spawnShell(cols, rows)
 }
 
 // detectAgentName picks an agent CLI deterministically: the preferred one if
@@ -177,7 +171,7 @@ func NewWithFile(dir, file string, cols, rows int) *Model {
 	if err != nil {
 		return New(dir, cols, rows) // fall back to a shell if nvim is unavailable
 	}
-	m.editorPaneID = m.tree.AddTab("editor", ep)
+	m.ws().editorPaneID = m.tree.AddTab("editor", ep)
 	m.adopt(ep)
 	m.syncPaneSizes()
 	return m
@@ -193,8 +187,7 @@ func newModel(dir string, cols, rows int, spawn spawnFunc) *Model {
 		rows = 24
 	}
 	leader := keymap.ParseLeader(os.Getenv("KARYA_LEADER"))
-	return &Model{
-		tree:   layout.NewTree(),
+	m := &Model{
 		keys:   keymap.NewWithLeader(keymap.DefaultBindingsFor(leader), leader),
 		leader: leader,
 		spawn:  spawn,
@@ -203,6 +196,8 @@ func newModel(dir string, cols, rows int, spawn spawnFunc) *Model {
 		rows:   rows,
 		status: leaderHint(leader),
 	}
+	m.initWorkspaces()
+	return m
 }
 
 // leaderHint renders the status-line hint naming the active leader.
@@ -303,6 +298,9 @@ func (m *Model) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 		return m, editorWaitCmd(v.pane)
 	case lifecycleDoneMsg:
 		return m, m.handleLifecycleDone(v)
+	case companionAnswerMsg:
+		v.comp.Answer(v.text, v.err)
+		return m, nil
 	case provisionDoneMsg:
 		if v.err != nil {
 			m.status = v.lang + " language tools unavailable (see log)"
@@ -318,8 +316,12 @@ func (m *Model) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 	return m, nil
 }
 
-// handleKey routes a key through the unified keymap engine.
+// handleKey routes a key through the unified keymap engine. While the workspace
+// picker overlay is open it intercepts keys before the keymap.
 func (m *Model) handleKey(k term.Key) tui.Cmd {
+	if m.picker {
+		return m.handlePickerKey(k)
+	}
 	res := m.keys.Feed(k, m.context())
 	m.whichkey = nil
 	switch res.Kind {
@@ -361,6 +363,7 @@ func (m *Model) forward(k term.Key) tui.Cmd {
 	case paneView:
 		id := m.tree.FocusedID()
 		p.HandleKey(k)
+		w := m.ws()
 		// The gate inbox can request opening a task's review.
 		if inbox, ok := p.(*gateview.Inbox); ok {
 			if openID := inbox.OpenRequest(); openID != "" {
@@ -368,14 +371,26 @@ func (m *Model) forward(k term.Key) tui.Cmd {
 				return nil
 			}
 		}
+		// The companion pane can ask a headless question (read-only, no edits).
+		if comp, ok := p.(*companionview.Companion); ok {
+			if q := comp.AskRequest(); q != "" {
+				return m.askCompanion(comp, q)
+			}
+		}
+		// The git panel can request opening the selected file in the editor view.
+		if panel, ok := p.(*gitui.Panel); ok {
+			if path := panel.OpenRequest(); path != "" {
+				return m.openFileInEditorView(filepath.Join(m.dir, path), 0)
+			}
+		}
 		// The file finder can request opening a file in the editor.
 		if fv, ok := p.(*finder.Finder); ok {
 			if path := fv.OpenRequest(); path != "" {
-				if m.finderPaneID != 0 && m.tree.FocusPane(m.finderPaneID) {
+				if w.finderPaneID != 0 && m.tree.FocusPane(w.finderPaneID) {
 					m.tree.CloseFocused()
-					m.finderPaneID = 0
+					w.finderPaneID = 0
 				}
-				cmd := m.openFile(path, 0)
+				cmd := m.openFileInEditorView(path, 0)
 				m.syncPaneSizes()
 				return cmd
 			}
@@ -383,16 +398,16 @@ func (m *Model) forward(k term.Key) tui.Cmd {
 		// Project search can request opening a match at its location.
 		if sv, ok := p.(*searchview.Search); ok {
 			if match := sv.OpenRequest(); match != nil {
-				if m.searchPaneID != 0 && m.tree.FocusPane(m.searchPaneID) {
+				if w.searchPaneID != 0 && m.tree.FocusPane(w.searchPaneID) {
 					m.tree.CloseFocused()
-					m.searchPaneID = 0
+					w.searchPaneID = 0
 				}
-				cmd := m.openFile(match.File, match.Line)
+				cmd := m.openFileInEditorView(match.File, match.Line)
 				m.syncPaneSizes()
 				return cmd
 			}
 		}
-		// The task board can request a review, an agent pane, or a lifecycle step.
+		// The task board can request a review, a git jump, an agent, or a step.
 		if board, ok := p.(*taskview.Board); ok {
 			if rid := board.ReviewRequest(); rid != "" {
 				m.openReviewFor(rid)
@@ -401,31 +416,62 @@ func (m *Model) forward(k term.Key) tui.Cmd {
 			if aid := board.AgentRequest(); aid != "" {
 				return m.openAgentPane(aid)
 			}
+			if gid := board.GitRequest(); gid != "" {
+				return m.openGitForTask(gid)
+			}
 			if req, ok := board.LifecycleRequest(); ok {
 				return m.runLifecycle(req)
 			}
 		}
 		if p.Done() {
 			switch id {
-			case m.gitPaneID:
-				m.gitPaneID = 0
-			case m.taskPaneID:
-				m.taskPaneID = 0
-				m.board = nil
-			case m.reviewPaneID:
-				m.reviewPaneID = 0
-			case m.inboxPaneID:
-				m.inboxPaneID = 0
-			case m.finderPaneID:
-				m.finderPaneID = 0
-			case m.searchPaneID:
-				m.searchPaneID = 0
+			case w.gitPaneID:
+				w.gitPaneID = 0
+			case w.taskPaneID:
+				w.taskPaneID = 0
+				w.board = nil
+			case w.reviewPaneID:
+				w.reviewPaneID = 0
+			case w.inboxPaneID:
+				w.inboxPaneID = 0
+			case w.finderPaneID:
+				w.finderPaneID = 0
+			case w.searchPaneID:
+				w.searchPaneID = 0
 			}
 			m.tree.CloseFocused()
 			m.syncPaneSizes()
 		}
 	}
 	return nil
+}
+
+// spawnCompanion returns the read-only Companion agent pane for the editor view,
+// backed by the first detected agent (or none).
+func (m *Model) spawnCompanion() layout.PaneContent {
+	return companionview.New(detectAgentName(""))
+}
+
+// companionAnswerMsg carries a headless agent's reply back to a companion pane.
+type companionAnswerMsg struct {
+	comp *companionview.Companion
+	text string
+	err  error
+}
+
+// askCompanion runs a companion question through a headless agent off the render
+// path and returns the reply to the pane. The companion never edits files — it
+// uses the agent's one-shot headless mode purely to answer (DESIGN.md §6).
+func (m *Model) askCompanion(c *companionview.Companion, q string) tui.Cmd {
+	name := detectAgentName("")
+	dir := m.dir
+	return func() tui.Msg {
+		if name == "" {
+			return companionAnswerMsg{comp: c, err: errNoAgent}
+		}
+		text, err := agent.NewRunner(name).Headless(context.Background(), dir, q)
+		return companionAnswerMsg{comp: c, text: text, err: err}
+	}
 }
 
 // openAgentPane runs the task's preferred (or first detected) agent CLI in a PTY
@@ -466,114 +512,119 @@ func (m *Model) openAgentPane(id string) tui.Cmd {
 	return cmd
 }
 
-// openGitPanel focuses the git panel if open, else opens it in a new tab.
+// openGitForTask jumps to the Git view for a task (to inspect its worktree and
+// branch). The dedicated worktree list/diff arrives in a later phase.
+func (m *Model) openGitForTask(id string) tui.Cmd {
+	m.switchTo(WSGit)
+	m.openGitPanel()
+	m.status = "git · task " + id
+	return nil
+}
+
+// openGitPanel focuses the git panel if open, else opens it in the Git view.
+// The caller switches to WSGit first (dispatch/cross-nav), so it targets that
+// workspace's tree.
 func (m *Model) openGitPanel() *gitui.Panel {
-	if m.gitPaneID != 0 && m.tree.FocusPane(m.gitPaneID) {
+	w := m.ws()
+	if w.gitPaneID != 0 && m.tree.FocusPane(w.gitPaneID) {
 		if p, ok := m.tree.FocusedContent().(*gitui.Panel); ok {
 			return p
 		}
 	}
 	panel := gitui.New(git.New(m.dir, nil))
-	m.gitPaneID = m.tree.AddTab("git", panel)
+	w.gitPaneID = m.tree.AddTab("git", panel)
 	m.syncPaneSizes()
 	return panel
 }
 
-// openTaskBoard focuses the task board if open, else opens it in a new tab.
+// openTaskBoard focuses the task board if open, else opens it in the Multi-Agent
+// view. The caller switches to WSAgents first.
 func (m *Model) openTaskBoard() *taskview.Board {
-	if m.taskPaneID != 0 && m.tree.FocusPane(m.taskPaneID) {
+	w := m.ws()
+	if w.taskPaneID != 0 && m.tree.FocusPane(w.taskPaneID) {
 		if b, ok := m.tree.FocusedContent().(*taskview.Board); ok {
 			return b
 		}
 	}
 	board := taskview.New(m.loadTasks)
-	m.board = board
-	m.taskPaneID = m.tree.AddTab("tasks", board)
+	w.board = board
+	w.taskPaneID = m.tree.AddTab("tasks", board)
 	m.syncPaneSizes()
 	return board
 }
 
-// lifecycleDoneMsg reports the result of a background `karya` lifecycle command.
+// lifecycleDoneMsg reports the result of a background lifecycle step.
 type lifecycleDoneMsg struct {
-	req    taskview.LifecycleRequest
-	output string
-	err    error
+	req taskview.LifecycleRequest
+	id  string // the resolved task id (set for Op=="new")
+	err error
 }
 
-// runLifecycle drives one gate-lifecycle step from the task board by running the
-// matching `karya` subcommand in the background (off the render path), so the
-// tested CLI does the work while the TUI stays responsive (DESIGN.md §6). The
-// board's status line reflects progress and, on completion, the result.
+// runLifecycle drives one gate-lifecycle step from the task board in-process, off
+// the render path so the TUI stays responsive (DESIGN.md §6). The step logic
+// lives in internal/tasksvc — the same functions the CLI once shelled out to.
+// The board's status line reflects progress and, on completion, the result.
 func (m *Model) runLifecycle(req taskview.LifecycleRequest) tui.Cmd {
-	bin, err := os.Executable()
+	env, err := tasksvc.RepoEnv(m.dir)
 	if err != nil {
 		m.status = "lifecycle: " + err.Error()
 		return nil
 	}
 	m.status = req.Op + " " + req.ID + " …"
-	dir := m.dir
 	return func() tui.Msg {
-		cmd := exec.Command(bin, lifecycleArgs(req)...)
-		cmd.Dir = dir
-		out, err := cmd.CombinedOutput()
-		return lifecycleDoneMsg{req: req, output: string(out), err: err}
+		id := req.ID
+		var runErr error
+		switch req.Op {
+		case "new":
+			t, e := tasksvc.NewTask(env, req.ID, "")
+			id, runErr = t.ID, e
+		case "start":
+			_, runErr = tasksvc.Start(env, req.ID, "HEAD")
+		case "plan":
+			_, runErr = tasksvc.Plan(context.Background(), env, req.ID)
+		case "implement":
+			_, runErr = tasksvc.Implement(context.Background(), env, req.ID)
+		case "verify":
+			res, _, e := tasksvc.Verify(env, req.ID)
+			if e == nil && !res.Passed() {
+				e = errors.New("verification failed")
+			}
+			runErr = e
+		case "merge":
+			runErr = tasksvc.Merge(env, req.ID, false)
+		}
+		return lifecycleDoneMsg{req: req, id: id, err: runErr}
 	}
 }
 
-// lifecycleArgs maps a request to its `karya` argument vector.
-func lifecycleArgs(req taskview.LifecycleRequest) []string {
-	switch req.Op {
-	case "new":
-		return []string{"task", "new", req.ID} // ID carries the slug
-	case "start":
-		return []string{"task", "start", req.ID}
-	default: // plan | implement | verify | merge
-		return []string{req.Op, req.ID}
-	}
-}
-
-// handleLifecycleDone records a finished lifecycle step: it refreshes the board
-// (states changed on disk), reports success or the failure's first line, and for
-// a newly created task opens its spec in the editor to fill in the contract.
+// handleLifecycleDone records a finished lifecycle step: it refreshes the
+// Multi-Agent board (states changed on disk), reports success or the failure's
+// first line, and for a newly created task opens its spec in the editor to fill
+// in the contract.
 func (m *Model) handleLifecycleDone(v lifecycleDoneMsg) tui.Cmd {
-	if m.board != nil {
-		m.board.Refresh()
+	board := m.workspaces[WSAgents].board
+	if board != nil {
+		board.Refresh()
 	}
 	if v.err != nil {
-		msg := fmt.Sprintf("%s %s failed: %s", v.req.Op, v.req.ID, firstLine(v.output))
+		msg := fmt.Sprintf("%s %s failed: %s", v.req.Op, v.req.ID, firstLine(v.err.Error()))
 		m.status = msg
-		if m.board != nil {
-			m.board.SetStatus(msg)
+		if board != nil {
+			board.SetStatus(msg)
 		}
 		return nil
 	}
 	msg := fmt.Sprintf("%s %s ✓", v.req.Op, v.req.ID)
 	m.status = msg
-	if m.board != nil {
-		m.board.SetStatus(msg)
+	if board != nil {
+		board.SetStatus(msg)
 	}
-	if v.req.Op == "new" {
-		if id := parseCreatedID(v.output); id != "" {
-			cmd := m.openFile(task.NewStore(m.dir).SpecPath(id), 0)
-			m.syncPaneSizes()
-			return cmd
-		}
+	if v.req.Op == "new" && v.id != "" {
+		cmd := m.openFileInEditorView(task.NewStore(m.dir).SpecPath(v.id), 0)
+		m.syncPaneSizes()
+		return cmd
 	}
 	return nil
-}
-
-// parseCreatedID extracts the task id from `karya task new`'s "Created task <id>"
-// line, so the board can open the new task's spec for editing.
-func parseCreatedID(output string) string {
-	for _, line := range strings.Split(output, "\n") {
-		const p = "Created task "
-		if i := strings.Index(line, p); i >= 0 {
-			if fields := strings.Fields(line[i+len(p):]); len(fields) > 0 {
-				return fields[0] // drop the trailing "(draft)"
-			}
-		}
-	}
-	return ""
 }
 
 // firstLine returns the first non-empty line of s, trimmed (for status errors).
@@ -602,8 +653,8 @@ func (m *Model) openReview() {
 	m.openReviewFor(pending[0].ID)
 }
 
-// openReviewFor assembles and opens the review for task id, replacing any stale
-// review tab. The human can approve/reject from within the review.
+// openReviewFor assembles and opens the review for task id in the Review view,
+// replacing any stale review tab. The human can approve/reject from within it.
 func (m *Model) openReviewFor(id string) {
 	store := task.NewStore(m.dir)
 	rev, err := review.Assemble(store, git.New(m.dir, nil), id)
@@ -611,32 +662,39 @@ func (m *Model) openReviewFor(id string) {
 		m.status = "review: " + err.Error()
 		return
 	}
-	if m.reviewPaneID != 0 && m.tree.FocusPane(m.reviewPaneID) {
+	m.switchTo(WSReview)
+	w := m.ws()
+	if w.reviewPaneID != 0 && m.tree.FocusPane(w.reviewPaneID) {
 		m.tree.CloseFocused() // drop the stale review before opening a fresh one
 	}
-	m.reviewPaneID = m.tree.AddTab("review", reviewview.New(rev, m))
+	w.reviewPaneID = m.tree.AddTab("review", reviewview.New(rev, m))
 	m.syncPaneSizes()
 }
 
-// openFinder opens (or focuses) the fuzzy file finder.
+// openFinder opens (or focuses) the fuzzy file finder in the editor view.
 func (m *Model) openFinder() {
-	if m.finderPaneID != 0 && m.tree.FocusPane(m.finderPaneID) {
+	m.switchTo(WSEditor)
+	w := m.ws()
+	if w.finderPaneID != 0 && m.tree.FocusPane(w.finderPaneID) {
 		if _, ok := m.tree.FocusedContent().(*finder.Finder); ok {
 			return
 		}
 	}
-	m.finderPaneID = m.tree.AddTab("find", finder.New(finder.ListFiles(m.dir)))
+	w.finderPaneID = m.tree.AddTab("find", finder.New(finder.ListFiles(m.dir)))
 	m.syncPaneSizes()
 }
 
-// openSearch opens (or focuses) the project search (live grep) view.
+// openSearch opens (or focuses) the project search (live grep) view in the editor
+// view.
 func (m *Model) openSearch() {
-	if m.searchPaneID != 0 && m.tree.FocusPane(m.searchPaneID) {
+	m.switchTo(WSEditor)
+	w := m.ws()
+	if w.searchPaneID != 0 && m.tree.FocusPane(w.searchPaneID) {
 		if _, ok := m.tree.FocusedContent().(*searchview.Search); ok {
 			return
 		}
 	}
-	m.searchPaneID = m.tree.AddTab("search", searchview.New(m.dir, searchview.Ripgrep))
+	w.searchPaneID = m.tree.AddTab("search", searchview.New(m.dir, searchview.Ripgrep))
 	m.syncPaneSizes()
 }
 
@@ -650,15 +708,23 @@ func (m *Model) firstEditor() *editorPane {
 	return nil
 }
 
-// focusEditor moves focus to the editor pane, if one exists.
+// focusEditor switches to the editor view and focuses its editor pane.
 func (m *Model) focusEditor() {
-	if m.editorPaneID != 0 {
-		m.tree.FocusPane(m.editorPaneID)
+	m.switchTo(WSEditor)
+	if id := m.ws().editorPaneID; id != 0 {
+		m.tree.FocusPane(id)
 	}
 }
 
-// openFile opens path (at line; 0 = no jump) in the editor pane, creating one if
-// none exists.
+// openFileInEditorView switches to the editor view and opens path there. It is
+// the cross-view entry point used from Git/search/finder/task flows.
+func (m *Model) openFileInEditorView(path string, line int) tui.Cmd {
+	m.switchTo(WSEditor)
+	return m.openFile(path, line)
+}
+
+// openFile opens path (at line; 0 = no jump) in the active view's editor pane,
+// creating one if none exists. Callers switch to the editor view first.
 func (m *Model) openFile(path string, line int) tui.Cmd {
 	if ep := m.firstEditor(); ep != nil {
 		m.focusEditor()
@@ -668,20 +734,22 @@ func (m *Model) openFile(path string, line int) tui.Cmd {
 	// No editor pane yet — open one on the file.
 	inner := m.treeRect()
 	ed := m.spawnEditor(path, inner.W-2, inner.H-2)
-	m.editorPaneID = m.tree.AddTab("editor", ed)
+	m.ws().editorPaneID = m.tree.AddTab("editor", ed)
 	cmd := m.adopt(ed)
 	m.syncPaneSizes()
 	return cmd
 }
 
-// openInbox focuses the gate inbox if open, else opens it in a new tab.
+// openInbox opens (or focuses) the gate inbox in the Multi-Agent view.
 func (m *Model) openInbox() {
-	if m.inboxPaneID != 0 && m.tree.FocusPane(m.inboxPaneID) {
+	m.switchTo(WSAgents)
+	w := m.ws()
+	if w.inboxPaneID != 0 && m.tree.FocusPane(w.inboxPaneID) {
 		if _, ok := m.tree.FocusedContent().(*gateview.Inbox); ok {
 			return
 		}
 	}
-	m.inboxPaneID = m.tree.AddTab("gates", gateview.New(m.loadGateItems))
+	w.inboxPaneID = m.tree.AddTab("gates", gateview.New(m.loadGateItems))
 	m.syncPaneSizes()
 }
 
@@ -713,23 +781,11 @@ func (m *Model) Reject(id, feedback string) error { return m.crossGate(id, true,
 
 // crossGate performs a human gate crossing over the repo's task store.
 func (m *Model) crossGate(id string, reject bool, feedback string) error {
-	store := task.NewStore(m.dir)
-	t, err := store.Get(id)
+	env, err := tasksvc.RepoEnv(m.dir)
 	if err != nil {
 		return err
 	}
-	p, ok := gate.For(t.State)
-	if !ok {
-		return errNotPending
-	}
-	target := p.Approve
-	if reject {
-		target = p.Reject
-	}
-	if err := t.Transition(target, "human", feedback); err != nil {
-		return err
-	}
-	return store.Save(t)
+	return tasksvc.CrossGate(env, id, "human", reject, feedback)
 }
 
 // loadTasks reads the repo's tasks for the board (decoupling taskview from the
@@ -789,18 +845,38 @@ func (m *Model) dispatch(a keymap.ActionID) tui.Cmd {
 	case keymap.ActionTabPrev:
 		m.tree.PrevTab()
 		m.syncPaneSizes()
+	case keymap.ActionViewEditor:
+		return m.switchTo(WSEditor)
+	case keymap.ActionViewAgents:
+		return m.switchTo(WSAgents)
+	case keymap.ActionViewGit:
+		return m.switchTo(WSGit)
+	case keymap.ActionViewReview:
+		return m.switchTo(WSReview)
+	case keymap.ActionViewScratch:
+		return m.switchTo(WSScratch)
+	case keymap.ActionViewSettings:
+		return m.switchTo(WSSettings)
+	case keymap.ActionViewPicker:
+		m.openPicker()
 	case keymap.ActionTaskBoard:
+		m.switchTo(WSAgents)
 		m.openTaskBoard()
 	case keymap.ActionTaskNew:
+		m.switchTo(WSAgents)
 		m.openTaskBoard().BeginNew()
 	case keymap.ActionTaskStart:
+		m.switchTo(WSAgents)
 		m.openTaskBoard()
 		m.status = "select a task and press s to start it"
 	case keymap.ActionGitPanel:
+		m.switchTo(WSGit)
 		m.openGitPanel()
 	case keymap.ActionGitCommit:
+		m.switchTo(WSGit)
 		m.openGitPanel().EnterCommit()
 	case keymap.ActionGitPush:
+		m.switchTo(WSGit)
 		m.openGitPanel().Push()
 	case keymap.ActionReview:
 		m.openReview()
@@ -819,13 +895,8 @@ func (m *Model) dispatch(a keymap.ActionID) tui.Cmd {
 		return tui.Quit
 	case keymap.ActionHelpKeys:
 		l := m.leader.String()
-		m.status = l + " then h/j/k/l focus · |/- split · H/J/K/L resize · c/n/p tabs · Q quit"
+		m.status = l + " 1-6 views · h/j/k/l focus · |/- split · c/n/p tabs · Q quit"
 	default:
-		if n := tabGotoIndex(a); n > 0 {
-			m.tree.GotoTab(n)
-			m.syncPaneSizes()
-			break
-		}
 		m.status = string(a) + " — coming in a later phase"
 	}
 	return nil
@@ -936,6 +1007,9 @@ func (m *Model) View(buf *cellbuf.Buffer) {
 	if len(m.whichkey) > 0 {
 		m.drawWhichKey(buf)
 	}
+	if m.picker {
+		m.drawPicker(buf)
+	}
 }
 
 // readCmd returns a command that reads the next chunk from a shell pane.
@@ -988,34 +1062,12 @@ func paneTitle(c layout.PaneContent) string {
 		return "find"
 	case *searchview.Search:
 		return "search"
+	case *companionview.Companion:
+		return "companion"
 	case *placeholderPane:
 		return v.title
 	}
 	return ""
-}
-
-func tabGotoIndex(a keymap.ActionID) int {
-	switch a {
-	case keymap.ActionTabGoto1:
-		return 1
-	case keymap.ActionTabGoto2:
-		return 2
-	case keymap.ActionTabGoto3:
-		return 3
-	case keymap.ActionTabGoto4:
-		return 4
-	case keymap.ActionTabGoto5:
-		return 5
-	case keymap.ActionTabGoto6:
-		return 6
-	case keymap.ActionTabGoto7:
-		return 7
-	case keymap.ActionTabGoto8:
-		return 8
-	case keymap.ActionTabGoto9:
-		return 9
-	}
-	return 0
 }
 
 // Run launches the IDE against the real terminal for working directory dir. If

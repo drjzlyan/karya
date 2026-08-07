@@ -59,22 +59,6 @@ func Run(args []string) int {
 		return cmdNew(rest)
 	case "ship":
 		return cmdShip(rest)
-	case "task":
-		return cmdTask(rest)
-	case "tasks":
-		return cmdTask(append([]string{"list"}, rest...))
-	case "plan":
-		return cmdPlan(rest)
-	case "implement":
-		return cmdImplement(rest)
-	case "gate":
-		return cmdGate(rest)
-	case "review":
-		return cmdReview(rest)
-	case "verify":
-		return cmdVerify(rest)
-	case "merge":
-		return cmdMerge(rest)
 	case "skills":
 		return cmdSkills(rest)
 	case "init":
@@ -534,42 +518,15 @@ func fail(err error) int {
 func usage(w *os.File) {
 	fmt.Fprint(w, `karya — an AI-first, terminal-based IDE in a single binary
 
+karya is a TUI IDE: run it with no arguments to open (or resume) the IDE for the
+current repo. Everything — editing, the multi-agent task flow, git, review,
+scratch, and settings — lives inside the six views (switch with Ctrl+Space 1-6).
+The CLI exists only to manage the binary itself.
+
 Usage:
-  karya                     Launch or attach the IDE session for the cwd
-  karya dev [name] [path]   Explicit session launch (-a agent, -k kill, -q quit)
-
-  karya agent <cmd>         status | switch | next | prev | reset | prefs | clear
-  karya task <cmd>          new <slug> [--agent] | list | status | show <id>
-                            start <id> [--base <ref>] | abandon <id> [-y]
-                            (see: karya help task)
-  karya plan <id>           Agent drafts PLAN.md in the task worktree (→ plan gate)
-  karya implement <id>      Agent implements the approved plan (→ diff gate)
-  karya review [id]         Review a pending gate (plan/diff/verify)
-  karya gate <cmd>          approve <id> | reject <id> [-m msg]  (advance/return a gate)
-  karya verify <id>         Run the task's Verification commands (→ verify gate)
-  karya merge <id>          Merge the approved worktree back to base (done)
-  karya init [--force]      Scaffold .karya/ + a repo AGENTS.md for the task flow
-  karya edit <file> [line]  Open a file in the editor pane (used as $EDITOR)
-  karya run <cmd...>        Run a command in the build/test pane
-  karya new <lang> <name>   Scaffold a project (python|java|typescript|go|cpp|rust)
-  karya ship [--push --pr]  Stage, agent-write the commit message, commit (--no-verify)
-  karya lang <cmd>          list | add <lang> [versions] | remove <lang> | all
-  karya profile <cmd>       list | install <id>  (core|docs|python|go|rust|java|typescript|cpp)
-  karya tool <cmd>          list | update <id>|all  (managed tool health & updates)
-
-  karya install             Set up karya (isolated, non-destructive)
-  karya update [--check]    Self-update binary, configs, tools, plugins
+  karya                     Open or resume the IDE for the current repo
+  karya update [--check]    Self-update the binary, configs, and tools
   karya uninstall           Remove karya entirely (nothing else touched)
-
-  karya doctor              Health check
-  karya shellenv            Print opt-in shell integration (eval this)
-  karya completion <shell>  Print a bash/zsh/fish completion script
   karya version             Print version / build info
-  karya tutorial [n|ide [lang]]  Hands-on walkthrough (ide = in-editor; lang picks the sample)
-  karya docs [topic]        Read the embedded docs offline (no topic lists them)
-  karya keys                Show the full CLI / tmux / Neovim key reference
-  karya help [command]      Show this help, or detailed help for one command
-
-Docs: karya docs tutorial · karya docs keymaps
 `)
 }

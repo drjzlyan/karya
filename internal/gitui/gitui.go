@@ -61,6 +61,7 @@ type Panel struct {
 	commitBuf string
 	branchBuf string
 	status    string
+	openReq   string // repo-relative path the user asked to open in the editor
 	closed    bool
 }
 
@@ -73,6 +74,22 @@ func New(repo *git.Repo) *Panel {
 
 // Done reports whether the panel asked to close.
 func (p *Panel) Done() bool { return p.closed }
+
+// requestOpen records a request to open the selected changed file in the editor
+// view (a no-op unless the Changes pane has a selection).
+func (p *Panel) requestOpen() {
+	if p.focus == focusChanges && len(p.files) > 0 {
+		p.openReq = p.files[p.sel].Path
+	}
+}
+
+// OpenRequest returns (once) the repo-relative path the user asked to open in the
+// editor, or "". The IDE fulfils it by jumping to the editor view.
+func (p *Panel) OpenRequest() string {
+	path := p.openReq
+	p.openReq = ""
+	return path
+}
 
 // EnterCommit switches the panel into commit-message input mode.
 func (p *Panel) EnterCommit() {
@@ -204,6 +221,8 @@ func (p *Panel) HandleKey(k term.Key) {
 	case k == term.RuneKey('b'):
 		p.mode = modeBranch
 		p.branchBuf = ""
+	case k == term.RuneKey('o'):
+		p.requestOpen()
 	case k == term.RuneKey('r'):
 		p.refresh()
 	case k == term.Ctrl('d'):

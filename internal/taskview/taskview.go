@@ -26,6 +26,7 @@ type Board struct {
 	status    string
 	reviewReq string            // set to a task id when the user asks to review it
 	agentReq  string            // set to a task id when the user asks to run an agent in it
+	gitReq    string            // set to a task id when the user asks to jump to the git view
 	lifeReq   *LifecycleRequest // set when the user drives a lifecycle step
 	inputting bool              // true while typing a new task's slug
 	input     string            // the slug being typed in new-task mode
@@ -85,6 +86,8 @@ func (b *Board) HandleKey(k term.Key) {
 		b.reviewReq = b.Selected()
 	case k == term.RuneKey('a'):
 		b.agentReq = b.Selected()
+	case k == term.RuneKey('g'):
+		b.gitReq = b.Selected()
 	case k == term.RuneKey('n'):
 		b.inputting = true
 		b.input = ""
@@ -174,6 +177,14 @@ func (b *Board) AgentRequest() string {
 	return id
 }
 
+// GitRequest returns (once) the task id the user asked to jump to the git view
+// for (to inspect its worktree/branch), or "".
+func (b *Board) GitRequest() string {
+	id := b.gitReq
+	b.gitReq = ""
+	return id
+}
+
 func (b *Board) move(delta int) {
 	if len(b.items) == 0 {
 		return
@@ -231,7 +242,7 @@ func (b *Board) drawBottom(buf *cellbuf.Buffer, r cellbuf.Rect, y int) {
 	case b.status != "":
 		text = b.status
 	default:
-		text = "n new · s start · p plan · i implement · v verify · m merge · Enter review · a agent · r refresh · q close"
+		text = "n new · s start · p plan · i implement · v verify · m merge · Enter review · g git · a agent · r refresh · q close"
 	}
 	buf.SetString(r.X, y, fit(text, r.W), st)
 }

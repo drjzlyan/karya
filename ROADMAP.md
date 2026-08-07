@@ -263,3 +263,104 @@ without the user editing any agent config by hand.
 
 **Done when:** sandboxed task execution, signed marketplace content, audit trail,
 and docs that match behavior. Ship v1.0.
+
+---
+
+## Phase 9 — Six-view IDE restructure ◐
+**Goal:** reorganize the IDE around six top-level views (workspaces) the user
+switches between, with agents as headless backend engines karya drives, a slim
+CLI, and seamless cross-view navigation. The views blend together — from any view
+you can jump to the right one for a task (git file → editor, task → git/review).
+
+The six views:
+1. **Human-in-Control** — editor (nav/search/LSP) + terminal + a read-only
+   **Companion** agent pane (asks only, never edits files).
+2. **Multi-Agent SE** — dashboard of every task, agent output, and state; create
+   and instruct tasks; the configurable role pipeline runs here.
+3. **Git** — lazygit-style git ops + worktree list + per-worktree diff.
+4. **Review** — open PRs in configured repos + adhoc PR URL; reviewer comments
+   over the PR base commit.
+5. **Scratch** — ideas/docs/mermaid in a global dir (not the repo), path set in
+   Settings.
+6. **Settings** — language/LSP/formatter installs; global + project agent
+   instructions; agent config; orchestration pipeline; skills; MCP.
+
+**Locked decisions (2026-08-07):** agents are **headless backends karya drives**
+(no interactive agent-in-terminal panes for the SE flow); top-level view switcher
+(`Ctrl+Space 1-6` + `Ctrl+Space Space` picker); **CLI is just
+`version`/`update`/`uninstall`** + bare-`karya` TUI launch; the role pipeline
+(looper / knowledge-maintainer / planner / executor / tester-verifier / reviewer)
+is **user-configurable** with those six as the default preset.
+
+- ☑ **P1 shell** — view switcher + per-workspace pane trees
+  (`internal/ide/workspace.go`), existing panes migrated into their views,
+  cross-view jumps (git file `o`→editor, task `g`/`Enter`→git/review)
+- ☑ Read-only **Companion** agent pane (`internal/companionview`, headless Q&A)
+- ☑ In-process task lifecycle (`internal/tasksvc`) — the TUI no longer shells out
+  to `karya <subcommand>`; CLI slimmed (lifecycle commands deleted; other legacy
+  tooling commands hidden-but-dispatchable, pending migration into Settings in P8)
+- ☐ **P2 Human-in-Control depth** — richer Companion (streaming answers, task/repo
+  context via `internal/prompts`), file tree/breadcrumbs, terminal ergonomics
+- ☐ **P3 Multi-Agent orchestration** — configurable role pipeline as the default
+  preset; per-role headless backend + instructions; per-task per-role status +
+  transcripts (build on `internal/agentrun`, `task`, `gate`)
+- ☐ **P4 Git worktree depth** — first-class worktree list + per-worktree diff over
+  base; jump-to-editor/review from a worktree
+- ☐ **P5 Review of PRs** — `gh pr list` for configured repos + adhoc PR URL; fetch
+  PR base commit, assemble diff via `internal/diffview`, reviewer emits inline
+  comments over the base; optionally post via `gh`
+- ☐ **P6 Scratch** — global scratch dir (Settings-configurable), markdown +
+  mermaid render, doc/page drafting via a headless backend
+- ☐ **P7 Settings UI + MCP** — TUI over `internal/config`/`prefs`/`toolreg`/
+  `skills`; global vs project instructions (non-overriding unless opted in);
+  orchestration pipeline editor; MCP marketplace (folds in Phase 6)
+- ☐ **P8 CLI/tmux cleanup** — remove the hidden legacy subcommands + the
+  tmux/session layer once nothing shells out to `karya <subcommand>`
+
+**Architecture & conventions (established in P1 — future phases follow these):**
+
+- **Workspace layer** (`internal/ide/workspace.go`): root `ide.Model` holds
+  `workspaces [6]*workspace` + an `active` index. Each `workspace` owns its own
+  `*layout.Tree` and its per-view singleton pane IDs (finder/search/git/task/
+  review/inbox/editor). `m.tree` is a live pointer to the active workspace's tree,
+  kept in sync by `switchTo`/`initWorkspaces`, so all pane code and tests operate
+  on one tree. Pane IDs live on `workspace` (not `Model`) because per-tree ids are
+  allocated independently and would collide across workspaces.
+- **Switching**: `switchTo(kind)` sets `active`, lazily seeds the view's default
+  layout on first visit (`seedWorkspace`), and re-syncs pane sizes. Only the
+  editor view is seeded eagerly; the rest seed on first switch (fast startup).
+  Bound to `Ctrl+Space 1-6`; the picker overlay is `Ctrl+Space Space`.
+- **Cross-view navigation = poll-drain request bus** (no channels): a view sets a
+  request field (e.g. `gitui.Panel.OpenRequest`, `taskview.Board.GitRequest/
+  ReviewRequest`, `companionview.Companion.AskRequest`), and the root model drains
+  it in `forward()`, switching to the target workspace first, then acting. Add new
+  cross-view intents the same way.
+- **Agents are headless**: the Companion (`internal/companionview`) and the task
+  lifecycle both call agents via headless one-shot mode off the render path
+  (`agent.NewRunner(name).Headless(...)`, `internal/agentrun`). No interactive
+  agent PTY panes in the SE flow. Companion answers only — never edits files.
+- **In-process lifecycle** (`internal/tasksvc`): `Env{Repo, Store, Worktrees}` +
+  `RepoEnv(dir)`; `Plan/Implement/Verify/Merge/NewTask/Start/Abandon/List/
+  CrossGate`. The TUI drives the gate lifecycle by calling these directly — it
+  never shells out to a `karya` subcommand.
+- **Pane migration** (where each existing view lives): editor + terminal +
+  Companion, with finder/search, in view 1; task board + gate inbox in view 2;
+  git panel (+ worktree list/diff, P4) in view 3; task-gate reviews in view 4
+  (PR review is P5); placeholders in views 4–6 until their phases land.
+
+**Risks carried forward (address in P8):** the hidden legacy subcommands
+(`shell`, `agent native`, `agent switch-to`, `tui`) are still shelled out by the
+tmux/session layer — remove them together with that layer, not before, or a live
+session breaks. `syncPaneSizes` sizes only the active tree; keep re-syncing on
+`switchTo` when a view was resized while hidden.
+
+**Verification (each phase keeps these green):** `go build ./...`;
+`go test ./...`; golangci-lint via `make lint` (runs it through `go run`, not on
+PATH); the integration smoke (`go test -tags=integration ./internal/ide/`) launches
+`karya tui` on a real PTY. Manual: cycle all six views via `Ctrl+Space 1-6` and
+the picker; ask the Companion a question and confirm no file mutation; open a
+changed file from Git → lands in the editor; run a task lifecycle op and confirm
+it runs in-process (no `karya` subprocess) and the board refreshes.
+
+**Done when:** all six views are usable and blend together, agents run only as
+karya-driven backends, and the CLI is just `version`/`update`/`uninstall`.

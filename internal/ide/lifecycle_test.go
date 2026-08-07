@@ -1,7 +1,6 @@
 package ide
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 
@@ -29,42 +28,6 @@ func TestLeaderNewTaskOpensBoardInInput(t *testing.T) {
 	}
 }
 
-func TestLifecycleArgs(t *testing.T) {
-	cases := []struct {
-		req  taskview.LifecycleRequest
-		want []string
-	}{
-		{taskview.LifecycleRequest{Op: "new", ID: "my-slug"}, []string{"task", "new", "my-slug"}},
-		{taskview.LifecycleRequest{Op: "start", ID: "t1"}, []string{"task", "start", "t1"}},
-		{taskview.LifecycleRequest{Op: "plan", ID: "t1"}, []string{"plan", "t1"}},
-		{taskview.LifecycleRequest{Op: "implement", ID: "t1"}, []string{"implement", "t1"}},
-		{taskview.LifecycleRequest{Op: "verify", ID: "t1"}, []string{"verify", "t1"}},
-		{taskview.LifecycleRequest{Op: "merge", ID: "t1"}, []string{"merge", "t1"}},
-	}
-	for _, tc := range cases {
-		if got := lifecycleArgs(tc.req); !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("lifecycleArgs(%+v) = %v want %v", tc.req, got, tc.want)
-		}
-	}
-}
-
-func TestParseCreatedID(t *testing.T) {
-	cases := []struct {
-		out  string
-		want string
-	}{
-		{"Created task 2026-08-07-my-slug (draft)\n  spec: /x/SPEC.md\n", "2026-08-07-my-slug"},
-		{"some noise\nCreated task abc\n", "abc"},
-		{"no id here\n", ""},
-		{"", ""},
-	}
-	for _, tc := range cases {
-		if got := parseCreatedID(tc.out); got != tc.want {
-			t.Errorf("parseCreatedID(%q) = %q want %q", tc.out, got, tc.want)
-		}
-	}
-}
-
 func TestFirstLine(t *testing.T) {
 	if got := firstLine("\n\n  boom: it broke  \nmore\n"); got != "boom: it broke" {
 		t.Errorf("firstLine = %q", got)
@@ -79,7 +42,7 @@ func TestFirstLine(t *testing.T) {
 func TestLifecycleDoneRefreshesBoard(t *testing.T) {
 	m := testModel(80, 24)
 	loads := 0
-	m.board = taskview.New(func() []taskview.Item {
+	m.workspaces[WSAgents].board = taskview.New(func() []taskview.Item {
 		loads++
 		return []taskview.Item{{ID: "t1", State: "planned", Title: "x"}}
 	})

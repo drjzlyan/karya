@@ -123,12 +123,12 @@ func TestWhichKeyCandidatesUnderGroup(t *testing.T) {
 	}
 }
 
-func TestTabGotoDigits(t *testing.T) {
+func TestViewSwitchDigits(t *testing.T) {
 	e := testEngine()
 	e.Feed(Leader, Context{})
 	res := e.Feed(term.RuneKey('3'), Context{})
-	if res.Kind != ResDispatch || res.Action != ActionTabGoto3 {
-		t.Fatalf("expected tab goto 3, got %+v", res)
+	if res.Kind != ResDispatch || res.Action != ActionViewGit {
+		t.Fatalf("expected git view switch, got %+v", res)
 	}
 }
 

@@ -139,9 +139,43 @@ func TestLeaderNewTabAndSwitch(t *testing.T) {
 	if m.tree.ActiveTab() != 1 {
 		t.Fatalf("new tab should be active")
 	}
-	press(m, leaderThen('1')...) // jump to tab 1
+	press(m, leaderThen('p')...) // previous tab
 	if m.tree.ActiveTab() != 0 {
-		t.Fatalf("goto tab 1 failed, active=%d", m.tree.ActiveTab())
+		t.Fatalf("prev tab failed, active=%d", m.tree.ActiveTab())
+	}
+}
+
+func TestLeaderSwitchesView(t *testing.T) {
+	m := testModel(80, 24)
+	if m.active != WSEditor {
+		t.Fatalf("default view = %d, want WSEditor", m.active)
+	}
+	press(m, leaderThen('3')...) // switch to the Git view
+	if m.active != WSGit {
+		t.Fatalf("after <leader>3 active = %d, want WSGit", m.active)
+	}
+	// The Git view seeded its git panel; m.tree now points at the Git workspace.
+	if m.tree != m.workspaces[WSGit].tree {
+		t.Fatal("m.tree did not follow the active workspace")
+	}
+	press(m, leaderThen('1')...) // back to the editor view
+	if m.active != WSEditor {
+		t.Fatalf("after <leader>1 active = %d, want WSEditor", m.active)
+	}
+}
+
+func TestViewPickerSwitches(t *testing.T) {
+	m := testModel(80, 24)
+	press(m, leaderThen(' ')...) // open the picker
+	if !m.picker {
+		t.Fatal("picker did not open")
+	}
+	press(m, term.RuneKey('3')) // pick the Git view
+	if m.picker {
+		t.Fatal("picker should close after a pick")
+	}
+	if m.active != WSGit {
+		t.Fatalf("picker pick active = %d, want WSGit", m.active)
 	}
 }
 

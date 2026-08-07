@@ -29,7 +29,15 @@ const (
 	ActionTabNext ActionID = "tab.next"
 	ActionTabPrev ActionID = "tab.prev"
 	ActionTabNew  ActionID = "tab.new"
-	ActionTabGoto ActionID = "tab.goto" // suffixed with the digit at dispatch time
+
+	// The six top-level workspace switches and the picker overlay.
+	ActionViewEditor   ActionID = "view.editor"
+	ActionViewAgents   ActionID = "view.agents"
+	ActionViewGit      ActionID = "view.git"
+	ActionViewReview   ActionID = "view.review"
+	ActionViewScratch  ActionID = "view.scratch"
+	ActionViewSettings ActionID = "view.settings"
+	ActionViewPicker   ActionID = "view.picker"
 
 	ActionPaneSwitcher ActionID = "pane.switcher"
 	ActionFocusEditor  ActionID = "focus.editor"
@@ -50,17 +58,6 @@ const (
 	ActionAgentInbox ActionID = "agent.inbox"
 	ActionHelpKeys   ActionID = "help.keys"
 	ActionQuit       ActionID = "app.quit"
-
-	// ActionTabGoto1..9 are the concrete per-digit tab jumps.
-	ActionTabGoto1 ActionID = "tab.goto.1"
-	ActionTabGoto2 ActionID = "tab.goto.2"
-	ActionTabGoto3 ActionID = "tab.goto.3"
-	ActionTabGoto4 ActionID = "tab.goto.4"
-	ActionTabGoto5 ActionID = "tab.goto.5"
-	ActionTabGoto6 ActionID = "tab.goto.6"
-	ActionTabGoto7 ActionID = "tab.goto.7"
-	ActionTabGoto8 ActionID = "tab.goto.8"
-	ActionTabGoto9 ActionID = "tab.goto.9"
 )
 
 // Leader is karya's default leader key: Ctrl+Space. It can be overridden per
@@ -107,6 +104,7 @@ func DefaultBindingsFor(leader term.Key) []Binding {
 		gTasks = "Tasks"
 		gGit   = "Git"
 		gApp   = "karya"
+		gViews = "Views"
 	)
 	b := []Binding{
 		// Pane focus
@@ -148,21 +146,17 @@ func DefaultBindingsFor(leader term.Key) []Binding {
 		{Keys: lead('a'), Action: ActionAgentInbox, Desc: "Agent inbox / delegate", Group: gApp},
 		{Keys: lead('?'), Action: ActionHelpKeys, Desc: "Keymap reference", Group: gApp},
 		{Keys: lead('Q'), Action: ActionQuit, Desc: "Quit karya", Group: gApp},
+		// Top-level view switcher: <leader> 1..6 jump between workspaces, <leader>
+		// Space opens the picker overlay.
+		{Keys: lead('1'), Action: ActionViewEditor, Desc: "Editor view (Human-in-Control)", Group: gViews},
+		{Keys: lead('2'), Action: ActionViewAgents, Desc: "Multi-Agent view", Group: gViews},
+		{Keys: lead('3'), Action: ActionViewGit, Desc: "Git view", Group: gViews},
+		{Keys: lead('4'), Action: ActionViewReview, Desc: "Review view", Group: gViews},
+		{Keys: lead('5'), Action: ActionViewScratch, Desc: "Scratch view", Group: gViews},
+		{Keys: lead('6'), Action: ActionViewSettings, Desc: "Settings view", Group: gViews},
+		{Keys: lead(' '), Action: ActionViewPicker, Desc: "View switcher", Group: gViews},
 		// Send a literal leader to the focused pane.
 		{Keys: []term.Key{leader, leader}, Action: ActionSendLeader, Desc: "Send leader to pane", Group: gPanes},
-	}
-	// Tab jumps 1..9
-	tabGoto := []ActionID{
-		ActionTabGoto1, ActionTabGoto2, ActionTabGoto3, ActionTabGoto4, ActionTabGoto5,
-		ActionTabGoto6, ActionTabGoto7, ActionTabGoto8, ActionTabGoto9,
-	}
-	for i := 0; i < 9; i++ {
-		b = append(b, Binding{
-			Keys:   lead(rune('1' + i)),
-			Action: tabGoto[i],
-			Desc:   "Go to tab " + string(rune('1'+i)),
-			Group:  gTabs,
-		})
 	}
 	return b
 }

@@ -13,11 +13,56 @@ every working session.
 
 ## Current status
 
-**Active phase:** Phase 5 — skills marketplace (next). Phase 0–4 core are shipped:
-docs pivot, TUI skeleton, embed Neovim, git panel/task board/review+gates, and
-verification/merge (verify+merge CLI, in-TUI approve/reject + gate inbox, agent
-PTY panes in worktrees). Phase B (agent adapters) proceeds in parallel (headless);
-tdd/cross-agent/regression-net/perf remain within Phase 4.
+**Active phase:** Six-view IDE restructure (Phase 9) — Phase 1 shell **shipped**
+(see below). Phase 0–5 shipped: docs pivot, TUI skeleton, embed Neovim, git
+panel/task board/review+gates, verification/merge, skills marketplace. Phase B
+(agent adapters) proceeds in parallel (headless).
+
+**Six-view restructure — Phase 1 shell shipped (2026-08-07):** the IDE is now
+organized around six top-level **workspaces** switched with `Ctrl+Space 1-6` (or
+the `Ctrl+Space Space` picker): 1 Human-in-Control (editor + terminal + read-only
+**Companion** agent pane), 2 Multi-Agent dashboard (task board + gate inbox), 3
+Git, 4 Review, 5 Scratch, 6 Settings. Each workspace owns its own pane/tab tree
+(`internal/ide/workspace.go`). The Companion pane (`internal/companionview`)
+answers questions via a headless agent and never edits files. Cross-view jumps
+work (git file → editor with `o`; task → git/review with `g`/Enter). The task
+lifecycle now runs **in-process** via `internal/tasksvc` (no more shelling out to
+`karya plan <id>`), and the **CLI is slimmed** to `version`/`update`/`uninstall`
+plus the bare-`karya` TUI launch (legacy tooling commands are hidden, pending
+migration into the Settings view). Review-of-PRs, Scratch depth, the Settings UI,
+and the configurable multi-agent role pipeline are stubs for later phases.
+The full phased breakdown, the architecture/conventions established in P1, the
+risks carried forward, and the verification recipe live in [ROADMAP.md](ROADMAP.md)
+Phase 9 (P1–P8) — that plus this file are the source of truth for the restructure
+(no separate plan doc).
+
+**P1 shipped — key files & tests:**
+- New: `internal/ide/workspace.go` (workspace layer, `switchTo`, `seedWorkspace`,
+  picker); `internal/companionview/` (headless Q&A pane); `internal/tasksvc/`
+  (in-process lifecycle + `tasksvc_test.go`).
+- `internal/ide/ide.go` — `Model` now holds `workspaces [6]*workspace` + `active`
+  + live `tree` pointer; `runLifecycle` calls `tasksvc` (dropped the
+  `os/exec` subprocess + `lifecycleArgs`/`parseCreatedID`); `crossGate` delegates
+  to `tasksvc.CrossGate`; new `askCompanion`/`companionAnswerMsg`,
+  `openFileInEditorView`, `openGitForTask`; `forward()` drains the new requests.
+- `internal/keymap/bindings.go` — `ActionView*`/`ActionViewPicker`; digits `1-6`
+  repurposed to view switches (removed `ActionTabGoto*`).
+- `internal/gitui/gitui.go` — `o` → `OpenRequest()` (open file in editor).
+- `internal/taskview/taskview.go` — `g` → `GitRequest()` (jump to Git view).
+- `internal/cli/cli.go` — dispatch/usage trimmed to `version`/`update`/`uninstall`
+  + bare TUI; **deleted** `plan.go`/`verifymerge.go`/`task.go`/`gate.go` (+ their
+  tests) since the lifecycle logic moved to `tasksvc` and the `unused` linter
+  forbids dead code. Other legacy tooling commands stay dispatchable-but-hidden.
+- Tests updated: `internal/ide/{ide,lifecycle}_test.go`, `keymap/keymap_test.go`;
+  gate/verify coverage moved into `tasksvc_test.go`. Full `go test ./...`,
+  `go vet ./...`, golangci-lint, and the integration smoke all pass.
+
+**Next action:** Phase 9 **P3 — Multi-Agent orchestration**. Build the
+configurable role pipeline (looper / knowledge-maintainer / planner / executor /
+tester-verifier / reviewer) as the default preset, driving headless backends
+per role via `internal/agentrun`, and surface per-task per-role status +
+transcripts in the Multi-Agent dashboard (`internal/taskview`). (P2 Human-in-
+Control depth can land alongside.) Keep build/`go test ./...`/golangci-lint green.
 **Architecture pivot (2026-08-06):** karya moves from an *orchestrator* (external
 tmux + standalone Neovim UI + lazygit, three keymaps) to a **single-process TUI**
 that owns the terminal and embeds Neovim as the editing engine over msgpack-RPC,
