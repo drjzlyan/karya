@@ -77,8 +77,24 @@ isolated git worktree (branch `task/<id>`) and advances through human gates.
 | `<L> r` | Review the pending gate for the current task |
 | `<L> a` | Agent inbox / delegate the current gate to an agent |
 
-On the task board and in lists, vim motions work: `j`/`k` move, `g`/`G` jump,
-`/` searches, `Enter` opens, `q` closes. Destructive actions (abandon) confirm.
+On the task board the whole gate lifecycle is keyboard-driven — each key runs the
+matching `karya` command in the background and updates the row's state in place:
+
+| Key | Action |
+|---|---|
+| `j`/`k` | Move the selection |
+| `n` | New task (type a slug, `Enter` creates it and opens its spec) |
+| `s` | Start the selected task (create its isolated worktree) |
+| `p` | Plan — the agent drafts `PLAN.md` (→ plan gate) |
+| `i` | Implement the approved plan (→ diff gate) |
+| `v` | Verify — run the spec's Verification block (→ verify gate) |
+| `m` | Merge the approved worktree back to base |
+| `Enter` | Review the selected task's pending gate |
+| `a` | Run the task's agent interactively in a pane |
+| `r` | Refresh · `q` closes |
+
+Review and approval stay native (`Enter` / `<L> r`): a human always crosses the
+gate. Destructive actions (abandon) confirm.
 
 ## 3. Git — `<L> g` (built-in panel)
 

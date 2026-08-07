@@ -232,6 +232,27 @@ dashboard.
   already OKF-shaped; captured a direction in DESIGN §11 to add OKF frontmatter +
   a `karya knowledge export` for portable, shareable task knowledge.
 
+### 2026-08-07 — In-TUI task lifecycle (Phase B wiring)
+
+- Wired the agent-driving CLI steps: `karya plan <id>` and `karya implement <id>`
+  (`internal/cli/plan.go`) wrap `agentrun.RunStep` and own the gate transitions
+  (draft→planned on plan; approved→implementing on implement, gated on the plan
+  gate), re-running against the latest rejection feedback. Dispatch + usage
+  updated.
+- The task board is now a keyboard-driven lifecycle surface (`internal/taskview`):
+  `n` new (inline slug input → creates the task and opens its spec), `s` start,
+  `p` plan, `i` implement, `v` verify, `m` merge — each emits a `LifecycleRequest`
+  the IDE fulfils by running the matching `karya` subcommand in the background
+  (`Model.runLifecycle` → `lifecycleDoneMsg`), off the render path, then refreshes
+  the board in place. Review/approve stays native (`Enter` / `<L> r`).
+- `<L> t n` opens the board straight into new-task input; `<L> t s` opens it ready
+  to start (both previously "coming soon" stubs). docs/keymaps.md board section
+  rewritten + re-vendored.
+- Verified: unit tests for board lifecycle keys + input mode and the ide helpers
+  (`lifecycleArgs`/`parseCreatedID`/`firstLine`, `<L> t n` flow); `go build`,
+  `go vet`, `go test -race ./...`, `-tags=integration` (ide+agentrun), and
+  golangci-lint v2 all green.
+
 ### Resume point (do this next)
 
 1. Phase 6 — MCP marketplace (mirrors skills): `internal/mcp`, per-agent native
@@ -239,6 +260,6 @@ dashboard.
 2. Remaining Phase 4: `tdd:true` acceptance-test-first flow, cross-agent reviewer
    pre-gate filter, auto-detected regression net at the verify gate, perf
    benchmarks vs the §8.4 budgets.
-4. In parallel (Phase B, headless): finish `internal/agentrun` adapters + `Caps`
-   matrix; `karya plan <id>` / `karya implement <id>`; adapter contract tests via
-   a scripted fake-agent binary.
+3. Phase B follow-ups (headless): finish the remaining `agentrun` adapters + `Caps`
+   matrix and add adapter contract tests via a scripted fake-agent binary
+   (`karya plan`/`implement` are now wired end-to-end into the TUI board).

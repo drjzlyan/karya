@@ -84,6 +84,81 @@ func TestBoardAgentRequest(t *testing.T) {
 	}
 }
 
+func TestBoardLifecycleRequest(t *testing.T) {
+	cases := []struct {
+		key    term.Key
+		selIdx int
+		wantOp string
+		wantID string
+	}{
+		{term.RuneKey('s'), 0, "start", "2026-08-06-a"},
+		{term.RuneKey('p'), 1, "plan", "2026-08-06-b"},
+		{term.RuneKey('i'), 1, "implement", "2026-08-06-b"},
+		{term.RuneKey('v'), 2, "verify", "2026-08-06-c"},
+		{term.RuneKey('m'), 2, "merge", "2026-08-06-c"},
+	}
+	for _, tc := range cases {
+		b := New(func() []Item { return sampleItems() })
+		for i := 0; i < tc.selIdx; i++ {
+			b.HandleKey(term.RuneKey('j'))
+		}
+		b.HandleKey(tc.key)
+		req, ok := b.LifecycleRequest()
+		if !ok || req.Op != tc.wantOp || req.ID != tc.wantID {
+			t.Fatalf("%s: got (%+v,%v) want {%s %s}", tc.key, req, ok, tc.wantOp, tc.wantID)
+		}
+		if _, ok := b.LifecycleRequest(); ok {
+			t.Fatalf("%s: request should be consumed once", tc.key)
+		}
+	}
+}
+
+func TestBoardNewTaskInput(t *testing.T) {
+	b := New(func() []Item { return sampleItems() })
+	b.HandleKey(term.RuneKey('n')) // enter input mode
+	if !b.inputting {
+		t.Fatal("n should enter input mode")
+	}
+	for _, r := range "my-feature" {
+		b.HandleKey(term.RuneKey(r))
+	}
+	b.HandleKey(term.Named(term.SymBackspace)) // "my-featur"
+	b.HandleKey(term.RuneKey('e'))             // "my-feature"
+	b.HandleKey(term.Named(term.SymEnter))
+	req, ok := b.LifecycleRequest()
+	if !ok || req.Op != "new" || req.ID != "my-feature" {
+		t.Fatalf("new task = (%+v,%v) want {new my-feature}", req, ok)
+	}
+	if b.inputting {
+		t.Fatal("Enter should leave input mode")
+	}
+}
+
+func TestBoardNewTaskCancel(t *testing.T) {
+	b := New(func() []Item { return sampleItems() })
+	b.HandleKey(term.RuneKey('n'))
+	b.HandleKey(term.RuneKey('x'))
+	b.HandleKey(term.Named(term.SymEsc))
+	if b.inputting {
+		t.Fatal("Esc should cancel input mode")
+	}
+	if _, ok := b.LifecycleRequest(); ok {
+		t.Fatal("cancelled input must not emit a request")
+	}
+}
+
+func TestBoardInputModeSwallowsKeys(t *testing.T) {
+	b := New(func() []Item { return sampleItems() })
+	b.HandleKey(term.RuneKey('n'))
+	b.HandleKey(term.RuneKey('j')) // a letter of the slug, not navigation
+	if b.Selected() != "2026-08-06-a" {
+		t.Fatalf("input mode must not navigate; selected=%q", b.Selected())
+	}
+	if b.input != "j" {
+		t.Fatalf("input = %q want \"j\"", b.input)
+	}
+}
+
 func TestBoardQuitCloses(t *testing.T) {
 	b := New(func() []Item { return nil })
 	if b.Done() {

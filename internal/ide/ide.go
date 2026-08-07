@@ -7,8 +7,10 @@ package ide
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/drjzlyan/karya/internal/agent"
 	"github.com/drjzlyan/karya/internal/cellbuf"
@@ -78,6 +80,7 @@ type Model struct {
 	finderPaneID layout.PaneID
 	searchPaneID layout.PaneID
 	editorPaneID layout.PaneID
+	board        *taskview.Board // the open task board, for background refresh
 }
 
 // shellReadMsg carries a chunk of a shell pane's output back into the loop.
@@ -298,6 +301,8 @@ func (m *Model) Update(msg tui.Msg) (tui.Model, tui.Cmd) {
 		}
 		// A repaint happens after every Update; just keep waiting for the next flush.
 		return m, editorWaitCmd(v.pane)
+	case lifecycleDoneMsg:
+		return m, m.handleLifecycleDone(v)
 	case provisionDoneMsg:
 		if v.err != nil {
 			m.status = v.lang + " language tools unavailable (see log)"
@@ -387,7 +392,7 @@ func (m *Model) forward(k term.Key) tui.Cmd {
 				return cmd
 			}
 		}
-		// The task board can request a review or an agent pane for a task.
+		// The task board can request a review, an agent pane, or a lifecycle step.
 		if board, ok := p.(*taskview.Board); ok {
 			if rid := board.ReviewRequest(); rid != "" {
 				m.openReviewFor(rid)
@@ -396,6 +401,9 @@ func (m *Model) forward(k term.Key) tui.Cmd {
 			if aid := board.AgentRequest(); aid != "" {
 				return m.openAgentPane(aid)
 			}
+			if req, ok := board.LifecycleRequest(); ok {
+				return m.runLifecycle(req)
+			}
 		}
 		if p.Done() {
 			switch id {
@@ -403,6 +411,7 @@ func (m *Model) forward(k term.Key) tui.Cmd {
 				m.gitPaneID = 0
 			case m.taskPaneID:
 				m.taskPaneID = 0
+				m.board = nil
 			case m.reviewPaneID:
 				m.reviewPaneID = 0
 			case m.inboxPaneID:
@@ -478,9 +487,103 @@ func (m *Model) openTaskBoard() *taskview.Board {
 		}
 	}
 	board := taskview.New(m.loadTasks)
+	m.board = board
 	m.taskPaneID = m.tree.AddTab("tasks", board)
 	m.syncPaneSizes()
 	return board
+}
+
+// lifecycleDoneMsg reports the result of a background `karya` lifecycle command.
+type lifecycleDoneMsg struct {
+	req    taskview.LifecycleRequest
+	output string
+	err    error
+}
+
+// runLifecycle drives one gate-lifecycle step from the task board by running the
+// matching `karya` subcommand in the background (off the render path), so the
+// tested CLI does the work while the TUI stays responsive (DESIGN.md §6). The
+// board's status line reflects progress and, on completion, the result.
+func (m *Model) runLifecycle(req taskview.LifecycleRequest) tui.Cmd {
+	bin, err := os.Executable()
+	if err != nil {
+		m.status = "lifecycle: " + err.Error()
+		return nil
+	}
+	m.status = req.Op + " " + req.ID + " …"
+	dir := m.dir
+	return func() tui.Msg {
+		cmd := exec.Command(bin, lifecycleArgs(req)...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		return lifecycleDoneMsg{req: req, output: string(out), err: err}
+	}
+}
+
+// lifecycleArgs maps a request to its `karya` argument vector.
+func lifecycleArgs(req taskview.LifecycleRequest) []string {
+	switch req.Op {
+	case "new":
+		return []string{"task", "new", req.ID} // ID carries the slug
+	case "start":
+		return []string{"task", "start", req.ID}
+	default: // plan | implement | verify | merge
+		return []string{req.Op, req.ID}
+	}
+}
+
+// handleLifecycleDone records a finished lifecycle step: it refreshes the board
+// (states changed on disk), reports success or the failure's first line, and for
+// a newly created task opens its spec in the editor to fill in the contract.
+func (m *Model) handleLifecycleDone(v lifecycleDoneMsg) tui.Cmd {
+	if m.board != nil {
+		m.board.Refresh()
+	}
+	if v.err != nil {
+		msg := fmt.Sprintf("%s %s failed: %s", v.req.Op, v.req.ID, firstLine(v.output))
+		m.status = msg
+		if m.board != nil {
+			m.board.SetStatus(msg)
+		}
+		return nil
+	}
+	msg := fmt.Sprintf("%s %s ✓", v.req.Op, v.req.ID)
+	m.status = msg
+	if m.board != nil {
+		m.board.SetStatus(msg)
+	}
+	if v.req.Op == "new" {
+		if id := parseCreatedID(v.output); id != "" {
+			cmd := m.openFile(task.NewStore(m.dir).SpecPath(id), 0)
+			m.syncPaneSizes()
+			return cmd
+		}
+	}
+	return nil
+}
+
+// parseCreatedID extracts the task id from `karya task new`'s "Created task <id>"
+// line, so the board can open the new task's spec for editing.
+func parseCreatedID(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		const p = "Created task "
+		if i := strings.Index(line, p); i >= 0 {
+			if fields := strings.Fields(line[i+len(p):]); len(fields) > 0 {
+				return fields[0] // drop the trailing "(draft)"
+			}
+		}
+	}
+	return ""
+}
+
+// firstLine returns the first non-empty line of s, trimmed (for status errors).
+func firstLine(s string) string {
+	for _, line := range strings.Split(s, "\n") {
+		if t := strings.TrimSpace(line); t != "" {
+			return t
+		}
+	}
+	return ""
 }
 
 // openReview opens the review for the first task awaiting a gate.
@@ -689,9 +792,10 @@ func (m *Model) dispatch(a keymap.ActionID) tui.Cmd {
 	case keymap.ActionTaskBoard:
 		m.openTaskBoard()
 	case keymap.ActionTaskNew:
-		m.status = "new task: run `karya task new <slug>` (in-TUI form coming soon)"
+		m.openTaskBoard().BeginNew()
 	case keymap.ActionTaskStart:
-		m.status = "start task: run `karya task start <id>` (in-TUI form coming soon)"
+		m.openTaskBoard()
+		m.status = "select a task and press s to start it"
 	case keymap.ActionGitPanel:
 		m.openGitPanel()
 	case keymap.ActionGitCommit:

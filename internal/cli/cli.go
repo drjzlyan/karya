@@ -63,6 +63,10 @@ func Run(args []string) int {
 		return cmdTask(rest)
 	case "tasks":
 		return cmdTask(append([]string{"list"}, rest...))
+	case "plan":
+		return cmdPlan(rest)
+	case "implement":
+		return cmdImplement(rest)
 	case "gate":
 		return cmdGate(rest)
 	case "review":
@@ -538,6 +542,12 @@ Usage:
   karya task <cmd>          new <slug> [--agent] | list | status | show <id>
                             start <id> [--base <ref>] | abandon <id> [-y]
                             (see: karya help task)
+  karya plan <id>           Agent drafts PLAN.md in the task worktree (→ plan gate)
+  karya implement <id>      Agent implements the approved plan (→ diff gate)
+  karya review [id]         Review a pending gate (plan/diff/verify)
+  karya gate <cmd>          approve <id> | reject <id> [-m msg]  (advance/return a gate)
+  karya verify <id>         Run the task's Verification commands (→ verify gate)
+  karya merge <id>          Merge the approved worktree back to base (done)
   karya init [--force]      Scaffold .karya/ + a repo AGENTS.md for the task flow
   karya edit <file> [line]  Open a file in the editor pane (used as $EDITOR)
   karya run <cmd...>        Run a command in the build/test pane
