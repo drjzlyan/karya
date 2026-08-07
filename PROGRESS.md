@@ -222,14 +222,21 @@ dashboard.
   (`Ctrl+Space /`), both opening results in the editor via `editorPane.OpenFile`;
   `Ctrl+Space e` focuses the editor. docs/keymaps.md updated + re-vendored.
 
+### 2026-08-07 — Phase 5 complete (skills) + OKF direction
+
+- Skills marketplace done: per-agent materialization (symlinks into detected
+  agents' dirs, karya-owned-links only), project `.karya/skills/` listing,
+  `karya doctor` skills report, uninstall dematerialize. (TUI browser deferred.)
+- Clarified OKF = Google's Open Knowledge Format (markdown + YAML frontmatter,
+  files, cross-links, format-is-the-contract). karya's `.karya/` artifacts are
+  already OKF-shaped; captured a direction in DESIGN §11 to add OKF frontmatter +
+  a `karya knowledge export` for portable, shareable task knowledge.
+
 ### Resume point (do this next)
 
-1. Finish Phase 5 — per-agent materialization (symlink/copy installed skills into
-   opted-in agents' native dirs; remove on uninstall) + project `.karya/skills/`
-   auto-visibility; `karya doctor` reports installed skills.
-2. Phase 6 — MCP marketplace: `internal/mcp` (registry client, per-agent native
-   config generation from one source of truth), `karya mcp search|install|sync`.
-3. Remaining Phase 4: `tdd:true` acceptance-test-first flow, cross-agent reviewer
+1. Phase 6 — MCP marketplace (mirrors skills): `internal/mcp`, per-agent native
+   config generation from one source of truth, `karya mcp search|install|sync`.
+2. Remaining Phase 4: `tdd:true` acceptance-test-first flow, cross-agent reviewer
    pre-gate filter, auto-detected regression net at the verify gate, perf
    benchmarks vs the §8.4 budgets.
 4. In parallel (Phase B, headless): finish `internal/agentrun` adapters + `Caps`

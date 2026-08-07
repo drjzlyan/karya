@@ -621,6 +621,16 @@ Rules:
   the single-process / embed-Neovim pivot.
 - **Living sync rule (unchanged):** behavior changes update `docs/` + DESIGN.md
   in the same PR; `docs/tutorial.md` must always match reality.
+- **Open Knowledge Format (OKF) alignment.** karya's `.karya/` artifacts are
+  already OKF-shaped — markdown files with YAML front-matter, organized as a file
+  tree, cross-linked by markdown links, produced/consumed by humans *and* agents
+  with no SDK (the format is the contract). This mirrors Google's
+  [OKF](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing).
+  Direction (Phase 6.x): give the `.karya/` knowledge artifacts (`CONTEXT.md`,
+  per-task `MEMORY.md`, specs) consistent OKF front-matter (`type`, `title`,
+  `description`, `tags`, `timestamp`) and a `karya knowledge export` that emits an
+  OKF bundle — so a task's knowledge is portable and shareable across agents,
+  tools, and organizations, not locked into karya.
 
 ---
 

@@ -215,18 +215,21 @@ navigation without leaving karya. **Shipped 2026-08-07.**
 
 ---
 
-## Phase 5 — Skills marketplace
+## Phase 5 — Skills marketplace ◐
 **Goal:** portable SKILL.md packages, installed once, visible to every agent.
 
-- ☐ `internal/skills` — registry client, hash-verified install into karya prefix
-- ☐ Default registry + `karya skills registry add <url>`
-- ☐ Per-agent materialization (opt-in) + removal on uninstall
-- ☐ Project-local `.karya/skills/` auto-visible to task agents
-- ☐ `karya skills search|install|remove|list` + `internal/skillsview` TUI browser
-- ☐ `karya doctor` reports installed skills per agent
+- ☑ `internal/skills` — registry client, hash-verified atomic install into the
+  karya prefix (Source: HTTP/dir/fake)
+- ☑ Default registry + `karya skills registry add <url>`
+- ☑ Per-agent materialization (symlinks into detected agents' dirs) + removal on
+  uninstall/remove
+- ☑ Project-local `.karya/skills/` listed (auto-visible to task agents)
+- ☑ `karya skills search|install|remove|list` + `karya doctor` reports skills
+- ☐ `internal/skillsview` TUI browser
 
 **Done when:** a skill installs from the registry and is usable by every opted-in
 agent in task runs, fully inside karya-owned paths.
+**Core shipped 2026-08-07; TUI browser deferred.**
 
 ---
 
