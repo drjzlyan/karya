@@ -19,6 +19,18 @@ const (
 	modeCommit
 )
 
+// focusArea is which list the panel's motion keys drive.
+type focusArea uint8
+
+const (
+	focusChanges focusArea = iota // the working-tree file list
+	focusLog                      // the commit history
+)
+
+// logDepth is how many recent commits the panel loads, so the history is useful
+// (and scrollable) even on a clean tree.
+const logDepth = 50
+
 // Panel is the git panel view.
 type Panel struct {
 	repo *git.Repo
@@ -27,6 +39,10 @@ type Panel struct {
 	files  []git.FileStatus
 	sel    int
 
+	commits []git.Commit
+	logSel  int
+
+	focus      focusArea
 	diff       []diffview.Line
 	diffScroll int
 
@@ -73,11 +89,31 @@ func (p *Panel) refresh() {
 	if p.sel >= len(files) {
 		p.sel = max(0, len(files)-1)
 	}
+	if commits, err := p.repo.Log(logDepth); err == nil {
+		p.commits = commits
+	}
+	if p.logSel >= len(p.commits) {
+		p.logSel = max(0, len(p.commits)-1)
+	}
+	// On a clean tree there is nothing to stage, so default motion to history —
+	// the panel stays useful instead of showing an empty void.
+	if len(p.files) == 0 && len(p.commits) > 0 {
+		p.focus = focusLog
+	}
 	p.loadDiff()
 }
 
 func (p *Panel) loadDiff() {
 	p.diffScroll = 0
+	if p.focus == focusLog {
+		if len(p.commits) == 0 {
+			p.diff = nil
+			return
+		}
+		d, _ := p.repo.Show(p.commits[p.logSel].Hash)
+		p.diff = diffview.Parse(d)
+		return
+	}
 	if len(p.files) == 0 {
 		p.diff = nil
 		return
@@ -100,6 +136,8 @@ func (p *Panel) HandleKey(k term.Key) {
 		p.move(1)
 	case k == term.RuneKey('k') || k == term.Named(term.SymUp):
 		p.move(-1)
+	case k == term.Named(term.SymTab):
+		p.toggleFocus()
 	case k == term.RuneKey(' ') || k == term.Named(term.SymEnter):
 		p.toggleStage()
 	case k == term.RuneKey('a'):
@@ -151,7 +189,26 @@ func (p *Panel) handleCommitKey(k term.Key) {
 	}
 }
 
+// toggleFocus switches motion keys between the file list and the commit log,
+// then reloads the diff for whatever the newly focused list has selected.
+func (p *Panel) toggleFocus() {
+	if p.focus == focusChanges {
+		p.focus = focusLog
+	} else {
+		p.focus = focusChanges
+	}
+	p.loadDiff()
+}
+
 func (p *Panel) move(delta int) {
+	if p.focus == focusLog {
+		if len(p.commits) == 0 {
+			return
+		}
+		p.logSel = clamp(p.logSel+delta, 0, len(p.commits)-1)
+		p.loadDiff()
+		return
+	}
 	if len(p.files) == 0 {
 		return
 	}

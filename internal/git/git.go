@@ -171,11 +171,13 @@ func (r *Repo) Merge(branch, message string) error {
 type Commit struct {
 	Hash    string
 	Subject string
+	Author  string
+	When    string // relative committer date, e.g. "2 hours ago"
 }
 
 // Log returns up to n recent commits (newest first).
 func (r *Repo) Log(n int) ([]Commit, error) {
-	out, err := r.out("log", fmt.Sprintf("-%d", n), "--pretty=%h\x1f%s")
+	out, err := r.out("log", fmt.Sprintf("-%d", n), "--pretty=%h\x1f%s\x1f%an\x1f%cr")
 	if err != nil {
 		return nil, err
 	}
@@ -184,14 +186,26 @@ func (r *Repo) Log(n int) ([]Commit, error) {
 		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(line, "\x1f", 2)
+		parts := strings.SplitN(line, "\x1f", 4)
 		c := Commit{Hash: parts[0]}
 		if len(parts) > 1 {
 			c.Subject = parts[1]
 		}
+		if len(parts) > 2 {
+			c.Author = parts[2]
+		}
+		if len(parts) > 3 {
+			c.When = parts[3]
+		}
 		commits = append(commits, c)
 	}
 	return commits, nil
+}
+
+// Show returns the diff a commit introduced (git show), for previewing history
+// in the git panel.
+func (r *Repo) Show(ref string) (string, error) {
+	return r.out("show", "--stat", "--patch", ref)
 }
 
 // CurrentBranch returns the checked-out branch name (or "HEAD" when detached).

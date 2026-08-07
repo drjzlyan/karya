@@ -12,7 +12,9 @@ import (
 // fakeRunner returns canned git output and records Run calls.
 type fakeRunner struct {
 	status string
+	log    string // canned `git log` output (pretty %h\x1f%s\x1f%an\x1f%cr)
 	runs   [][]string
+	shown  []string // refs passed to `git show`
 }
 
 func (f *fakeRunner) Output(dir, name string, args ...string) (string, error) {
@@ -23,6 +25,11 @@ func (f *fakeRunner) Output(dir, name string, args ...string) (string, error) {
 		return "main", nil
 	case len(args) > 0 && args[0] == "diff":
 		return "diff --git a/x b/x\n@@ -0,0 +1 @@\n+hi\n", nil
+	case len(args) > 0 && args[0] == "log":
+		return f.log, nil
+	case len(args) > 0 && args[0] == "show":
+		f.shown = append(f.shown, args[len(args)-1])
+		return "commit diff\n@@ -0,0 +1 @@\n+x\n", nil
 	}
 	return "", nil
 }
@@ -43,6 +50,14 @@ func (f *fakeRunner) ran(sub string) bool {
 
 func newPanel(status string) (*Panel, *fakeRunner) {
 	fr := &fakeRunner{status: status}
+	return New(git.New("/repo", fr)), fr
+}
+
+// sampleLog is two commits in git's pretty format (hash, subject, author, when).
+const sampleLog = "abc123\x1ffirst change\x1fAda\x1f2 hours ago\ndef456\x1fsecond change\x1fLin\x1f3 days ago"
+
+func newPanelWithLog(status, log string) (*Panel, *fakeRunner) {
+	fr := &fakeRunner{status: status, log: log}
 	return New(git.New("/repo", fr)), fr
 }
 
@@ -139,6 +154,75 @@ func TestPanelMoveSelection(t *testing.T) {
 	p.HandleKey(term.RuneKey('k'))
 	if p.sel != 1 {
 		t.Fatalf("sel = %d want 1", p.sel)
+	}
+}
+
+func TestPanelLoadsLog(t *testing.T) {
+	p, _ := newPanelWithLog(" M a.go", sampleLog)
+	if len(p.commits) != 2 {
+		t.Fatalf("want 2 commits, got %d", len(p.commits))
+	}
+	if p.commits[0].Subject != "first change" || p.commits[0].When != "2 hours ago" {
+		t.Fatalf("commit not parsed: %+v", p.commits[0])
+	}
+}
+
+func TestPanelCleanTreeFocusesLog(t *testing.T) {
+	// A clean tree has nothing to stage, so the panel should default to the log
+	// and preview the tip commit's diff — no empty void.
+	p, fr := newPanelWithLog("", sampleLog)
+	if p.focus != focusLog {
+		t.Fatalf("clean tree should focus the log")
+	}
+	if len(fr.shown) == 0 || fr.shown[0] != "abc123" {
+		t.Fatalf("should have shown the tip commit; shown=%v", fr.shown)
+	}
+	if len(p.diff) == 0 {
+		t.Fatalf("commit diff should be loaded on a clean tree")
+	}
+}
+
+func TestPanelTabTogglesFocus(t *testing.T) {
+	p, _ := newPanelWithLog(" M a.go", sampleLog) // dirty → starts on changes
+	if p.focus != focusChanges {
+		t.Fatalf("dirty tree should start on changes")
+	}
+	p.HandleKey(term.Named(term.SymTab))
+	if p.focus != focusLog {
+		t.Fatalf("Tab should switch to log")
+	}
+	p.HandleKey(term.Named(term.SymTab))
+	if p.focus != focusChanges {
+		t.Fatalf("Tab should switch back to changes")
+	}
+}
+
+func TestPanelLogNavigationShowsCommit(t *testing.T) {
+	p, fr := newPanelWithLog(" M a.go", sampleLog)
+	p.HandleKey(term.Named(term.SymTab)) // focus log (shows abc123)
+	p.HandleKey(term.RuneKey('j'))       // move to second commit
+	if p.logSel != 1 {
+		t.Fatalf("logSel = %d want 1", p.logSel)
+	}
+	last := fr.shown[len(fr.shown)-1]
+	if last != "def456" {
+		t.Fatalf("moving in the log should show that commit; last shown=%q", last)
+	}
+	// j/k must drive the log, not the file list, while the log is focused.
+	if p.sel != 0 {
+		t.Fatalf("file selection must not move while log is focused; sel=%d", p.sel)
+	}
+}
+
+func TestPanelViewShowsLogSection(t *testing.T) {
+	p, _ := newPanelWithLog("", sampleLog)
+	buf := cellbuf.New(80, 16)
+	p.View(buf, cellbuf.Rect{X: 0, Y: 0, W: 80, H: 16}, true)
+	out := buf.String()
+	for _, want := range []string{"Log (2)", "abc123", "first change"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("log section missing %q:\n%s", want, out)
+		}
 	}
 }
 

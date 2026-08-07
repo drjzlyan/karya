@@ -1,6 +1,8 @@
 package gitui
 
 import (
+	"fmt"
+
 	"github.com/drjzlyan/karya/internal/cellbuf"
 	"github.com/drjzlyan/karya/internal/diffview"
 	"github.com/drjzlyan/karya/internal/git"
@@ -27,7 +29,26 @@ func (p *Panel) View(buf *cellbuf.Buffer, r cellbuf.Rect, focused bool) {
 		return
 	}
 	listW := min(40, r.W/2)
-	p.drawFiles(buf, cellbuf.Rect{X: r.X, Y: bodyY, W: listW, H: bodyH})
+
+	// Left column: Changes on top, Log below — so the panel is informative even
+	// when the tree is clean. Give Changes only what it needs (capped at half),
+	// and let the Log fill the rest.
+	changesH := len(p.files) + 1 // +1 header
+	if changesH < 2 {
+		changesH = 2 // header + "(clean)"
+	}
+	if max := bodyH / 2; changesH > max && max >= 2 {
+		changesH = max
+	}
+	if changesH > bodyH {
+		changesH = bodyH
+	}
+	p.drawChanges(buf, cellbuf.Rect{X: r.X, Y: bodyY, W: listW, H: changesH})
+	logY := bodyY + changesH
+	if logH := bottomY - logY; logH > 0 {
+		p.drawLog(buf, cellbuf.Rect{X: r.X, Y: logY, W: listW, H: logH})
+	}
+
 	diffX := r.X + listW + 1
 	diffW := r.X + r.W - diffX
 	if diffW > 0 {
@@ -35,23 +56,66 @@ func (p *Panel) View(buf *cellbuf.Buffer, r cellbuf.Rect, focused bool) {
 	}
 }
 
-func (p *Panel) drawFiles(buf *cellbuf.Buffer, r cellbuf.Rect) {
+func (p *Panel) drawChanges(buf *cellbuf.Buffer, r cellbuf.Rect) {
+	hdr := header("Changes", len(p.files), p.focus == focusChanges)
+	buf.SetString(r.X, r.Y, fit(hdr, r.W), cellbuf.Style{Attrs: cellbuf.AttrBold})
+	rows := cellbuf.Rect{X: r.X, Y: r.Y + 1, W: r.W, H: r.H - 1}
+	if rows.H < 1 {
+		return
+	}
 	if len(p.files) == 0 {
-		buf.SetString(r.X, r.Y, fit("(clean)", r.W), cellbuf.Style{FG: cellbuf.Palette(8)})
+		buf.SetString(rows.X, rows.Y, fit("(clean)", rows.W), cellbuf.Style{FG: cellbuf.Palette(8)})
 		return
 	}
 	for i, f := range p.files {
-		if i >= r.H {
+		if i >= rows.H {
 			break
 		}
 		mark, markStyle := fileMark(f)
 		st := cellbuf.Style{}
-		if i == p.sel {
+		if i == p.sel && p.focus == focusChanges {
 			st.Attrs |= cellbuf.AttrReverse
 		}
-		buf.Set(r.X, r.Y+i, cellbuf.Cell{Rune: mark, Width: 1, Style: markStyle})
-		buf.SetString(r.X+2, r.Y+i, fit(f.Path, r.W-2), st)
+		buf.Set(rows.X, rows.Y+i, cellbuf.Cell{Rune: mark, Width: 1, Style: markStyle})
+		buf.SetString(rows.X+2, rows.Y+i, fit(f.Path, rows.W-2), st)
 	}
+}
+
+func (p *Panel) drawLog(buf *cellbuf.Buffer, r cellbuf.Rect) {
+	hdr := header("Log", len(p.commits), p.focus == focusLog)
+	buf.SetString(r.X, r.Y, fit(hdr, r.W), cellbuf.Style{Attrs: cellbuf.AttrBold})
+	rows := cellbuf.Rect{X: r.X, Y: r.Y + 1, W: r.W, H: r.H - 1}
+	if rows.H < 1 {
+		return
+	}
+	if len(p.commits) == 0 {
+		buf.SetString(rows.X, rows.Y, fit("(no commits)", rows.W), cellbuf.Style{FG: cellbuf.Palette(8)})
+		return
+	}
+	// Keep the selected commit in view (simple window that follows the cursor).
+	start := 0
+	if p.logSel >= rows.H {
+		start = p.logSel - rows.H + 1
+	}
+	for i := start; i < len(p.commits) && i-start < rows.H; i++ {
+		c := p.commits[i]
+		y := rows.Y + (i - start)
+		st := cellbuf.Style{}
+		if i == p.logSel && p.focus == focusLog {
+			st.Attrs |= cellbuf.AttrReverse
+		}
+		buf.SetString(rows.X, y, c.Hash+" ", cellbuf.Style{FG: cellbuf.Palette(3)}) // yellow hash
+		buf.SetString(rows.X+len(c.Hash)+1, y, fit(c.Subject, rows.W-len(c.Hash)-1), st)
+	}
+}
+
+// header formats a section title with its count and a focus marker.
+func header(name string, n int, focused bool) string {
+	marker := "  "
+	if focused {
+		marker = "▸ "
+	}
+	return fmt.Sprintf("%s%s (%d)", marker, name, n)
 }
 
 // fileMark returns a status glyph and its color for a file.
@@ -77,7 +141,7 @@ func (p *Panel) drawBottom(buf *cellbuf.Buffer, r cellbuf.Rect, y int) {
 	}
 	text := p.status
 	if text == "" {
-		text = "j/k move · space stage · a/u all · c commit · P push · q close"
+		text = "Tab changes/log · j/k move · space stage · a/u all · c commit · P push · q close"
 	}
 	buf.SetString(r.X, y, fit(text, r.W), st)
 }

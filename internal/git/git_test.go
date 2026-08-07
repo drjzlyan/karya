@@ -105,14 +105,17 @@ func TestDiffArgv(t *testing.T) {
 
 func TestLogParse(t *testing.T) {
 	fr := &fakeRunner{outputs: map[string]string{
-		"log -2 --pretty=%h\x1f%s": "abc123\x1ffirst\ndef456\x1fsecond",
+		"log -2 --pretty=%h\x1f%s\x1f%an\x1f%cr": "abc123\x1ffirst\x1fAda\x1f2 hours ago\ndef456\x1fsecond\x1fLin\x1f3 days ago",
 	}}
 	r := New("/repo", fr)
 	commits, err := r.Log(2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []Commit{{Hash: "abc123", Subject: "first"}, {Hash: "def456", Subject: "second"}}
+	want := []Commit{
+		{Hash: "abc123", Subject: "first", Author: "Ada", When: "2 hours ago"},
+		{Hash: "def456", Subject: "second", Author: "Lin", When: "3 days ago"},
+	}
 	if !reflect.DeepEqual(commits, want) {
 		t.Fatalf("log = %+v want %+v", commits, want)
 	}

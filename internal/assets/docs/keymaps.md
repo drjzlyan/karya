@@ -106,9 +106,14 @@ karya has its own git panel — no external git TUI.
 | `<L> g c` | Commit (agent can draft the message) |
 | `<L> g p` | Push |
 
-Inside the git panel: `j`/`k` move, `Space`/`Enter` stage/unstage the item under
-the cursor, `c` commit, `P` push, `d` view the diff, `q` closes. The diff view is
-the same renderer used by task review.
+The panel has two lists — **Changes** (the working tree) and **Log** (recent
+history) — with a live diff of whatever is selected, so it stays useful even on a
+clean tree. `Tab` switches focus between the two lists (a clean tree starts on the
+log); `j`/`k` move within the focused list. In Changes, `Space`/`Enter`
+stage/unstage the file, `a`/`u` stage/unstage all, `c` commits (the agent can
+draft the message), `P` pushes. In Log, moving previews each commit's diff.
+`Ctrl-d`/`Ctrl-u` scroll the diff; `q` closes. The diff view is the same renderer
+used by task review.
 
 ## 4. Editing (the embedded Neovim engine)
 
